@@ -51,7 +51,7 @@ export function Home() {
             src={content}
             className='h-screen w-full border-none'
             title={t('Custom Home Page')}
-            sandbox='allow-forms allow-popups allow-popups-to-escape-sandbox allow-scripts'
+            sandbox='allow-forms allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts'
           />
         </PublicLayout>
       )
