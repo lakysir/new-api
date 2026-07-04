@@ -87,8 +87,8 @@ export function useSidebarData(): SidebarData {
             icon: Key,
           },
           {
-            title: t('Script Square'),
-            url: '/scripts',
+            title: t('My Scripts'),
+            url: '/my-scripts',
             icon: ScrollText,
           },
           {

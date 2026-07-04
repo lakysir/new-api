@@ -2603,6 +2603,8 @@
     "Script deleted": "スクリプトを削除しました",
     "Delete script #{{id}}?": "スクリプト #{{id}} を削除しますか？",
     "JavaScript code": "JavaScript コード",
+    "Preview truncated": "プレビューは省略されています",
+    "Browse published scripts shared by users.": "ユーザーが共有した公開スクリプトを閲覧します。",
     "Saving only updates the draft; publishing copies the current draft to the square version.": "保存は下書きだけを更新します。公開すると現在の下書きが広場版にコピーされます。",
     "Model Tags": "モデルタグ",
     "Model to use for testing": "テストに使用するモデル",

@@ -2603,6 +2603,8 @@
     "Script deleted": "Script deleted",
     "Delete script #{{id}}?": "Delete script #{{id}}?",
     "JavaScript code": "JavaScript code",
+    "Preview truncated": "Preview truncated",
+    "Browse published scripts shared by users.": "Browse published scripts shared by users.",
     "Saving only updates the draft; publishing copies the current draft to the square version.": "Saving only updates the draft; publishing copies the current draft to the square version.",
     "Model Tags": "Model Tags",
     "Model to use for testing": "Model to use for testing",

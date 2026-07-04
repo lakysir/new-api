@@ -2603,6 +2603,8 @@
     "Script deleted": "Đã xóa script",
     "Delete script #{{id}}?": "Xóa script #{{id}}?",
     "JavaScript code": "Mã JavaScript",
+    "Preview truncated": "Bản xem trước đã được rút gọn",
+    "Browse published scripts shared by users.": "Duyệt các script đã xuất bản được người dùng chia sẻ.",
     "Saving only updates the draft; publishing copies the current draft to the square version.": "Lưu chỉ cập nhật bản nháp; xuất bản sẽ sao chép bản nháp hiện tại thành phiên bản trên quảng trường.",
     "Model Tags": "Thẻ mô hình",
     "Model to use for testing": "Mô hình dùng để kiểm thử",

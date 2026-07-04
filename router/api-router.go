@@ -242,16 +242,20 @@ func SetApiRouter(router *gin.Engine) {
 		}
 
 		scriptRoute := apiRouter.Group("/scripts")
-		scriptRoute.Use(middleware.UserAuth())
 		{
 			scriptRoute.GET("/square", controller.ListScriptSquare)
 			scriptRoute.GET("/square/:id", controller.GetScriptSquareDetail)
-			scriptRoute.GET("/mine", controller.ListMyScripts)
-			scriptRoute.POST("/mine", controller.SaveMyScriptDraft)
-			scriptRoute.GET("/mine/:id", controller.GetMyScript)
-			scriptRoute.PUT("/mine/:id", controller.SaveMyScriptDraft)
-			scriptRoute.POST("/mine/:id/publish", controller.PublishMyScript)
-			scriptRoute.DELETE("/mine/:id", controller.DeleteMyScript)
+
+			scriptUserRoute := scriptRoute.Group("/")
+			scriptUserRoute.Use(middleware.UserAuth())
+			{
+				scriptUserRoute.GET("/mine", controller.ListMyScripts)
+				scriptUserRoute.POST("/mine", controller.SaveMyScriptDraft)
+				scriptUserRoute.GET("/mine/:id", controller.GetMyScript)
+				scriptUserRoute.PUT("/mine/:id", controller.SaveMyScriptDraft)
+				scriptUserRoute.POST("/mine/:id/publish", controller.PublishMyScript)
+				scriptUserRoute.DELETE("/mine/:id", controller.DeleteMyScript)
+			}
 		}
 
 		scriptApiRoute := apiRouter.Group("/script-api")

@@ -2603,6 +2603,8 @@
     "Script deleted": "Script supprimé",
     "Delete script #{{id}}?": "Supprimer le script #{{id}} ?",
     "JavaScript code": "Code JavaScript",
+    "Preview truncated": "Aperçu tronqué",
+    "Browse published scripts shared by users.": "Parcourez les scripts publiés partagés par les utilisateurs.",
     "Saving only updates the draft; publishing copies the current draft to the square version.": "L'enregistrement met uniquement à jour le brouillon ; la publication copie le brouillon actuel vers la version de la place.",
     "Model Tags": "Tags de modèle",
     "Model to use for testing": "Modèle à utiliser pour les tests",

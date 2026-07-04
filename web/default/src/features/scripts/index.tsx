@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { Dialog } from '@/components/dialog'
-import { SectionPageLayout } from '@/components/layout'
+import { PublicLayout, SectionPageLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -14,7 +14,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { api } from '@/lib/api'
 
@@ -52,9 +51,137 @@ async function unwrap<T>(
   return res.data.data
 }
 
-export function ScriptsPage() {
+function CodePreviewDialog({
+  script,
+  onOpenChange,
+}: {
+  script: UserScript | null
+  onOpenChange: (open: boolean) => void
+}) {
   const { t } = useTranslation()
-  const [squareScripts, setSquareScripts] = useState<UserScript[]>([])
+
+  return (
+    <Dialog
+      open={!!script}
+      onOpenChange={onOpenChange}
+      title={`${script?.title || ''} #${script?.id || ''}`}
+      description={script?.description}
+      contentClassName='sm:max-w-3xl'
+      contentHeight='58vh'
+    >
+      <pre className='overflow-auto rounded-lg border bg-muted/40 p-3 font-mono text-xs whitespace-pre-wrap'>
+        {script?.code_preview || ''}
+        {script?.preview_truncated ? `\n\n/* ${t('Preview truncated')} */` : ''}
+      </pre>
+    </Dialog>
+  )
+}
+
+export function ScriptSquarePage() {
+  const { t } = useTranslation()
+  const [scripts, setScripts] = useState<UserScript[]>([])
+  const [loading, setLoading] = useState(false)
+  const [previewScript, setPreviewScript] = useState<UserScript | null>(null)
+
+  async function loadSquare() {
+    setLoading(true)
+    try {
+      const square = await unwrap<{ items: UserScript[]; total: number }>(
+        api.get('/api/scripts/square', { params: { limit: 100 } })
+      )
+      setScripts(square.items || [])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function openSquarePreview(id: number) {
+    const script = await unwrap<UserScript>(api.get(`/api/scripts/square/${id}`))
+    setPreviewScript(script)
+  }
+
+  useEffect(() => {
+    loadSquare().catch((err) => toast.error(String(err?.message || err)))
+  }, [])
+
+  return (
+    <PublicLayout>
+      <div className='mx-auto flex w-full max-w-6xl flex-col gap-6'>
+        <div className='flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between'>
+          <div className='space-y-2'>
+            <h1 className='text-2xl font-semibold tracking-normal'>
+              {t('Script Square')}
+            </h1>
+            <p className='text-muted-foreground max-w-2xl text-sm'>
+              {t('Browse published scripts shared by users.')}
+            </p>
+          </div>
+          <Button
+            type='button'
+            variant='outline'
+            onClick={() =>
+              loadSquare().catch((err) =>
+                toast.error(String(err?.message || err))
+              )
+            }
+            disabled={loading}
+          >
+            {t('Refresh')}
+          </Button>
+        </div>
+
+        <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-3'>
+          {scripts.map((script) => (
+            <article
+              key={script.id}
+              className='flex min-h-48 flex-col gap-4 rounded-lg border bg-card p-4 text-card-foreground shadow-xs'
+            >
+              <div className='min-w-0 space-y-2'>
+                <div className='text-muted-foreground text-xs'>#{script.id}</div>
+                <h2 className='truncate text-base font-medium'>
+                  {script.title}
+                </h2>
+                <p className='text-muted-foreground line-clamp-3 text-sm'>
+                  {script.description || '-'}
+                </p>
+              </div>
+              <div className='text-muted-foreground mt-auto grid gap-1 text-xs'>
+                <div>
+                  {t('Created At')}: {formatTime(script.created_at)}
+                </div>
+                <div>
+                  {t('Updated At')}: {formatTime(script.updated_at)}
+                </div>
+              </div>
+              <Button
+                type='button'
+                variant='outline'
+                className='w-full'
+                onClick={() =>
+                  openSquarePreview(script.id).catch((err) =>
+                    toast.error(String(err?.message || err))
+                  )
+                }
+              >
+                {t('View Code')}
+              </Button>
+            </article>
+          ))}
+        </div>
+      </div>
+
+      <CodePreviewDialog
+        script={previewScript}
+        onOpenChange={(open) => {
+          if (!open) setPreviewScript(null)
+        }}
+      />
+    </PublicLayout>
+  )
+}
+
+export function MyScriptsPage() {
+  const { t } = useTranslation()
   const [myScripts, setMyScripts] = useState<UserScript[]>([])
   const [loading, setLoading] = useState(false)
   const [previewScript, setPreviewScript] = useState<UserScript | null>(null)
@@ -69,16 +196,10 @@ export function ScriptsPage() {
     [editing.id, t]
   )
 
-  async function loadAll() {
+  async function loadMine() {
     setLoading(true)
     try {
-      const [square, mine] = await Promise.all([
-        unwrap<{ items: UserScript[]; total: number }>(
-          api.get('/api/scripts/square', { params: { limit: 100 } })
-        ),
-        unwrap<UserScript[]>(api.get('/api/scripts/mine')),
-      ])
-      setSquareScripts(square.items || [])
+      const mine = await unwrap<UserScript[]>(api.get('/api/scripts/mine'))
       setMyScripts(mine || [])
     } finally {
       setLoading(false)
@@ -86,12 +207,16 @@ export function ScriptsPage() {
   }
 
   useEffect(() => {
-    loadAll().catch((err) => toast.error(String(err?.message || err)))
+    loadMine().catch((err) => toast.error(String(err?.message || err)))
   }, [])
 
-  async function openSquarePreview(id: number) {
-    const script = await unwrap<UserScript>(api.get(`/api/scripts/square/${id}`))
-    setPreviewScript(script)
+  async function openMinePreview(id: number) {
+    const script = await unwrap<UserScript>(api.get(`/api/scripts/mine/${id}`))
+    setPreviewScript({
+      ...script,
+      code_preview: script.draft_code || '',
+      preview_truncated: false,
+    })
   }
 
   async function openMineEditor(id: number) {
@@ -119,31 +244,31 @@ export function ScriptsPage() {
     toast.success(t('Draft saved'))
     setEditorOpen(false)
     setEditing(emptyForm)
-    await loadAll()
+    await loadMine()
   }
 
   async function publishScript(id: number) {
     await unwrap(api.post(`/api/scripts/mine/${id}/publish`))
     toast.success(t('Script published'))
-    await loadAll()
+    await loadMine()
   }
 
   async function deleteScript(id: number) {
     if (!window.confirm(t('Delete script #{{id}}?', { id }))) return
     await unwrap(api.delete(`/api/scripts/mine/${id}`))
     toast.success(t('Script deleted'))
-    await loadAll()
+    await loadMine()
   }
 
   return (
     <SectionPageLayout fixedContent>
-      <SectionPageLayout.Title>{t('Script Square')}</SectionPageLayout.Title>
+      <SectionPageLayout.Title>{t('My Scripts')}</SectionPageLayout.Title>
       <SectionPageLayout.Actions>
         <Button
           type='button'
           variant='outline'
           onClick={() =>
-            loadAll().catch((err) => toast.error(String(err?.message || err)))
+            loadMine().catch((err) => toast.error(String(err?.message || err)))
           }
           disabled={loading}
         >
@@ -160,145 +285,97 @@ export function ScriptsPage() {
         </Button>
       </SectionPageLayout.Actions>
       <SectionPageLayout.Content>
-        <Tabs defaultValue='square' className='h-full'>
-          <TabsList>
-            <TabsTrigger value='square'>{t('Square')}</TabsTrigger>
-            <TabsTrigger value='mine'>{t('My Scripts')}</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value='square' className='min-h-0 overflow-auto'>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>ID</TableHead>
-                  <TableHead>{t('Title')}</TableHead>
-                  <TableHead>{t('Description')}</TableHead>
-                  <TableHead>{t('Created At')}</TableHead>
-                  <TableHead>{t('Updated At')}</TableHead>
-                  <TableHead className='text-right'>{t('Actions')}</TableHead>
+        <div className='min-h-0 overflow-auto'>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>ID</TableHead>
+                <TableHead>{t('Title')}</TableHead>
+                <TableHead>{t('Description')}</TableHead>
+                <TableHead>{t('Status')}</TableHead>
+                <TableHead>{t('Created At')}</TableHead>
+                <TableHead>{t('Updated At')}</TableHead>
+                <TableHead className='text-right'>{t('Actions')}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {myScripts.map((script) => (
+                <TableRow key={script.id}>
+                  <TableCell>{script.id}</TableCell>
+                  <TableCell className='max-w-48 truncate'>
+                    {script.title}
+                  </TableCell>
+                  <TableCell className='max-w-80 truncate'>
+                    {script.description}
+                  </TableCell>
+                  <TableCell>
+                    {script.published ? t('Published') : t('Draft')}
+                  </TableCell>
+                  <TableCell>{formatTime(script.created_at)}</TableCell>
+                  <TableCell>{formatTime(script.updated_at)}</TableCell>
+                  <TableCell className='space-x-2 text-right'>
+                    <Button
+                      type='button'
+                      variant='outline'
+                      size='sm'
+                      onClick={() =>
+                        openMinePreview(script.id).catch((err) =>
+                          toast.error(String(err?.message || err))
+                        )
+                      }
+                    >
+                      {t('View Code')}
+                    </Button>
+                    <Button
+                      type='button'
+                      variant='outline'
+                      size='sm'
+                      onClick={() =>
+                        openMineEditor(script.id).catch((err) =>
+                          toast.error(String(err?.message || err))
+                        )
+                      }
+                    >
+                      {t('Edit')}
+                    </Button>
+                    <Button
+                      type='button'
+                      variant='secondary'
+                      size='sm'
+                      onClick={() =>
+                        publishScript(script.id).catch((err) =>
+                          toast.error(String(err?.message || err))
+                        )
+                      }
+                    >
+                      {t('Publish')}
+                    </Button>
+                    <Button
+                      type='button'
+                      variant='destructive'
+                      size='sm'
+                      onClick={() =>
+                        deleteScript(script.id).catch((err) =>
+                          toast.error(String(err?.message || err))
+                        )
+                      }
+                    >
+                      {t('Delete')}
+                    </Button>
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {squareScripts.map((script) => (
-                  <TableRow key={script.id}>
-                    <TableCell>{script.id}</TableCell>
-                    <TableCell className='max-w-48 truncate'>
-                      {script.title}
-                    </TableCell>
-                    <TableCell className='max-w-96 truncate'>
-                      {script.description}
-                    </TableCell>
-                    <TableCell>{formatTime(script.created_at)}</TableCell>
-                    <TableCell>{formatTime(script.updated_at)}</TableCell>
-                    <TableCell className='text-right'>
-                      <Button
-                        type='button'
-                        variant='outline'
-                        size='sm'
-                        onClick={() =>
-                          openSquarePreview(script.id).catch((err) =>
-                            toast.error(String(err?.message || err))
-                          )
-                        }
-                      >
-                        {t('View Code')}
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TabsContent>
-
-          <TabsContent value='mine' className='min-h-0 overflow-auto'>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>ID</TableHead>
-                  <TableHead>{t('Title')}</TableHead>
-                  <TableHead>{t('Description')}</TableHead>
-                  <TableHead>{t('Status')}</TableHead>
-                  <TableHead>{t('Created At')}</TableHead>
-                  <TableHead>{t('Updated At')}</TableHead>
-                  <TableHead className='text-right'>{t('Actions')}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {myScripts.map((script) => (
-                  <TableRow key={script.id}>
-                    <TableCell>{script.id}</TableCell>
-                    <TableCell className='max-w-48 truncate'>
-                      {script.title}
-                    </TableCell>
-                    <TableCell className='max-w-80 truncate'>
-                      {script.description}
-                    </TableCell>
-                    <TableCell>
-                      {script.published ? t('Published') : t('Draft')}
-                    </TableCell>
-                    <TableCell>{formatTime(script.created_at)}</TableCell>
-                    <TableCell>{formatTime(script.updated_at)}</TableCell>
-                    <TableCell className='space-x-2 text-right'>
-                      <Button
-                        type='button'
-                        variant='outline'
-                        size='sm'
-                        onClick={() =>
-                          openMineEditor(script.id).catch((err) =>
-                            toast.error(String(err?.message || err))
-                          )
-                        }
-                      >
-                        {t('Edit')}
-                      </Button>
-                      <Button
-                        type='button'
-                        variant='secondary'
-                        size='sm'
-                        onClick={() =>
-                          publishScript(script.id).catch((err) =>
-                            toast.error(String(err?.message || err))
-                          )
-                        }
-                      >
-                        {t('Publish')}
-                      </Button>
-                      <Button
-                        type='button'
-                        variant='destructive'
-                        size='sm'
-                        onClick={() =>
-                          deleteScript(script.id).catch((err) =>
-                            toast.error(String(err?.message || err))
-                          )
-                        }
-                      >
-                        {t('Delete')}
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TabsContent>
-        </Tabs>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       </SectionPageLayout.Content>
 
-      <Dialog
-        open={!!previewScript}
+      <CodePreviewDialog
+        script={previewScript}
         onOpenChange={(open) => {
           if (!open) setPreviewScript(null)
         }}
-        title={`${previewScript?.title || ''} #${previewScript?.id || ''}`}
-        description={previewScript?.description}
-        contentClassName='sm:max-w-3xl'
-        contentHeight='58vh'
-      >
-        <pre className='overflow-auto rounded-lg border bg-muted/40 p-3 font-mono text-xs whitespace-pre-wrap'>
-          {previewScript?.code_preview || ''}
-          {previewScript?.preview_truncated ? '\n\n/* preview truncated */' : ''}
-        </pre>
-      </Dialog>
+      />
 
       <Dialog
         open={editorOpen}
