@@ -241,6 +241,29 @@ func SetApiRouter(router *gin.Engine) {
 			tokenRoute.POST("/batch/keys", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.GetTokenKeysBatch)
 		}
 
+		scriptRoute := apiRouter.Group("/scripts")
+		scriptRoute.Use(middleware.UserAuth())
+		{
+			scriptRoute.GET("/square", controller.ListScriptSquare)
+			scriptRoute.GET("/square/:id", controller.GetScriptSquareDetail)
+			scriptRoute.GET("/mine", controller.ListMyScripts)
+			scriptRoute.POST("/mine", controller.SaveMyScriptDraft)
+			scriptRoute.GET("/mine/:id", controller.GetMyScript)
+			scriptRoute.PUT("/mine/:id", controller.SaveMyScriptDraft)
+			scriptRoute.POST("/mine/:id/publish", controller.PublishMyScript)
+			scriptRoute.DELETE("/mine/:id", controller.DeleteMyScript)
+		}
+
+		scriptApiRoute := apiRouter.Group("/script-api")
+		scriptApiRoute.Use(middleware.CORS(), middleware.CriticalRateLimit(), middleware.TokenAuthReadOnly())
+		{
+			scriptApiRoute.GET("/scripts/mine", controller.ApiListMyScripts)
+			scriptApiRoute.POST("/scripts", controller.ApiSaveMyScriptDraft)
+			scriptApiRoute.GET("/scripts/:id", controller.ApiGetMyScript)
+			scriptApiRoute.PUT("/scripts/:id", controller.ApiSaveMyScriptDraft)
+			scriptApiRoute.GET("/square/:id/code", controller.ApiGetPublishedScriptCode)
+		}
+
 		usageRoute := apiRouter.Group("/usage")
 		usageRoute.Use(middleware.CORS(), middleware.CriticalRateLimit())
 		{

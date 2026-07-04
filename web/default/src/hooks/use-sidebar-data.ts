@@ -27,6 +27,7 @@ import {
   ListTodo,
   MessageSquare,
   Radio,
+  ScrollText,
   ServerCog,
   Settings,
   Ticket,
@@ -84,6 +85,11 @@ export function useSidebarData(): SidebarData {
             title: t('API Keys'),
             url: '/keys',
             icon: Key,
+          },
+          {
+            title: t('Script Square'),
+            url: '/scripts',
+            icon: ScrollText,
           },
           {
             title: t('Usage Logs'),

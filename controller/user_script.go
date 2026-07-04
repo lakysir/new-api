@@ -1,0 +1,194 @@
+package controller
+
+import (
+	"errors"
+	"net/http"
+	"strconv"
+
+	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/model"
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+)
+
+type userScriptSaveRequest struct {
+	Id          int    `json:"id"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Code        string `json:"code"`
+	DraftCode   string `json:"draft_code"`
+}
+
+func parseScriptId(c *gin.Context) (int, bool) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id <= 0 {
+		common.ApiErrorMsg(c, "invalid script id")
+		return 0, false
+	}
+	return id, true
+}
+
+func scriptCodeFromRequest(req userScriptSaveRequest) string {
+	if req.Code != "" {
+		return req.Code
+	}
+	return req.DraftCode
+}
+
+func ListScriptSquare(c *gin.Context) {
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	scripts, total, err := model.ListPublishedUserScripts(offset, limit)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{
+		"items": scripts,
+		"total": total,
+	})
+}
+
+func GetScriptSquareDetail(c *gin.Context) {
+	id, ok := parseScriptId(c)
+	if !ok {
+		return
+	}
+	script, err := model.GetPublishedUserScript(id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			common.ApiErrorMsg(c, "script not found")
+			return
+		}
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, script)
+}
+
+func ListMyScripts(c *gin.Context) {
+	scripts, err := model.ListUserScripts(c.GetInt("id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, scripts)
+}
+
+func GetMyScript(c *gin.Context) {
+	id, ok := parseScriptId(c)
+	if !ok {
+		return
+	}
+	script, err := model.GetUserScriptById(id, c.GetInt("id"))
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			common.ApiErrorMsg(c, "script not found")
+			return
+		}
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, script)
+}
+
+func SaveMyScriptDraft(c *gin.Context) {
+	var req userScriptSaveRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	id := req.Id
+	if pathId := c.Param("id"); pathId != "" {
+		parsed, err := strconv.Atoi(pathId)
+		if err != nil || parsed <= 0 {
+			common.ApiErrorMsg(c, "invalid script id")
+			return
+		}
+		id = parsed
+	}
+	script, err := model.UpsertUserScriptDraft(c.GetInt("id"), id, req.Title, req.Description, scriptCodeFromRequest(req))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, script)
+}
+
+func PublishMyScript(c *gin.Context) {
+	id, ok := parseScriptId(c)
+	if !ok {
+		return
+	}
+	script, err := model.GetUserScriptById(id, c.GetInt("id"))
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			common.ApiErrorMsg(c, "script not found")
+			return
+		}
+		common.ApiError(c, err)
+		return
+	}
+	if script.DraftCode == "" {
+		common.ApiErrorMsg(c, "draft code is empty")
+		return
+	}
+	script.PublishedCode = script.DraftCode
+	script.Published = true
+	script.PublishedAt = common.GetTimestamp()
+	if err := model.DB.Save(script).Error; err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, script)
+}
+
+func DeleteMyScript(c *gin.Context) {
+	id, ok := parseScriptId(c)
+	if !ok {
+		return
+	}
+	err := model.DB.Where("id = ? AND user_id = ?", id, c.GetInt("id")).Delete(&model.UserScript{}).Error
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, nil)
+}
+
+func ApiListMyScripts(c *gin.Context) {
+	ListMyScripts(c)
+}
+
+func ApiGetMyScript(c *gin.Context) {
+	GetMyScript(c)
+}
+
+func ApiSaveMyScriptDraft(c *gin.Context) {
+	SaveMyScriptDraft(c)
+}
+
+func ApiGetPublishedScriptCode(c *gin.Context) {
+	id, ok := parseScriptId(c)
+	if !ok {
+		return
+	}
+	script, err := model.GetPublishedUserScriptCode(id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "script not found"})
+			return
+		}
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{
+		"id":           script.Id,
+		"title":        script.Title,
+		"description":  script.Description,
+		"code":         script.PublishedCode,
+		"published_at": script.PublishedAt,
+		"created_at":   script.CreatedAt,
+		"updated_at":   script.UpdatedAt,
+	})
+}
