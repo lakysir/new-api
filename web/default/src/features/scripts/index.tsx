@@ -368,77 +368,77 @@ export function MyScriptsPage() {
             </TableBody>
           </Table>
         </div>
-      </SectionPageLayout.Content>
 
-      <CodePreviewDialog
-        script={previewScript}
-        onOpenChange={(open) => {
-          if (!open) setPreviewScript(null)
-        }}
-      />
+        <CodePreviewDialog
+          script={previewScript}
+          onOpenChange={(open) => {
+            if (!open) setPreviewScript(null)
+          }}
+        />
 
-      <Dialog
-        open={editorOpen}
-        onOpenChange={setEditorOpen}
-        title={editorTitle}
-        description={t(
-          'Saving only updates the draft; publishing copies the current draft to the square version.'
-        )}
-        contentClassName='sm:max-w-4xl'
-        contentHeight='520px'
-        footer={
-          <>
-            <Button
-              type='button'
-              variant='outline'
-              onClick={() => setEditorOpen(false)}
-            >
-              {t('Cancel')}
-            </Button>
-            <Button
-              type='button'
-              onClick={() =>
-                saveDraft().catch((err) =>
-                  toast.error(String(err?.message || err))
-                )
+        <Dialog
+          open={editorOpen}
+          onOpenChange={setEditorOpen}
+          title={editorTitle}
+          description={t(
+            'Saving only updates the draft; publishing copies the current draft to the square version.'
+          )}
+          contentClassName='sm:max-w-4xl'
+          contentHeight='520px'
+          footer={
+            <>
+              <Button
+                type='button'
+                variant='outline'
+                onClick={() => setEditorOpen(false)}
+              >
+                {t('Cancel')}
+              </Button>
+              <Button
+                type='button'
+                onClick={() =>
+                  saveDraft().catch((err) =>
+                    toast.error(String(err?.message || err))
+                  )
+                }
+              >
+                {t('Save Draft')}
+              </Button>
+            </>
+          }
+        >
+          <div className='grid gap-3'>
+            <Input
+              value={editing.title}
+              placeholder={t('Title')}
+              onChange={(event) =>
+                setEditing((prev) => ({ ...prev, title: event.target.value }))
               }
-            >
-              {t('Save Draft')}
-            </Button>
-          </>
-        }
-      >
-        <div className='grid gap-3'>
-          <Input
-            value={editing.title}
-            placeholder={t('Title')}
-            onChange={(event) =>
-              setEditing((prev) => ({ ...prev, title: event.target.value }))
-            }
-          />
-          <Input
-            value={editing.description}
-            placeholder={t('Description')}
-            onChange={(event) =>
-              setEditing((prev) => ({
-                ...prev,
-                description: event.target.value,
-              }))
-            }
-          />
-          <Textarea
-            value={editing.draft_code}
-            placeholder={t('JavaScript code')}
-            className='min-h-[360px] font-mono text-xs'
-            onChange={(event) =>
-              setEditing((prev) => ({
-                ...prev,
-                draft_code: event.target.value,
-              }))
-            }
-          />
-        </div>
-      </Dialog>
+            />
+            <Input
+              value={editing.description}
+              placeholder={t('Description')}
+              onChange={(event) =>
+                setEditing((prev) => ({
+                  ...prev,
+                  description: event.target.value,
+                }))
+              }
+            />
+            <Textarea
+              value={editing.draft_code}
+              placeholder={t('JavaScript code')}
+              className='min-h-[360px] font-mono text-xs'
+              onChange={(event) =>
+                setEditing((prev) => ({
+                  ...prev,
+                  draft_code: event.target.value,
+                }))
+              }
+            />
+          </div>
+        </Dialog>
+      </SectionPageLayout.Content>
     </SectionPageLayout>
   )
 }
