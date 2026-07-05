@@ -259,13 +259,14 @@ func SetApiRouter(router *gin.Engine) {
 		}
 
 		scriptApiRoute := apiRouter.Group("/script-api")
-		scriptApiRoute.Use(middleware.CORS(), middleware.CriticalRateLimit(), middleware.TokenAuthReadOnly())
+		scriptApiRoute.Use(middleware.CORS(), middleware.TokenAuthReadOnly())
 		{
 			scriptApiRoute.GET("/scripts/mine", controller.ApiListMyScripts)
-			scriptApiRoute.POST("/scripts", controller.ApiSaveMyScriptDraft)
-			scriptApiRoute.GET("/scripts/:id", controller.ApiGetMyScript)
-			scriptApiRoute.PUT("/scripts/:id", controller.ApiSaveMyScriptDraft)
 			scriptApiRoute.GET("/square/:id/code", controller.ApiGetPublishedScriptCode)
+
+			scriptApiRoute.GET("/scripts/:id", middleware.CriticalRateLimit(), controller.ApiGetMyScript)
+			scriptApiRoute.POST("/scripts", middleware.CriticalRateLimit(), controller.ApiSaveMyScriptDraft)
+			scriptApiRoute.PUT("/scripts/:id", middleware.CriticalRateLimit(), controller.ApiSaveMyScriptDraft)
 		}
 
 		usageRoute := apiRouter.Group("/usage")

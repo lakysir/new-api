@@ -77,11 +77,39 @@ function CodePreviewDialog({
   )
 }
 
+function DescriptionDialog({
+  script,
+  onOpenChange,
+}: {
+  script: UserScript | null
+  onOpenChange: (open: boolean) => void
+}) {
+  const { t } = useTranslation()
+
+  return (
+    <Dialog
+      open={!!script}
+      onOpenChange={onOpenChange}
+      title={`${script?.title || ''} #${script?.id || ''}`}
+      description={t('Description')}
+      contentClassName='sm:max-w-2xl'
+      contentHeight='360px'
+    >
+      <div className='text-sm leading-relaxed whitespace-pre-wrap'>
+        {script?.description || t('No description available.')}
+      </div>
+    </Dialog>
+  )
+}
+
 export function ScriptSquarePage() {
   const { t } = useTranslation()
   const [scripts, setScripts] = useState<UserScript[]>([])
   const [loading, setLoading] = useState(false)
   const [previewScript, setPreviewScript] = useState<UserScript | null>(null)
+  const [descriptionScript, setDescriptionScript] = useState<UserScript | null>(
+    null
+  )
 
   async function loadSquare() {
     setLoading(true)
@@ -144,6 +172,14 @@ export function ScriptSquarePage() {
                 <p className='text-muted-foreground line-clamp-3 text-sm'>
                   {script.description || '-'}
                 </p>
+                <Button
+                  type='button'
+                  variant='link'
+                  className='h-auto p-0 text-sm'
+                  onClick={() => setDescriptionScript(script)}
+                >
+                  {t('Details')}
+                </Button>
               </div>
               <div className='text-muted-foreground mt-auto grid gap-1 text-xs'>
                 <div>
@@ -174,6 +210,12 @@ export function ScriptSquarePage() {
         script={previewScript}
         onOpenChange={(open) => {
           if (!open) setPreviewScript(null)
+        }}
+      />
+      <DescriptionDialog
+        script={descriptionScript}
+        onOpenChange={(open) => {
+          if (!open) setDescriptionScript(null)
         }}
       />
     </PublicLayout>
@@ -415,9 +457,11 @@ export function MyScriptsPage() {
                 setEditing((prev) => ({ ...prev, title: event.target.value }))
               }
             />
-            <Input
+            <Textarea
               value={editing.description}
               placeholder={t('Description')}
+              rows={10}
+              className='min-h-[240px] resize-y'
               onChange={(event) =>
                 setEditing((prev) => ({
                   ...prev,

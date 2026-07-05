@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -96,7 +97,13 @@ func GlobalWebRateLimit() func(c *gin.Context) {
 
 func GlobalAPIRateLimit() func(c *gin.Context) {
 	if common.GlobalApiRateLimitEnable {
-		return rateLimitFactory(common.GlobalApiRateLimitNum, common.GlobalApiRateLimitDuration, "GA")
+		limit := rateLimitFactory(common.GlobalApiRateLimitNum, common.GlobalApiRateLimitDuration, "GA")
+		return func(c *gin.Context) {
+			if isScriptApiRateLimitExempt(c) {
+				return
+			}
+			limit(c)
+		}
 	}
 	return defNext
 }
@@ -106,6 +113,17 @@ func CriticalRateLimit() func(c *gin.Context) {
 		return rateLimitFactory(common.CriticalRateLimitNum, common.CriticalRateLimitDuration, "CT")
 	}
 	return defNext
+}
+
+func isScriptApiRateLimitExempt(c *gin.Context) bool {
+	if c.Request.Method != http.MethodGet {
+		return false
+	}
+	path := c.Request.URL.Path
+	if path == "/api/script-api/scripts/mine" {
+		return true
+	}
+	return strings.HasPrefix(path, "/api/script-api/square/") && strings.HasSuffix(path, "/code")
 }
 
 func DownloadRateLimit() func(c *gin.Context) {
