@@ -247,6 +247,7 @@ function TaskLogsCard<TData>({
   const { t } = useTranslation()
 
   const taskIdCell = cells.get('task_id')
+  const modelCell = cells.get('model_name')
   const statusCell = cells.get('status')
   const submitTimeCell = cells.get('submit_time')
 
@@ -259,7 +260,13 @@ function TaskLogsCard<TData>({
 
       <div className='grid grid-cols-2 gap-1.5'>
         <SummaryField label={t('Submit Time')} cell={submitTimeCell} />
+        <SummaryField label={t('Model')} cell={modelCell} primaryOnly />
         <SummaryField label={t('User')} cell={cells.get('user')} primaryOnly />
+        <SummaryField
+          label={t('Duration')}
+          cell={cells.get('duration')}
+          primaryOnly
+        />
         <SummaryField
           label={t('Result')}
           cell={cells.get('fail_reason')}

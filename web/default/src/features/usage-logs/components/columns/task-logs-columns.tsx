@@ -22,6 +22,7 @@ import { Music } from 'lucide-react'
 import { useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { Dialog } from '@/components/dialog'
 import { StatusBadge } from '@/components/status-badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { getUserAvatarFallback, getUserAvatarStyle } from '@/lib/avatar'
@@ -54,6 +55,59 @@ function parseTaskData(data: unknown): unknown[] {
     }
   }
   return []
+}
+
+function getTaskModelName(log: TaskLog): string {
+  if (log.model_name) return log.model_name
+  if (log.properties && typeof log.properties === 'object') {
+    const properties = log.properties as Record<string, unknown>
+    const propertyModel = String(
+      properties.origin_model_name || properties.upstream_model_name || ''
+    )
+    if (propertyModel) return propertyModel
+  }
+  if (log.data && typeof log.data === 'string') {
+    try {
+      const data = JSON.parse(log.data) as Record<string, unknown>
+      if (typeof data.model === 'string') return data.model
+    } catch {
+      return ''
+    }
+  }
+  if (log.data && typeof log.data === 'object' && !Array.isArray(log.data)) {
+    const data = log.data as Record<string, unknown>
+    if (typeof data.model === 'string') return data.model
+  }
+  return ''
+}
+
+function TaskDetailsDialog({
+  log,
+  open,
+  onOpenChange,
+}: {
+  log: TaskLog
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  const { t } = useTranslation()
+  const details = useMemo(() => JSON.stringify(log, null, 2), [log])
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={t('Task Details')}
+      description={log.task_id}
+      contentClassName='sm:max-w-3xl'
+      contentHeight='60vh'
+      bodyClassName='h-full'
+    >
+      <pre className='bg-muted/50 h-full overflow-auto rounded-md border p-3 font-mono text-xs leading-relaxed break-all whitespace-pre-wrap'>
+        {details}
+      </pre>
+    </Dialog>
+  )
 }
 
 function AudioPreviewCell({ log }: { log: TaskLog }) {
@@ -166,28 +220,59 @@ export function useTaskLogsColumns(isAdmin: boolean): ColumnDef<TaskLog>[] {
     {
       accessorKey: 'task_id',
       header: t('Task ID'),
-      cell: ({ row }) => {
+      cell: function TaskIdCell({ row }) {
         const log = row.original
         const taskId = row.getValue('task_id') as string
+        const [dialogOpen, setDialogOpen] = useState(false)
         if (!taskId) {
           return <span className='text-muted-foreground/60 text-xs'>-</span>
         }
         return (
-          <div className='flex max-w-[170px] flex-col gap-0.5'>
-            <StatusBadge
-              label={taskId}
-              copyText={taskId}
-              variant='neutral'
-              size='sm'
-              className='border-border/60 bg-muted/30 !text-foreground max-w-full truncate rounded-md border px-1.5 py-0.5 font-mono'
+          <>
+            <div className='flex max-w-[170px] flex-col gap-0.5'>
+              <StatusBadge
+                label={taskId}
+                variant='neutral'
+                size='sm'
+                copyable={false}
+                onClick={() => setDialogOpen(true)}
+                title={t('Click to view full details')}
+                className='border-border/60 bg-muted/30 !text-foreground hover:bg-muted max-w-full cursor-pointer truncate rounded-md border px-1.5 py-0.5 font-mono'
+              />
+              <span className='text-muted-foreground/60 truncate text-[11px]'>
+                {t(log.platform)} · {t(taskActionMapper.getLabel(log.action))}
+              </span>
+            </div>
+            <TaskDetailsDialog
+              log={log}
+              open={dialogOpen}
+              onOpenChange={setDialogOpen}
             />
-            <span className='text-muted-foreground/60 truncate text-[11px]'>
-              {t(log.platform)} · {t(taskActionMapper.getLabel(log.action))}
-            </span>
-          </div>
+          </>
         )
       },
       meta: { mobileTitle: true },
+    },
+    {
+      id: 'model_name',
+      accessorFn: getTaskModelName,
+      header: t('Model'),
+      cell: ({ row }) => {
+        const modelName = row.getValue('model_name') as string
+        if (!modelName) {
+          return <span className='text-muted-foreground/60 text-xs'>-</span>
+        }
+        return (
+          <StatusBadge
+            label={modelName}
+            copyText={modelName}
+            variant='neutral'
+            size='sm'
+            className='border-border/60 bg-muted/20 !text-foreground max-w-[180px] truncate rounded-md border px-1.5 py-0.5 font-mono'
+          />
+        )
+      },
+      size: 180,
     },
     createDurationColumn<TaskLog>({
       submitTimeKey: 'submit_time',

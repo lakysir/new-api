@@ -538,6 +538,25 @@ func mapTaskStatusToSimple(status model.TaskStatus) string {
 	}
 }
 
+func taskModelName(task *model.Task) string {
+	if task.Properties.OriginModelName != "" {
+		return task.Properties.OriginModelName
+	}
+	if task.PrivateData.BillingContext != nil &&
+		task.PrivateData.BillingContext.OriginModelName != "" {
+		return task.PrivateData.BillingContext.OriginModelName
+	}
+	if len(task.Data) > 0 {
+		var data map[string]any
+		if err := common.Unmarshal(task.Data, &data); err == nil {
+			if modelName, ok := data["model"].(string); ok && modelName != "" {
+				return modelName
+			}
+		}
+	}
+	return task.Properties.UpstreamModelName
+}
+
 func TaskModel2Dto(task *model.Task) *dto.TaskDto {
 	return &dto.TaskDto{
 		ID:         task.ID,
@@ -549,6 +568,7 @@ func TaskModel2Dto(task *model.Task) *dto.TaskDto {
 		Group:      task.Group,
 		ChannelId:  task.ChannelId,
 		Quota:      task.Quota,
+		ModelName:  taskModelName(task),
 		Action:     task.Action,
 		Status:     string(task.Status),
 		FailReason: task.FailReason,
