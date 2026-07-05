@@ -123,6 +123,9 @@ func isScriptApiRateLimitExempt(c *gin.Context) bool {
 	if path == "/api/script-api/scripts/mine" {
 		return true
 	}
+	if strings.HasPrefix(path, "/api/script-api/scripts/") {
+		return true
+	}
 	return strings.HasPrefix(path, "/api/script-api/square/") && strings.HasSuffix(path, "/code")
 }
 
