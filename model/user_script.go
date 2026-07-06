@@ -1,6 +1,7 @@
 package model
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 
@@ -14,6 +15,7 @@ type UserScript struct {
 	UserId           int            `json:"user_id" gorm:"index;not null"`
 	Title            string         `json:"title" gorm:"type:varchar(128);not null"`
 	Description      string         `json:"description" gorm:"type:text"`
+	ScriptParams     string         `json:"script_params" gorm:"type:text"`
 	DraftCode        string         `json:"draft_code,omitempty" gorm:"type:text"`
 	PublishedCode    string         `json:"published_code,omitempty" gorm:"type:text"`
 	Published        bool           `json:"published" gorm:"index"`
@@ -29,22 +31,32 @@ func (UserScript) TableName() string {
 	return "user_scripts"
 }
 
-func NormalizeUserScriptInput(title string, description string, code string) (string, string, string, error) {
+func NormalizeUserScriptInput(title string, description string, scriptParams string, code string) (string, string, string, string, error) {
 	title = strings.TrimSpace(title)
 	description = strings.TrimSpace(description)
+	scriptParams = strings.TrimSpace(scriptParams)
 	if title == "" {
-		return "", "", "", errors.New("title is required")
+		return "", "", "", "", errors.New("title is required")
 	}
 	if len([]rune(title)) > 128 {
-		return "", "", "", errors.New("title is too long")
+		return "", "", "", "", errors.New("title is too long")
 	}
 	if len([]byte(description)) > 4096 {
-		return "", "", "", errors.New("description is too long")
+		return "", "", "", "", errors.New("description is too long")
+	}
+	if len([]byte(scriptParams)) > 65536 {
+		return "", "", "", "", errors.New("script params is too large")
+	}
+	if scriptParams != "" {
+		var decoded map[string]interface{}
+		if err := json.Unmarshal([]byte(scriptParams), &decoded); err != nil || decoded == nil {
+			return "", "", "", "", errors.New("script params must be a JSON object")
+		}
 	}
 	if len([]byte(code)) > UserScriptMaxCodeLength {
-		return "", "", "", errors.New("script code is too large")
+		return "", "", "", "", errors.New("script code is too large")
 	}
-	return title, description, code, nil
+	return title, description, scriptParams, code, nil
 }
 
 func userScriptPreview(code string) (string, bool) {
@@ -78,7 +90,7 @@ func ListPublishedUserScripts(offset int, limit int) ([]UserScript, int64, error
 		return nil, 0, err
 	}
 	var scripts []UserScript
-	err := DB.Select("id,user_id,title,description,published,published_at,created_at,updated_at,published_code").
+	err := DB.Select("id,user_id,title,description,script_params,published,published_at,created_at,updated_at,published_code").
 		Where("published = ?", true).
 		Order("updated_at desc,id desc").
 		Offset(offset).
@@ -111,7 +123,7 @@ func GetPublishedUserScript(id int) (*UserScript, error) {
 
 func GetPublishedUserScriptCode(id int) (*UserScript, error) {
 	var script UserScript
-	err := DB.Select("id,user_id,title,description,published,published_at,created_at,updated_at,published_code").
+	err := DB.Select("id,user_id,title,description,script_params,published,published_at,created_at,updated_at,published_code").
 		Where("id = ? AND published = ?", id, true).
 		First(&script).Error
 	if err != nil {
@@ -122,7 +134,7 @@ func GetPublishedUserScriptCode(id int) (*UserScript, error) {
 
 func ListUserScripts(userId int) ([]UserScript, error) {
 	var scripts []UserScript
-	err := DB.Select("id,user_id,title,description,published,published_at,created_at,updated_at").
+	err := DB.Select("id,user_id,title,description,script_params,published,published_at,created_at,updated_at").
 		Where("user_id = ?", userId).
 		Order("updated_at desc,id desc").
 		Find(&scripts).Error
@@ -141,8 +153,8 @@ func GetUserScriptById(id int, userId int) (*UserScript, error) {
 	return &script, nil
 }
 
-func UpsertUserScriptDraft(userId int, id int, title string, description string, code string) (*UserScript, error) {
-	title, description, code, err := NormalizeUserScriptInput(title, description, code)
+func UpsertUserScriptDraft(userId int, id int, title string, description string, scriptParams string, code string) (*UserScript, error) {
+	title, description, scriptParams, code, err := NormalizeUserScriptInput(title, description, scriptParams, code)
 	if err != nil {
 		return nil, err
 	}
@@ -153,6 +165,7 @@ func UpsertUserScriptDraft(userId int, id int, title string, description string,
 		}
 		script.Title = title
 		script.Description = description
+		script.ScriptParams = scriptParams
 		script.DraftCode = code
 		if err := DB.Save(script).Error; err != nil {
 			return nil, err
@@ -160,10 +173,11 @@ func UpsertUserScriptDraft(userId int, id int, title string, description string,
 		return script, nil
 	}
 	script := &UserScript{
-		UserId:      userId,
-		Title:       title,
-		Description: description,
-		DraftCode:   code,
+		UserId:       userId,
+		Title:        title,
+		Description:  description,
+		ScriptParams: scriptParams,
+		DraftCode:    code,
 	}
 	if err := DB.Create(script).Error; err != nil {
 		return nil, err

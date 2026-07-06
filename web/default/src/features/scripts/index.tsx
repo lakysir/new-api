@@ -22,6 +22,7 @@ type UserScript = {
   user_id: number
   title: string
   description: string
+  script_params?: string
   draft_code?: string
   published?: boolean
   published_at?: number
@@ -35,6 +36,20 @@ const emptyForm = {
   id: 0,
   title: '',
   description: '',
+  script_params: JSON.stringify(
+    {
+      prompt: 'a dog',
+      referenceImageUrls: [
+        'https://oss.aimh8.com/international/2026/07/05/233ac22e11714a66abf40de604f88fb3.jpg',
+      ],
+      model: 'NARWHAL',
+      resolution: '2K',
+      aspectRatio: '1:1',
+      timeoutMs: 120000,
+    },
+    null,
+    2
+  ),
   draft_code: '',
 }
 
@@ -69,6 +84,16 @@ function CodePreviewDialog({
       contentClassName='sm:max-w-3xl'
       contentHeight='58vh'
     >
+      {script?.script_params ? (
+        <div className='mb-3 rounded-lg border bg-muted/30 p-3'>
+          <div className='text-muted-foreground mb-2 text-xs font-medium'>
+            {t('Script Params')}
+          </div>
+          <pre className='overflow-auto font-mono text-xs whitespace-pre-wrap'>
+            {script.script_params}
+          </pre>
+        </div>
+      ) : null}
       <pre className='overflow-auto rounded-lg border bg-muted/40 p-3 font-mono text-xs whitespace-pre-wrap'>
         {script?.code_preview || ''}
         {script?.preview_truncated ? `\n\n/* ${t('Preview truncated')} */` : ''}
@@ -267,15 +292,23 @@ export function MyScriptsPage() {
       id: script.id,
       title: script.title || '',
       description: script.description || '',
+      script_params: script.script_params || '',
       draft_code: script.draft_code || '',
     })
     setEditorOpen(true)
   }
 
   async function saveDraft() {
+    if (editing.script_params.trim()) {
+      const parsed = JSON.parse(editing.script_params)
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error(t('Script Params must be a JSON object.'))
+      }
+    }
     const payload = {
       title: editing.title,
       description: editing.description,
+      script_params: editing.script_params,
       code: editing.draft_code,
     }
     if (editing.id) {
@@ -457,15 +490,25 @@ export function MyScriptsPage() {
                 setEditing((prev) => ({ ...prev, title: event.target.value }))
               }
             />
-            <Textarea
+            <Input
               value={editing.description}
               placeholder={t('Description')}
-              rows={10}
-              className='min-h-[240px] resize-y'
               onChange={(event) =>
                 setEditing((prev) => ({
                   ...prev,
                   description: event.target.value,
+                }))
+              }
+            />
+            <Textarea
+              value={editing.script_params}
+              placeholder={t('Script Params')}
+              rows={8}
+              className='min-h-[180px] resize-y font-mono text-xs'
+              onChange={(event) =>
+                setEditing((prev) => ({
+                  ...prev,
+                  script_params: event.target.value,
                 }))
               }
             />

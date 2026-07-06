@@ -12,11 +12,12 @@ import (
 )
 
 type userScriptSaveRequest struct {
-	Id          int    `json:"id"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Code        string `json:"code"`
-	DraftCode   string `json:"draft_code"`
+	Id           int    `json:"id"`
+	Title        string `json:"title"`
+	Description  string `json:"description"`
+	ScriptParams string `json:"script_params"`
+	Code         string `json:"code"`
+	DraftCode    string `json:"draft_code"`
 }
 
 func parseScriptId(c *gin.Context) (int, bool) {
@@ -107,7 +108,7 @@ func SaveMyScriptDraft(c *gin.Context) {
 		}
 		id = parsed
 	}
-	script, err := model.UpsertUserScriptDraft(c.GetInt("id"), id, req.Title, req.Description, scriptCodeFromRequest(req))
+	script, err := model.UpsertUserScriptDraft(c.GetInt("id"), id, req.Title, req.Description, req.ScriptParams, scriptCodeFromRequest(req))
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -183,12 +184,13 @@ func ApiGetPublishedScriptCode(c *gin.Context) {
 		return
 	}
 	common.ApiSuccess(c, gin.H{
-		"id":           script.Id,
-		"title":        script.Title,
-		"description":  script.Description,
-		"code":         script.PublishedCode,
-		"published_at": script.PublishedAt,
-		"created_at":   script.CreatedAt,
-		"updated_at":   script.UpdatedAt,
+		"id":            script.Id,
+		"title":         script.Title,
+		"description":   script.Description,
+		"script_params": script.ScriptParams,
+		"code":          script.PublishedCode,
+		"published_at":  script.PublishedAt,
+		"created_at":    script.CreatedAt,
+		"updated_at":    script.UpdatedAt,
 	})
 }
