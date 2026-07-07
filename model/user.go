@@ -273,7 +273,13 @@ func SearchUsers(keyword string, group string, role *int, status *int, startIdx 
 
 	query = query.Where("("+likeCondition+")", likeArgs...)
 	if group != "" {
-		query = query.Where(commonGroupCol+" = ?", group)
+		query = query.Where(
+			"("+commonGroupCol+" = ? OR "+commonGroupCol+" LIKE ? OR "+commonGroupCol+" LIKE ? OR "+commonGroupCol+" LIKE ?)",
+			group,
+			group+",%",
+			"%,"+group,
+			"%,"+group+",%",
+		)
 	}
 	if role != nil {
 		query = query.Where("role = ?", *role)

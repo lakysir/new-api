@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery } from '@tanstack/react-query'
 import { Pencil } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -31,6 +31,7 @@ import {
   sideDrawerFormClassName,
   sideDrawerHeaderClassName,
 } from '@/components/drawer-layout'
+import { MultiSelect } from '@/components/multi-select'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -81,7 +82,12 @@ import {
   getGroups,
   getPermissionCatalog,
 } from '../api'
-import { BINDING_FIELDS, ERROR_MESSAGES, SUCCESS_MESSAGES } from '../constants'
+import {
+  BINDING_FIELDS,
+  DEFAULT_GROUP,
+  ERROR_MESSAGES,
+  SUCCESS_MESSAGES,
+} from '../constants'
 import {
   userFormSchema,
   type UserFormValues,
@@ -97,6 +103,14 @@ type UsersMutateDrawerProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   currentRow?: User
+}
+
+function splitUserGroups(group?: string): string[] {
+  if (!group) return []
+  return group
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
 }
 
 export function UsersMutateDrawer({
@@ -131,6 +145,18 @@ export function UsersMutateDrawer({
     resolver: zodResolver(userFormSchema),
     defaultValues: USER_FORM_DEFAULT_VALUES,
   })
+  const watchedGroup = form.watch('group')
+  const selectedGroups = useMemo(
+    () => splitUserGroups(watchedGroup),
+    [watchedGroup]
+  )
+  const groupOptions = useMemo(() => {
+    const allGroups = new Set([...groups, ...selectedGroups])
+    return Array.from(allGroups).map((group) => ({
+      value: group,
+      label: group,
+    }))
+  }, [groups, selectedGroups])
 
   // Load existing data when updating
   useEffect(() => {
@@ -359,31 +385,22 @@ export function UsersMutateDrawer({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>{t('Group')}</FormLabel>
-                        <Select
-                          items={[
-                            ...groups.map((group) => ({
-                              value: group,
-                              label: group,
-                            })),
-                          ]}
-                          onValueChange={field.onChange}
-                          value={field.value}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder={t('Select a group')} />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent alignItemWithTrigger={false}>
-                            <SelectGroup>
-                              {groups.map((group) => (
-                                <SelectItem key={group} value={group}>
-                                  {group}
-                                </SelectItem>
-                              ))}
-                            </SelectGroup>
-                          </SelectContent>
-                        </Select>
+                        <FormControl>
+                          <MultiSelect
+                            options={groupOptions}
+                            selected={splitUserGroups(field.value)}
+                            onChange={(values) =>
+                              field.onChange(
+                                values.length > 0
+                                  ? values.join(',')
+                                  : DEFAULT_GROUP
+                              )
+                            }
+                            placeholder={t('Select groups')}
+                            emptyText={t('No group found.')}
+                            maxVisibleChips={4}
+                          />
+                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}

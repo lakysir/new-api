@@ -49,6 +49,14 @@ function getQuotaProgressColor(percentage: number): string {
   return '[&_[data-slot=progress-indicator]]:bg-emerald-500'
 }
 
+function splitUserGroups(group?: string): string[] {
+  if (!group) return []
+  return group
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
 export function useUsersColumns(): ColumnDef<User>[] {
   const { t } = useTranslation()
   return [
@@ -230,6 +238,18 @@ export function useUsersColumns(): ColumnDef<User>[] {
       header: t('Group'),
       cell: ({ row }) => {
         const group = row.getValue('group') as string
+        const groups = splitUserGroups(group)
+        if (groups.length > 1) {
+          return (
+            <BadgeCell>
+              <div className='flex max-w-[180px] flex-wrap gap-1'>
+                {groups.map((item) => (
+                  <GroupBadge key={item} group={item} />
+                ))}
+              </div>
+            </BadgeCell>
+          )
+        }
         return (
           <BadgeCell>
             <GroupBadge group={group} />
