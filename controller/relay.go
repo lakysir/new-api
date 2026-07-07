@@ -577,6 +577,9 @@ func RelayTask(c *gin.Context) {
 			common.SysError("settle task billing error: " + settleErr.Error())
 		}
 		service.LogTaskConsumption(c, relayInfo)
+		gopool.Go(func() {
+			perfmetrics.RecordRelaySample(relayInfo, true, 0)
+		})
 
 		task := model.InitTask(result.Platform, relayInfo)
 		task.PrivateData.UpstreamTaskID = result.UpstreamTaskID
@@ -601,6 +604,9 @@ func RelayTask(c *gin.Context) {
 	}
 
 	if taskErr != nil {
+		gopool.Go(func() {
+			perfmetrics.RecordRelaySample(relayInfo, false, 0)
+		})
 		respondTaskError(c, taskErr)
 	}
 }
