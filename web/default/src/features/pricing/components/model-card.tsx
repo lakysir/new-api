@@ -55,6 +55,8 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
   const usdExchangeRate = props.usdExchangeRate ?? 1
   const showRechargePrice = props.showRechargePrice ?? false
   const isTokenBased = isTokenBasedModel(props.model)
+  const requestPriceUnitLabel =
+    props.model.request_price_display_unit === 'second' ? 's' : t('request')
   const tokenUnitLabel = tokenUnit === 'K' ? '1K' : '1M'
   const tags = parseTags(props.model.tags)
   const groups = props.usableGroup
@@ -200,7 +202,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
                       true
                     )}
                   </span>{' '}
-                  / {t('request')}
+                  / {requestPriceUnitLabel}
                 </span>
               )}
             </div>

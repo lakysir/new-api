@@ -25,6 +25,7 @@ type Pricing struct {
 	ModelRatio             float64                 `json:"model_ratio"`
 	ModelPrice             float64                 `json:"model_price"`
 	RequestPriceUnits      int                     `json:"request_price_units,omitempty"`
+	RequestPriceDisplayUnit string                  `json:"request_price_display_unit,omitempty"`
 	OwnerBy                string                  `json:"owner_by"`
 	CompletionRatio        float64                 `json:"completion_ratio"`
 	CacheRatio             *float64                `json:"cache_ratio,omitempty"`
@@ -305,6 +306,7 @@ func updatePricing() {
 			pricing.Tags = meta.Tags
 			pricing.VendorID = meta.VendorID
 			pricing.RequestPriceUnits = meta.RequestPriceUnits
+			pricing.RequestPriceDisplayUnit = meta.RequestPriceDisplayUnit
 		}
 		modelPrice, findPrice := ratio_setting.GetModelPrice(model, false)
 		if findPrice {
@@ -344,7 +346,7 @@ func updatePricing() {
 
 	// 防止大更新后数据不通用
 	if len(pricingMap) > 0 {
-		pricingMap[0].PricingVersion = "request-price-units-20260707"
+		pricingMap[0].PricingVersion = "request-price-display-unit-20260707"
 	}
 
 	// 刷新缓存映射，供高并发快速查询

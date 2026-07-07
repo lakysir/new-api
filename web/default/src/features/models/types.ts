@@ -44,6 +44,7 @@ export interface Model {
   status: number
   sync_official: number
   request_price_units?: number
+  request_price_display_unit?: 'request' | 'second'
   created_time: number
   updated_time: number
   name_rule: number

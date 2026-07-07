@@ -99,6 +99,7 @@ const extendedModelFormSchema = z.object({
   status: z.boolean(),
   sync_official: z.boolean(),
   request_price_units: z.string().optional(),
+  request_price_display_unit: z.enum(['request', 'second']).optional(),
   price: z.string().optional(),
   ratio: z.string().optional(),
   cacheRatio: z.string().optional(),
@@ -239,6 +240,7 @@ export function ModelMutateDrawer({
       status: true,
       sync_official: true,
       request_price_units: '1',
+      request_price_display_unit: 'request',
       price: '',
       ratio: '',
       cacheRatio: '',
@@ -306,6 +308,8 @@ export function ModelMutateDrawer({
         status: model.status === 1,
         sync_official: model.sync_official === 1,
         request_price_units: String(model.request_price_units || 1),
+        request_price_display_unit:
+          model.request_price_display_unit === 'second' ? 'second' : 'request',
         price: '',
         ratio: '',
         cacheRatio: '',
@@ -411,6 +415,7 @@ export function ModelMutateDrawer({
         status: true,
         sync_official: true,
         request_price_units: '1',
+        request_price_display_unit: 'request',
         price: '',
         ratio: '',
         cacheRatio: '',
@@ -436,6 +441,10 @@ export function ModelMutateDrawer({
             1,
             Number.parseInt(values.request_price_units || '1', 10) || 1
           ),
+          request_price_display_unit:
+            values.request_price_display_unit === 'second'
+              ? 'second'
+              : 'request',
         }
 
         // Remove ratio fields from model data (they're stored in system settings)
@@ -1010,6 +1019,52 @@ export function ModelMutateDrawer({
                         <FormDescription>
                           {t(
                             'Only affects the displayed price on pricing model cards.'
+                          )}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name='request_price_display_unit'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Display unit')}</FormLabel>
+                        <FormControl>
+                          <RadioGroup
+                            value={field.value || 'request'}
+                            onValueChange={field.onChange}
+                          >
+                            <div className='flex items-center space-x-2'>
+                              <RadioGroupItem
+                                value='request'
+                                id='display-unit-request'
+                              />
+                              <Label
+                                htmlFor='display-unit-request'
+                                className='font-normal'
+                              >
+                                {t('Bill by request')}
+                              </Label>
+                            </div>
+                            <div className='flex items-center space-x-2'>
+                              <RadioGroupItem
+                                value='second'
+                                id='display-unit-second'
+                              />
+                              <Label
+                                htmlFor='display-unit-second'
+                                className='font-normal'
+                              >
+                                {t('Bill by second')}
+                              </Label>
+                            </div>
+                          </RadioGroup>
+                        </FormControl>
+                        <FormDescription>
+                          {t(
+                            'Only affects the displayed unit on pricing model cards.'
                           )}
                         </FormDescription>
                         <FormMessage />
