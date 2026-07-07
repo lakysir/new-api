@@ -40,6 +40,26 @@ export function getAvailableGroups(
 }
 
 /**
+ * Get visible groups for user-facing model detail sections.
+ * When a model is enabled for "all", only expose the current user's usable
+ * groups instead of all configured platform groups.
+ */
+export function getVisibleModelGroups(
+  model: PricingModel,
+  usableGroup: Record<string, { desc: string; ratio: number }>
+): string[] {
+  const modelEnableGroups = Array.isArray(model.enable_groups)
+    ? model.enable_groups
+    : []
+
+  if (modelEnableGroups.includes('all')) {
+    return Object.keys(usableGroup).filter((g) => !EXCLUDED_GROUPS.includes(g))
+  }
+
+  return getAvailableGroups(model, usableGroup)
+}
+
+/**
  * Replace model placeholder in endpoint path
  */
 export function replaceModelInPath(path: string, modelName: string): string {

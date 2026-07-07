@@ -37,6 +37,7 @@ import type { PerformanceGroup } from '@/features/performance-metrics/types'
 import { cn } from '@/lib/utils'
 
 import { type UptimeDayPoint } from '../lib/mock-stats'
+import { getVisibleModelGroups } from '../lib/model-helpers'
 import type { PricingModel } from '../types'
 import { LatencyTrendChart, UptimeTrendChart } from './model-details-charts'
 import { UptimeSparkline } from './model-details-uptime-sparkline'
@@ -161,7 +162,10 @@ function average(
   )
 }
 
-export function ModelDetailsPerformance(props: { model: PricingModel }) {
+export function ModelDetailsPerformance(props: {
+  model: PricingModel
+  usableGroup: Record<string, { desc: string; ratio: number }>
+}) {
   const { t } = useTranslation()
   const metricsQuery = useQuery({
     queryKey: ['perf-metrics', props.model.model_name],
@@ -182,6 +186,14 @@ export function ModelDetailsPerformance(props: { model: PricingModel }) {
         avg_tps: group.avg_tps,
       })),
     [groups]
+  )
+  const visibleGroups = useMemo(
+    () => new Set(getVisibleModelGroups(props.model, props.usableGroup)),
+    [props.model, props.usableGroup]
+  )
+  const visiblePerformances = useMemo(
+    () => performances.filter((perf) => visibleGroups.has(perf.group)),
+    [performances, visibleGroups]
   )
   const latencySeries = useMemo(() => toLatencySeries(groups), [groups])
   const uptimeSeries = useMemo(() => toUptimeSeries(groups), [groups])
@@ -258,7 +270,7 @@ export function ModelDetailsPerformance(props: { model: PricingModel }) {
           className='rounded-lg'
           tableClassName='text-sm'
           headerRowClassName={tableStyles.compactHeaderRow}
-          data={performances}
+          data={visiblePerformances}
           getRowKey={(perf) => perf.group}
           columns={[
             {

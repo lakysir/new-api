@@ -46,7 +46,7 @@ import {
   formatRateLimit,
   type SupportedParameter,
 } from '../lib/mock-stats'
-import { replaceModelInPath } from '../lib/model-helpers'
+import { getVisibleModelGroups, replaceModelInPath } from '../lib/model-helpers'
 import type { PricingModel } from '../types'
 
 // ---------------------------------------------------------------------------
@@ -665,9 +665,25 @@ function ParamRangeCell(props: { param: SupportedParameter }) {
 // Rate-limits table
 // ---------------------------------------------------------------------------
 
-function RateLimitsSection(props: { model: PricingModel }) {
+function RateLimitsSection(props: {
+  model: PricingModel
+  usableGroup: Record<string, { desc: string; ratio: number }>
+}) {
   const { t } = useTranslation()
-  const limits = useMemo(() => buildRateLimits(props.model), [props.model])
+  const visibleGroups = useMemo(
+    () => getVisibleModelGroups(props.model, props.usableGroup),
+    [props.model, props.usableGroup]
+  )
+  const limits = useMemo(
+    () => {
+      if (visibleGroups.length === 0) return []
+      return buildRateLimits({
+        ...props.model,
+        enable_groups: visibleGroups,
+      })
+    },
+    [props.model, visibleGroups]
+  )
 
   if (limits.length === 0) return null
 
@@ -761,13 +777,17 @@ function AuthSection() {
 export function ModelDetailsApi(props: {
   model: PricingModel
   endpointMap: Record<string, { path?: string; method?: string }>
+  usableGroup: Record<string, { desc: string; ratio: number }>
 }) {
   return (
     <div className='space-y-6'>
       <CodeSamplesSection model={props.model} endpointMap={props.endpointMap} />
       <AuthSection />
       <SupportedParametersSection model={props.model} />
-      <RateLimitsSection model={props.model} />
+      <RateLimitsSection
+        model={props.model}
+        usableGroup={props.usableGroup}
+      />
     </div>
   )
 }
