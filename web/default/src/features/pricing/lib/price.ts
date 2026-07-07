@@ -122,6 +122,12 @@ function hasRatio(value: number | null | undefined): boolean {
   return value !== undefined && value !== null && Number.isFinite(Number(value))
 }
 
+function getRequestPriceUnits(model: PricingModel): number {
+  const units = Number(model.request_price_units)
+  if (!Number.isInteger(units) || units < 1) return 1
+  return units
+}
+
 /**
  * Apply recharge rate to price
  *
@@ -269,7 +275,8 @@ export function formatRequestPrice(
   model: PricingModel,
   showWithRecharge = false,
   priceRate = 1,
-  usdExchangeRate = 1
+  usdExchangeRate = 1,
+  applyRequestPriceUnits = false
 ): string {
   if (model.quota_type !== QUOTA_TYPE_VALUES.REQUEST) {
     return '-'
@@ -281,7 +288,10 @@ export function formatRequestPrice(
   const groupRatio = model.group_ratio || {}
   const minRatio = getMinGroupRatio(enableGroups, groupRatio)
 
-  let priceInUSD = (model.model_price || 0) * minRatio
+  const requestPriceUnits = applyRequestPriceUnits
+    ? getRequestPriceUnits(model)
+    : 1
+  let priceInUSD = (model.model_price || 0) * minRatio * requestPriceUnits
 
   priceInUSD = applyRechargeRate(
     priceInUSD,

@@ -98,6 +98,7 @@ const extendedModelFormSchema = z.object({
   name_rule: z.number(),
   status: z.boolean(),
   sync_official: z.boolean(),
+  request_price_units: z.string().optional(),
   price: z.string().optional(),
   ratio: z.string().optional(),
   cacheRatio: z.string().optional(),
@@ -237,6 +238,7 @@ export function ModelMutateDrawer({
       name_rule: 0,
       status: true,
       sync_official: true,
+      request_price_units: '1',
       price: '',
       ratio: '',
       cacheRatio: '',
@@ -250,6 +252,12 @@ export function ModelMutateDrawer({
   const validateNumber = (value: string) => {
     if (value === '') return true
     return !Number.isNaN(Number.parseFloat(value))
+  }
+
+  const validatePositiveInteger = (value: string) => {
+    if (value === '') return true
+    const parsed = Number.parseInt(value, 10)
+    return String(parsed) === value && parsed >= 1
   }
 
   const handlePromptPriceChange = (value: string) => {
@@ -297,6 +305,7 @@ export function ModelMutateDrawer({
         name_rule: model.name_rule || 0,
         status: model.status === 1,
         sync_official: model.sync_official === 1,
+        request_price_units: String(model.request_price_units || 1),
         price: '',
         ratio: '',
         cacheRatio: '',
@@ -401,6 +410,7 @@ export function ModelMutateDrawer({
         name_rule: 0,
         status: true,
         sync_official: true,
+        request_price_units: '1',
         price: '',
         ratio: '',
         cacheRatio: '',
@@ -422,6 +432,10 @@ export function ModelMutateDrawer({
           tags: Array.isArray(values.tags) ? values.tags.join(',') : '',
           status: values.status ? 1 : 0,
           sync_official: values.sync_official ? 1 : 0,
+          request_price_units: Math.max(
+            1,
+            Number.parseInt(values.request_price_units || '1', 10) || 1
+          ),
         }
 
         // Remove ratio fields from model data (they're stored in system settings)
@@ -944,34 +958,65 @@ export function ModelMutateDrawer({
               </div>
 
               {pricingMode === 'per-request' ? (
-                <FormField
-                  control={form.control}
-                  name='price'
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('Fixed price (USD)')}</FormLabel>
-                      <FormControl>
-                        <Input
-                          type='text'
-                          placeholder='0.01'
-                          {...field}
-                          onChange={(e) => {
-                            const value = e.target.value
-                            if (validateNumber(value)) {
-                              field.onChange(value)
-                            }
-                          }}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        {t(
-                          'Cost in USD per request, regardless of tokens used.'
-                        )}
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                <>
+                  <FormField
+                    control={form.control}
+                    name='price'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Fixed price (USD)')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            type='text'
+                            placeholder='0.01'
+                            {...field}
+                            onChange={(e) => {
+                              const value = e.target.value
+                              if (validateNumber(value)) {
+                                field.onChange(value)
+                              }
+                            }}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t(
+                            'Cost in USD per request, regardless of tokens used.'
+                          )}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name='request_price_units'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Request count')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            type='text'
+                            inputMode='numeric'
+                            placeholder='1'
+                            {...field}
+                            onChange={(e) => {
+                              const value = e.target.value
+                              if (validatePositiveInteger(value)) {
+                                field.onChange(value)
+                              }
+                            }}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t(
+                            'Only affects the displayed price on pricing model cards.'
+                          )}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </>
               ) : (
                 <>
                   <div className='space-y-4'>

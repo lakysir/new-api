@@ -43,6 +43,7 @@ export interface Model {
   endpoints?: string
   status: number
   sync_official: number
+  request_price_units?: number
   created_time: number
   updated_time: number
   name_rule: number
