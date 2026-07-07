@@ -49,6 +49,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { getPerfMetrics } from '@/features/performance-metrics/api'
+import { useIsAdmin } from '@/hooks/use-admin'
 import {
   formatLatency,
   formatThroughput,
@@ -441,7 +442,10 @@ function ModelBackendSignalsSection(props: { model: PricingModel }) {
   )
 }
 
-function ModelBackendProviderSection(props: { model: PricingModel }) {
+function ModelBackendProviderSection(props: {
+  model: PricingModel
+  showAdminGroups?: boolean
+}) {
   const { t } = useTranslation()
   const model = props.model
   const groups = normalizeCatalogItems(model.enable_groups)
@@ -467,7 +471,7 @@ function ModelBackendProviderSection(props: { model: PricingModel }) {
     </CatalogInfoCell>
   )
 
-  if (groups.length > 0) {
+  if (props.showAdminGroups && groups.length > 0) {
     cells.push(
       <CatalogInfoCell key='groups' label={t('Groups')}>
         <CatalogPillList items={groups} />
@@ -511,12 +515,18 @@ function ModelBackendProviderSection(props: { model: PricingModel }) {
   )
 }
 
-function ModelBackendDetailsSection(props: { model: PricingModel }) {
+function ModelBackendDetailsSection(props: {
+  model: PricingModel
+  showAdminGroups?: boolean
+}) {
   return (
     <>
       <ModelBackendQuickStats model={props.model} />
       <ModelBackendSignalsSection model={props.model} />
-      <ModelBackendProviderSection model={props.model} />
+      <ModelBackendProviderSection
+        model={props.model}
+        showAdminGroups={props.showAdminGroups}
+      />
     </>
   )
 }
@@ -1154,6 +1164,7 @@ export interface ModelDetailsContentProps {
 
 export function ModelDetailsContent(props: ModelDetailsContentProps) {
   const { t } = useTranslation()
+  const isAdmin = useIsAdmin()
   const showRechargePrice = props.showRechargePrice ?? false
 
   const isDynamic =
@@ -1208,7 +1219,10 @@ export function ModelDetailsContent(props: ModelDetailsContentProps) {
             />
           </section>
 
-          <ModelBackendDetailsSection model={props.model} />
+          <ModelBackendDetailsSection
+            model={props.model}
+            showAdminGroups={isAdmin}
+          />
         </TabsContent>
 
         <TabsContent value='performance' className='outline-none'>
