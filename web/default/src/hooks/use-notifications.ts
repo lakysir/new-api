@@ -17,45 +17,21 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
-import { useState, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useStatus } from '@/hooks/use-status'
+import { getAnnouncementKey } from '@/lib/announcements'
 import { getNotice } from '@/lib/api'
 import { useNotificationStore } from '@/stores/notification-store'
 
-function hashString(input: string): string {
-  let hash = 0
-  if (!input) return '0'
-
-  for (let i = 0; i < input.length; i += 1) {
-    const chr = input.charCodeAt(i)
-    hash = (hash << 5) - hash + chr
-    hash |= 0
-  }
-
-  return hash.toString(36)
-}
-
-/**
- * Generate a unique key for an announcement
- * Prefer backend id, fall back to a content hash so edits register
- */
-function getAnnouncementKey(item: Record<string, unknown>): string {
-  if (!item) return ''
-
-  if (item.id !== undefined && item.id !== null) {
-    return `id:${item.id}`
-  }
-
-  const fingerprint = JSON.stringify({
-    publishDate: (item?.publishDate as string) || '',
-    content: ((item?.content as string) || '').trim(),
-    extra: ((item?.extra as string) || '').trim(),
-    type: (item?.type as string) || '',
-    title: ((item?.title as string) || '').trim(),
-    link: ((item?.link as string) || '').trim(),
-  })
-  return `hash:${hashString(fingerprint)}`
+interface NotificationAnnouncement {
+  id?: number | string
+  type?: string
+  content?: string
+  extra?: string
+  publishDate?: string | Date
+  title?: string
+  link?: string
 }
 
 /**
@@ -64,9 +40,11 @@ function getAnnouncementKey(item: Record<string, unknown>): string {
  */
 export function useNotifications() {
   const [popoverOpen, setPopoverOpen] = useState(false)
+  const [dialogOpen, setDialogOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'notice' | 'announcements'>(
     'notice'
   )
+  const autoOpenedSignatureRef = useRef<string | null>(null)
 
   // Fetch Notice from API
   const {
@@ -83,8 +61,11 @@ export function useNotifications() {
   const { status, loading: statusLoading } = useStatus()
   const announcementsEnabled = status?.announcements_enabled ?? false
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const announcements: Record<string, unknown>[] = announcementsEnabled
-    ? ((status?.announcements || []) as Record<string, unknown>[]).slice(0, 20)
+  const announcements: NotificationAnnouncement[] = announcementsEnabled
+    ? ((status?.announcements || []) as NotificationAnnouncement[]).slice(
+        0,
+        20
+      )
     : []
 
   // Notification store
@@ -105,12 +86,10 @@ export function useNotifications() {
     const noticeUnread =
       noticeContent && noticeContent !== lastReadNotice ? 1 : 0
 
-    const announcementsUnread = announcements.filter(
-      (item: Record<string, unknown>) => {
-        const key = getAnnouncementKey(item)
-        return !isAnnouncementRead(key)
-      }
-    ).length
+    const announcementsUnread = announcements.filter((item) => {
+      const key = getAnnouncementKey(item)
+      return !isAnnouncementRead(key)
+    }).length
 
     return {
       notice: noticeUnread,
@@ -119,48 +98,114 @@ export function useNotifications() {
     }
   }, [noticeContent, lastReadNotice, announcements, isAnnouncementRead])
 
-  const markAnnouncementsAsRead = () => {
+  const unreadAnnouncementKeys = useMemo(
+    () =>
+      announcements
+        .map((item) => getAnnouncementKey(item))
+        .filter((key) => key && !isAnnouncementRead(key)),
+    [announcements, isAnnouncementRead]
+  )
+
+  const markAnnouncementsAsRead = useCallback(() => {
     if (announcements.length > 0) {
-      const allKeys = announcements.map((item: Record<string, unknown>) =>
-        getAnnouncementKey(item)
-      )
+      const allKeys = announcements.map((item) => getAnnouncementKey(item))
       markAnnouncementsRead(allKeys)
     }
-  }
+  }, [announcements, markAnnouncementsRead])
 
   // Handle popover open
-  const handleOpenPopover = (tab?: 'notice' | 'announcements') => {
-    const nextTab = tab || activeTab
+  const handleOpenPopover = useCallback(
+    (tab?: 'notice' | 'announcements') => {
+      const nextTab = tab || activeTab
 
-    // Mark currently visible content as read when opening the notification center
-    if (noticeContent) {
-      markNoticeRead(noticeContent)
-    }
-    if (nextTab === 'announcements') {
-      markAnnouncementsAsRead()
-    }
+      // Mark currently visible content as read when opening the notification center
+      if (noticeContent) {
+        markNoticeRead(noticeContent)
+      }
+      if (nextTab === 'announcements') {
+        markAnnouncementsAsRead()
+      }
 
-    setActiveTab(nextTab)
-    setPopoverOpen(true)
-  }
+      setActiveTab(nextTab)
+      setPopoverOpen(true)
+    },
+    [
+      activeTab,
+      markAnnouncementsAsRead,
+      markNoticeRead,
+      noticeContent,
+      setActiveTab,
+      setPopoverOpen,
+    ]
+  )
 
-  const handlePopoverOpenChange = (open: boolean) => {
-    if (open) {
-      handleOpenPopover(activeTab)
-      return
-    }
+  const handlePopoverOpenChange = useCallback(
+    (open: boolean) => {
+      if (open) {
+        handleOpenPopover(activeTab)
+        return
+      }
 
-    setPopoverOpen(false)
-  }
+      setPopoverOpen(false)
+    },
+    [activeTab, handleOpenPopover]
+  )
 
   // Handle tab change - mark announcements as read when switching to that tab
-  const handleTabChange = (tab: 'notice' | 'announcements') => {
-    setActiveTab(tab)
+  const handleTabChange = useCallback(
+    (tab: 'notice' | 'announcements') => {
+      setActiveTab(tab)
 
-    if (tab === 'announcements') {
-      markAnnouncementsAsRead()
-    }
-  }
+      if (tab === 'announcements') {
+        markAnnouncementsAsRead()
+      }
+    },
+    [markAnnouncementsAsRead]
+  )
+
+  const handleOpenDialog = useCallback(
+    (tab: 'notice' | 'announcements') => {
+      if (noticeContent) {
+        markNoticeRead(noticeContent)
+      }
+      if (tab === 'announcements') {
+        markAnnouncementsAsRead()
+      }
+
+      setActiveTab(tab)
+      setDialogOpen(true)
+    },
+    [markAnnouncementsAsRead, markNoticeRead, noticeContent]
+  )
+
+  useEffect(() => {
+    if (noticeLoading || statusLoading || popoverOpen || dialogOpen) return
+    if (unreadCounts.total <= 0) return
+
+    const targetTab: 'notice' | 'announcements' =
+      unreadCounts.announcements > 0 ? 'announcements' : 'notice'
+    const signature = [
+      targetTab,
+      noticeContent && noticeContent !== lastReadNotice ? noticeContent : '',
+      unreadAnnouncementKeys.join('|'),
+    ].join('::')
+
+    if (!signature || autoOpenedSignatureRef.current === signature) return
+
+    autoOpenedSignatureRef.current = signature
+    handleOpenDialog(targetTab)
+  }, [
+    dialogOpen,
+    handleOpenDialog,
+    lastReadNotice,
+    noticeContent,
+    noticeLoading,
+    popoverOpen,
+    statusLoading,
+    unreadAnnouncementKeys,
+    unreadCounts.announcements,
+    unreadCounts.total,
+  ])
 
   return {
     // Data
@@ -176,6 +221,8 @@ export function useNotifications() {
     // Popover state
     popoverOpen,
     setPopoverOpen: handlePopoverOpenChange,
+    dialogOpen,
+    setDialogOpen,
     activeTab,
     setActiveTab: handleTabChange,
 

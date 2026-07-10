@@ -44,7 +44,7 @@ import { getAnnouncementColorClass } from '@/lib/colors'
 import { formatDateTimeObject } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
-interface AnnouncementItem {
+export interface AnnouncementItem {
   id?: number | string
   type?: string
   content?: string
@@ -178,7 +178,7 @@ function EmptyState({
 /**
  * Notice tab content
  */
-function NoticeContent({
+export function NoticeContent({
   notice,
   loading,
   t,
@@ -213,7 +213,7 @@ function NoticeContent({
 /**
  * Announcements tab content
  */
-function AnnouncementsContent({
+export function AnnouncementsContent({
   announcements,
   loading,
   t,
