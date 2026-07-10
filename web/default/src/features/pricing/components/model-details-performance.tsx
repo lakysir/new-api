@@ -195,17 +195,27 @@ export function ModelDetailsPerformance(props: {
     () => performances.filter((perf) => visibleGroups.has(perf.group)),
     [performances, visibleGroups]
   )
-  const latencySeries = useMemo(() => toLatencySeries(groups), [groups])
-  const uptimeSeries = useMemo(() => toUptimeSeries(groups), [groups])
+  const visibleMetricGroups = useMemo(
+    () => groups.filter((group) => visibleGroups.has(group.group)),
+    [groups, visibleGroups]
+  )
+  const latencySeries = useMemo(
+    () => toLatencySeries(visibleMetricGroups),
+    [visibleMetricGroups]
+  )
+  const uptimeSeries = useMemo(
+    () => toUptimeSeries(visibleMetricGroups),
+    [visibleMetricGroups]
+  )
   const uptimeByGroup = useMemo<Record<string, UptimeDayPoint[]>>(() => {
     const map: Record<string, UptimeDayPoint[]> = {}
-    for (const group of groups) {
+    for (const group of visibleMetricGroups) {
       map[group.group] = toGroupUptimeSeries(group)
     }
     return map
-  }, [groups])
+  }, [visibleMetricGroups])
 
-  if (metricsQuery.isLoading || performances.length === 0) {
+  if (metricsQuery.isLoading || visiblePerformances.length === 0) {
     return (
       <div className='text-muted-foreground rounded-lg border p-6 text-center text-sm'>
         {t('Performance data is not yet available for this model.')}
@@ -213,15 +223,15 @@ export function ModelDetailsPerformance(props: {
     )
   }
 
-  const tpsValues = performances
+  const tpsValues = visiblePerformances
     .map((p) => p.avg_tps)
     .filter((value) => value > 0)
   const avgTps =
     tpsValues.length > 0
       ? tpsValues.reduce((sum, value) => sum + value, 0) / tpsValues.length
       : 0
-  const avgLatency = average(performances, 'avg_latency_ms')
-  const successRates = performances
+  const avgLatency = average(visiblePerformances, 'avg_latency_ms')
+  const successRates = visiblePerformances
     .map((perf) => perf.success_rate)
     .filter((value) => Number.isFinite(value))
   const successRate =
