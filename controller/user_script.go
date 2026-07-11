@@ -20,6 +20,16 @@ type userScriptSaveRequest struct {
 	DraftCode    string `json:"draft_code"`
 }
 
+type publishedScriptListItem struct {
+	Id           int    `json:"id"`
+	Title        string `json:"title"`
+	Description  string `json:"description"`
+	ScriptParams string `json:"script_params"`
+	PublishedAt  int64  `json:"published_at"`
+	CreatedAt    int64  `json:"created_at"`
+	UpdatedAt    int64  `json:"updated_at"`
+}
+
 func parseScriptId(c *gin.Context) (int, bool) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil || id <= 0 {
@@ -159,6 +169,48 @@ func DeleteMyScript(c *gin.Context) {
 
 func ApiListMyScripts(c *gin.Context) {
 	ListMyScripts(c)
+}
+
+func ApiListPublishedScripts(c *gin.Context) {
+	page, err := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if err != nil || page < 1 {
+		page = 1
+	}
+	pageSize, err := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	if err != nil || pageSize < 1 {
+		pageSize = 20
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
+	// Bound the offset calculation on 32-bit builds and unreasonable requests.
+	if page > 1_000_000 {
+		page = 1_000_000
+	}
+
+	scripts, total, err := model.ListPublishedUserScripts((page-1)*pageSize, pageSize)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	items := make([]publishedScriptListItem, 0, len(scripts))
+	for _, script := range scripts {
+		items = append(items, publishedScriptListItem{
+			Id:           script.Id,
+			Title:        script.Title,
+			Description:  script.Description,
+			ScriptParams: script.ScriptParams,
+			PublishedAt:  script.PublishedAt,
+			CreatedAt:    script.CreatedAt,
+			UpdatedAt:    script.UpdatedAt,
+		})
+	}
+	common.ApiSuccess(c, gin.H{
+		"items":     items,
+		"total":     total,
+		"page":      page,
+		"page_size": pageSize,
+	})
 }
 
 func ApiGetMyScript(c *gin.Context) {
