@@ -37,7 +37,13 @@ type UserScript = {
   updated_at: number
   code_preview?: string
   preview_truncated?: boolean
-  review_status?: 'draft' | 'pending' | 'approved' | 'rejected' | 'publishing'
+  review_status?:
+    | 'draft'
+    | 'pending'
+    | 'approved'
+    | 'rejected'
+    | 'publishing'
+    | 'published'
   review_note?: string
   latest_version?: number
   has_unpublished_changes: boolean
@@ -79,6 +85,8 @@ function reviewStatusKey(status: UserScript['review_status']) {
       return 'Rejected'
     case 'publishing':
       return 'Publishing...'
+    case 'published':
+      return 'Published'
     default:
       return 'Draft'
   }

@@ -18,6 +18,7 @@ const (
 	ScriptReviewApproved   = "approved"   // review passed, publishable
 	ScriptReviewRejected   = "rejected"   // review failed, back to author
 	ScriptReviewPublishing = "publishing"
+	ScriptReviewPublished  = "published"
 )
 
 type UserScript struct {
@@ -40,6 +41,10 @@ type UserScript struct {
 	PreviewTruncated bool           `json:"preview_truncated,omitempty" gorm:"-"`
 	AuthorUsername          string `json:"author_username,omitempty" gorm:"-"`
 	HasUnpublishedChanges   bool   `json:"has_unpublished_changes" gorm:"-"`
+	PreviousTitle           string `json:"previous_title,omitempty" gorm:"-"`
+	PreviousDescription     string `json:"previous_description,omitempty" gorm:"-"`
+	PreviousScriptParams    string `json:"previous_script_params,omitempty" gorm:"-"`
+	PreviousCode            string `json:"previous_code,omitempty" gorm:"-"`
 }
 
 func (UserScript) TableName() string {
@@ -162,7 +167,7 @@ func GetPublishedUserScriptCode(id int) (*UserScript, error) {
 
 func ListUserScripts(userId int) ([]UserScript, error) {
 	var scripts []UserScript
-	err := DB.Select("id,user_id,title,description,script_params,published,published_at,review_status,review_note,latest_version,created_at,updated_at").
+	err := DB.Select("id,user_id,title,description,script_params,draft_code,published,published_at,review_status,review_note,latest_version,created_at,updated_at").
 		Where("user_id = ?", userId).
 		Order("user_scripts.updated_at desc,user_scripts.id desc").
 		Find(&scripts).Error
@@ -177,8 +182,9 @@ func ListUserScripts(userId int) ([]UserScript, error) {
 func ListScriptsByReviewStatus(status string) ([]UserScript, error) {
 	var scripts []UserScript
 	err := DB.Table("user_scripts").
-		Select("user_scripts.id,user_scripts.user_id,user_scripts.title,user_scripts.description,user_scripts.script_params,user_scripts.draft_code,user_scripts.review_status,user_scripts.review_note,user_scripts.latest_version,user_scripts.published,user_scripts.published_at,user_scripts.created_at,user_scripts.updated_at,users.username AS author_username").
+		Select("user_scripts.id,user_scripts.user_id,user_scripts.title,user_scripts.description,user_scripts.script_params,user_scripts.draft_code,user_scripts.review_status,user_scripts.review_note,user_scripts.latest_version,user_scripts.published,user_scripts.published_at,user_scripts.created_at,user_scripts.updated_at,users.username AS author_username,previous_version.title AS previous_title,previous_version.description AS previous_description,previous_version.script_params AS previous_script_params,previous_version.code AS previous_code").
 		Joins("LEFT JOIN users ON users.id = user_scripts.user_id").
+		Joins("LEFT JOIN script_versions previous_version ON previous_version.script_id = user_scripts.id AND previous_version.version = user_scripts.latest_version").
 		Where("user_scripts.review_status = ?", status).
 		Order("user_scripts.updated_at desc,user_scripts.id desc").
 		Find(&scripts).Error

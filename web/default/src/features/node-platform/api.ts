@@ -69,6 +69,10 @@ export function listPendingScripts() {
       description: string
       script_params?: string
       draft_code: string
+      previous_title?: string
+      previous_description?: string
+      previous_script_params?: string
+      previous_code?: string
       review_status: string
       latest_version?: number
     }>

@@ -260,7 +260,7 @@ func PublishScriptVersion(c *gin.Context) {
 	script.PublishedAt = version.PublishedAt
 	_ = model.DB.Model(script).Updates(map[string]any{
 		"published_code": normalized, "published": true, "published_at": version.PublishedAt,
-		"review_status": model.ScriptReviewDraft, "review_note": "",
+		"review_status": model.ScriptReviewPublished, "review_note": "",
 	}).Error
 
 	common.ApiSuccess(c, gin.H{

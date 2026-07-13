@@ -25,6 +25,7 @@ tiktoken_cache
 plans
 .claude
 .cursor
+new-api-custom.tar
 
 electron/node_modules
 electron/dist

@@ -86,6 +86,10 @@ func ListMyScripts(c *gin.Context) {
 	for i := range scripts {
 		matches, matchErr := draftMatchesLatestVersion(&scripts[i])
 		scripts[i].HasUnpublishedChanges = matchErr != nil || !matches
+		if matches && scripts[i].LatestVersion > 0 {
+			scripts[i].ReviewStatus = model.ScriptReviewPublished
+		}
+		scripts[i].DraftCode = ""
 	}
 	common.ApiSuccess(c, scripts)
 }
