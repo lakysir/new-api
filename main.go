@@ -28,6 +28,8 @@ import (
 	"github.com/QuantumNous/new-api/router"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/service/authz"
+	"github.com/QuantumNous/new-api/service/dispatch"
+	"github.com/QuantumNous/new-api/service/nodehub"
 	_ "github.com/QuantumNous/new-api/setting/performance_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
@@ -128,6 +130,10 @@ func main() {
 	// Report this process as a system instance so the System Info page can show
 	// all currently alive nodes in multi-instance deployments.
 	service.StartSystemInstanceReporter()
+
+	// Outbox publisher: drains task.offer (and other control events) enqueued by
+	// the scheduler and pushes them to the owning node's live control channel.
+	go dispatch.StartPublisher(nodehub.Default, time.Second, make(chan struct{}))
 
 	// Wire task polling adaptor factory (breaks service -> relay import cycle).
 	// Must run before the system task runner starts: the async_task_poll handler

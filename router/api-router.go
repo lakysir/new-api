@@ -313,6 +313,11 @@ func SetApiRouter(router *gin.Engine) {
 			}
 		}
 
+		// Provider control channel (WSS). Auth is via the device token carried in
+		// Sec-WebSocket-Protocol (browsers can't set WS headers), so it is NOT
+		// behind DeviceOrUserAuth — the handler authenticates itself.
+		apiRouter.GET("/nodes/control", controller.HandleNodeControl)
+
 		nodeRoute := apiRouter.Group("/nodes")
 		nodeRoute.Use(middleware.CORS(), middleware.DeviceOrUserAuth())
 		{
