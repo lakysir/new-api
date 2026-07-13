@@ -40,13 +40,10 @@ import {
   deleteNode,
   disableCapability,
   enableCapability,
-  listCategories,
   listMyDevices,
   listMyNodes,
   listNodeCapabilities,
-  reportBalanceCheck,
   revokeDevice,
-  type ScriptCategory,
 } from './api'
 import { displayToMicros, formatUnix, microsToDisplay } from './lib/format'
 import type { Device, NodeCapability, NodeInfo } from './types'
@@ -70,8 +67,7 @@ export function NodesConsolePage() {
   // A user may register dozens/hundreds of devices; hide revoked/offline by
   // default to keep the list readable.
   const [hideInactive, setHideInactive] = useState(true)
-  // Capability-config data: categories + published scripts to pick from.
-  const [categories, setCategories] = useState<ScriptCategory[]>([])
+  // Published scripts to pick from when listing a capability.
   const [pubScripts, setPubScripts] = useState<PublishedScript[]>([])
   // Per-node enable form: script id + version + price + quota.
   const [enableForm, setEnableForm] = useState<
@@ -86,34 +82,19 @@ export function NodesConsolePage() {
   async function loadAll() {
     setLoading(true)
     try {
-      const [d, n, cats, sq] = await Promise.all([
+      const [d, n, sq] = await Promise.all([
         listMyDevices(),
         listMyNodes(),
-        listCategories(),
         api.get('/api/scripts/square', { params: { limit: 200 } }),
       ])
       setDevices(d)
       setNodes(n)
-      setCategories(cats)
       const items = (sq.data?.data?.items ?? sq.data?.items ?? sq.data?.data ?? []) as PublishedScript[]
       setPubScripts(items)
     } catch (e) {
       toast.error(String((e as Error).message))
     } finally {
       setLoading(false)
-    }
-  }
-
-  // Record a balance check for a category on a node. NOTE: the real balance
-  // probe must run in the plugin (it holds the target-site session); this
-  // dashboard button records the passing window so the provider can list
-  // capabilities. The plugin will drive this automatically in production.
-  async function onBalanceCheck(nodeId: string, categoryId: number) {
-    try {
-      await reportBalanceCheck(nodeId, { category_id: categoryId, balance_ok: true })
-      toast.success(t('Balance check recorded'))
-    } catch (e) {
-      toast.error(String((e as Error).message))
     }
   }
 
@@ -340,27 +321,12 @@ export function NodesConsolePage() {
               {t('Capabilities of node {{id}}', { id: nodeId })}
             </div>
 
-            {/* Balance checks per category: a node must pass a category's balance
-                probe before it can list that category's scripts. */}
-            <div className='mb-3 rounded-lg border p-3'>
-              <div className='text-muted-foreground mb-2 text-xs'>
-                {t('Site balance checks (required before listing a category)')}
-              </div>
-              <div className='flex flex-wrap gap-2'>
-                {categories.map((cat) => (
-                  <Button
-                    key={cat.id}
-                    size='sm'
-                    variant='outline'
-                    onClick={() => onBalanceCheck(nodeId, cat.id)}
-                  >
-                    {t('Check')} {cat.name}
-                  </Button>
-                ))}
-                {categories.length === 0 && (
-                  <span className='text-muted-foreground text-xs'>{t('No categories yet')}</span>
-                )}
-              </div>
+            {/* Balance checks must run in the browser plugin (it holds the
+                target-site session). Do them there before listing a category. */}
+            <div className='mb-3 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-xs'>
+              {t(
+                'Run the site balance check in the browser plugin (popup → 本节点能力 → 读余额检查) before listing a category. Listing requires a passing balance check.'
+              )}
             </div>
 
             {/* List a capability: pick a published script + version, set price and

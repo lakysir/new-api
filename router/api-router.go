@@ -336,6 +336,7 @@ func SetApiRouter(router *gin.Engine) {
 			nodeRoute.GET("/mine", controller.ListMyNodes)
 			nodeRoute.DELETE("/:id", controller.DeleteMyNode)
 			nodeRoute.POST("/:id/heartbeat", controller.NodeHeartbeat)
+			nodeRoute.POST("/:id/balance-check", controller.ReportBalanceCheck)
 			nodeRoute.GET("/:id/capabilities", controller.ListCapabilities)
 			nodeRoute.POST("/:id/capabilities/:scriptId/test", controller.CreateCapabilityTest)
 			nodeRoute.PUT("/:id/capabilities/:scriptId", controller.EnableCapability)
