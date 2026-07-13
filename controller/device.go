@@ -2,6 +2,7 @@ package controller
 
 import (
 	"errors"
+	"net/http"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
@@ -48,6 +49,15 @@ func ActivateDevice(c *gin.Context) {
 	if err != nil {
 		if errors.Is(err, model.ErrChallengeInvalid) {
 			common.ApiErrorMsg(c, "challenge invalid or expired")
+			return
+		}
+		if errors.Is(err, model.ErrDeviceRevoked) {
+			// Signal a stable code so the plugin can rotate to a fresh device
+			// key and re-register as a NEW device (the revoked one stays for
+			// audit). A revoked device is never silently revived.
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false, "message": "device revoked", "error_code": "DEVICE_REVOKED",
+			})
 			return
 		}
 		common.ApiErrorMsg(c, err.Error())
