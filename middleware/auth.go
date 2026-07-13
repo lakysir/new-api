@@ -234,6 +234,66 @@ func TokenOrUserAuth() func(c *gin.Context) {
 	}
 }
 
+// DeviceAuth authenticates a Provider node request by its device access token
+// (issued at activation). On success it sets both the owning user id ("id") and
+// the "device_id" in context, so downstream handlers know which browser install
+// executed AND which user to credit earnings to. This is the auth for the
+// task-execution chain (nodes, fixed-version fetch, receipts).
+func DeviceAuth() func(c *gin.Context) {
+	return func(c *gin.Context) {
+		token := extractBearer(c)
+		device, err := model.AuthenticateDeviceByToken(token)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"success": false,
+				"message": "invalid or expired device token",
+			})
+			c.Abort()
+			return
+		}
+		c.Set("id", device.UserId)
+		c.Set("device_id", device.Id)
+		c.Next()
+	}
+}
+
+// DeviceOrUserAuth accepts, in order: a dashboard session, a device access
+// token, or an API key. It lets the same endpoint serve the plugin (device
+// token), the web console (session) and API clients (key) without duplicating
+// routes. When a device token matches, "device_id" is also set.
+func DeviceOrUserAuth() func(c *gin.Context) {
+	return func(c *gin.Context) {
+		// 1. Dashboard session.
+		session := sessions.Default(c)
+		if id := session.Get("id"); id != nil {
+			if status, ok := session.Get("status").(int); ok && status == common.UserStatusEnabled {
+				c.Set("id", id)
+				c.Next()
+				return
+			}
+		}
+		// 2. Device access token (opaque, won't collide with sk- API keys).
+		if token := extractBearer(c); token != "" {
+			if device, err := model.AuthenticateDeviceByToken(token); err == nil {
+				c.Set("id", device.UserId)
+				c.Set("device_id", device.Id)
+				c.Next()
+				return
+			}
+		}
+		// 3. API key.
+		TokenAuth()(c)
+	}
+}
+
+// extractBearer returns the raw token from the Authorization: Bearer header.
+func extractBearer(c *gin.Context) string {
+	key := c.Request.Header.Get("Authorization")
+	key = strings.TrimPrefix(key, "Bearer ")
+	key = strings.TrimPrefix(key, "bearer ")
+	return strings.TrimSpace(key)
+}
+
 // TokenAuthReadOnly 宽松版本的令牌认证中间件，用于只读查询接口。
 // 只验证令牌 key 是否存在，不检查令牌状态、过期时间和额度。
 // 即使令牌已过期、已耗尽或已禁用，也允许访问。

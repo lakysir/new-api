@@ -242,3 +242,23 @@ func TestDifferentKeysAreDifferentDevices(t *testing.T) {
 		t.Fatal("different device keys (e.g. two browsers) must be distinct devices")
 	}
 }
+
+func TestAuthenticateDeviceByToken(t *testing.T) {
+	device, session, _ := activateTestDevice(t, 610)
+	got, err := AuthenticateDeviceByToken(session.AccessToken)
+	if err != nil {
+		t.Fatalf("valid device token should authenticate: %v", err)
+	}
+	if got.Id != device.Id || got.UserId != 610 {
+		t.Fatalf("resolved wrong device/user: %+v", got)
+	}
+	if _, err := AuthenticateDeviceByToken("nope"); err != ErrDeviceTokenInvalid {
+		t.Fatalf("bad token must fail, got %v", err)
+	}
+	if err := RevokeDevice(610, device.Id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AuthenticateDeviceByToken(session.AccessToken); err == nil {
+		t.Fatal("revoked device token must not authenticate")
+	}
+}

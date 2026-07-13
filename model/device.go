@@ -270,6 +270,32 @@ func AuthenticateDeviceAccessToken(deviceId, accessToken string) (*Device, error
 	return &d, nil
 }
 
+// AuthenticateDeviceByToken resolves an active device from just the access
+// token (no device id needed) by matching its stored hash. Used by the device
+// auth middleware so the plugin only has to send `Authorization: Bearer
+// <deviceAccessToken>`. Returns ErrDeviceTokenInvalid on any miss so callers
+// never leak which part failed.
+func AuthenticateDeviceByToken(accessToken string) (*Device, error) {
+	if accessToken == "" {
+		return nil, ErrDeviceTokenInvalid
+	}
+	var d Device
+	err := DB.Where("access_token_hash = ?", nodeidentity.HashToken(accessToken)).First(&d).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrDeviceTokenInvalid
+	}
+	if err != nil {
+		return nil, err
+	}
+	if d.Status == DeviceStatusRevoked {
+		return nil, ErrDeviceRevoked
+	}
+	if d.AccessExpiresAt < time.Now().Unix() {
+		return nil, ErrDeviceTokenInvalid
+	}
+	return &d, nil
+}
+
 // RevokeDevice marks a device revoked and clears its tokens so neither refresh
 // nor access can succeed afterwards. It also suspends the device's nodes.
 func RevokeDevice(userId int, deviceId string) error {

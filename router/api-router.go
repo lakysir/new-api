@@ -277,7 +277,8 @@ func SetApiRouter(router *gin.Engine) {
 			}
 
 			scriptVersionRoute := scriptRoute.Group("/")
-			scriptVersionRoute.Use(middleware.UserAuth())
+			// Plugin fetches fixed versions with its API key; console uses session.
+			scriptVersionRoute.Use(middleware.CORS(), middleware.DeviceOrUserAuth())
 			{
 				scriptVersionRoute.GET("/:id/versions/:version", controller.GetFixedScriptVersion)
 			}
@@ -302,7 +303,8 @@ func SetApiRouter(router *gin.Engine) {
 			deviceRoute.POST("/refresh", middleware.CriticalRateLimit(), controller.RefreshDeviceSession)
 
 			deviceUserRoute := deviceRoute.Group("/")
-			deviceUserRoute.Use(middleware.UserAuth())
+			// Accept either a dashboard session or an API key (plugin uses the key).
+			deviceUserRoute.Use(middleware.CORS(), middleware.TokenOrUserAuth())
 			{
 				deviceUserRoute.GET("/mine", controller.ListMyDevices)
 				deviceUserRoute.POST("/challenge", middleware.CriticalRateLimit(), controller.CreateDeviceChallenge)
@@ -312,7 +314,7 @@ func SetApiRouter(router *gin.Engine) {
 		}
 
 		nodeRoute := apiRouter.Group("/nodes")
-		nodeRoute.Use(middleware.UserAuth())
+		nodeRoute.Use(middleware.CORS(), middleware.DeviceOrUserAuth())
 		{
 			nodeRoute.POST("", controller.RegisterNode)
 			nodeRoute.GET("/mine", controller.ListMyNodes)
@@ -325,7 +327,7 @@ func SetApiRouter(router *gin.Engine) {
 
 		// Client orders: quote, create (idempotent), status, cancel (Stage D).
 		orderRoute := apiRouter.Group("/orders")
-		orderRoute.Use(middleware.UserAuth())
+		orderRoute.Use(middleware.CORS(), middleware.DeviceOrUserAuth())
 		{
 			orderRoute.POST("/quote", controller.QuoteOrder)
 			orderRoute.POST("", middleware.CriticalRateLimit(), controller.CreateOrder)
@@ -337,7 +339,7 @@ func SetApiRouter(router *gin.Engine) {
 
 		// Ledger: balances and simulated (USD_TEST) deposits (Stage F).
 		ledgerRoute := apiRouter.Group("/ledger")
-		ledgerRoute.Use(middleware.UserAuth())
+		ledgerRoute.Use(middleware.CORS(), middleware.DeviceOrUserAuth())
 		{
 			ledgerRoute.GET("/balances", controller.GetMyLedgerBalances)
 			ledgerRoute.POST("/deposit/simulate", middleware.CriticalRateLimit(), controller.SimulatedDeposit)
@@ -345,7 +347,7 @@ func SetApiRouter(router *gin.Engine) {
 
 		// Payment: deposit address, fee estimate, withdrawal (Stage G).
 		paymentRoute := apiRouter.Group("/payment")
-		paymentRoute.Use(middleware.UserAuth())
+		paymentRoute.Use(middleware.CORS(), middleware.DeviceOrUserAuth())
 		{
 			paymentRoute.POST("/deposit-address", controller.CreateDepositAddress)
 			paymentRoute.POST("/withdrawals/estimate", controller.EstimateWithdrawalFee)
