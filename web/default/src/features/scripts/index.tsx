@@ -387,10 +387,15 @@ export function MyScriptsPage() {
 
   async function confirmSubmitReview() {
     const id = submitTarget
+    const sharePercent = Number(submitShare)
+    if (!Number.isFinite(sharePercent) || sharePercent < 0 || sharePercent > 5) {
+      toast.error(t('Your share must be between 0% and 5%.'))
+      return
+    }
     setBusyId(id)
     try {
       await submitScriptForReview(id, {
-        author_share_rate_ppm: Math.round(Number(submitShare || '0') * 10000),
+        author_share_rate_ppm: Math.round(sharePercent * 10000),
         category_id: submitCategory ? Number(submitCategory) : 0,
       })
       toast.success(t('Submitted for review'))
@@ -747,6 +752,9 @@ export function MyScriptsPage() {
               <label className='mb-1 block text-sm'>{t('Your share %')}</label>
               <Input
                 type='number'
+                min='0'
+                max='5'
+                step='0.01'
                 value={submitShare}
                 onChange={(e) => setSubmitShare(e.target.value)}
                 placeholder='3'

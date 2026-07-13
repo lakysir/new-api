@@ -54,8 +54,8 @@ func SubmitScriptForReview(c *gin.Context) {
 		CategoryId         int   `json:"category_id"`
 	}
 	_ = c.ShouldBindJSON(&body)
-	if body.AuthorShareRatePpm < 0 || body.AuthorShareRatePpm > 1_000_000 {
-		common.ApiErrorMsg(c, "author_share_rate_ppm must be within [0, 1000000]")
+	if body.AuthorShareRatePpm < 0 || body.AuthorShareRatePpm > 50_000 {
+		common.ApiErrorMsg(c, "author_share_rate_ppm must be within [0, 50000]")
 		return
 	}
 	if body.CategoryId > 0 {

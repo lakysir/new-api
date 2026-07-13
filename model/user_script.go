@@ -190,7 +190,7 @@ func ListUserScripts(userId int) ([]UserScript, error) {
 func ListScriptsByReviewStatus(status string) ([]UserScript, error) {
 	var scripts []UserScript
 	err := DB.Table("user_scripts").
-		Select("user_scripts.id,user_scripts.user_id,user_scripts.title,user_scripts.description,user_scripts.script_params,user_scripts.draft_code,user_scripts.review_status,user_scripts.review_note,user_scripts.latest_version,user_scripts.published,user_scripts.published_at,user_scripts.created_at,user_scripts.updated_at,users.username AS author_username,previous_version.title AS previous_title,previous_version.description AS previous_description,previous_version.script_params AS previous_script_params,previous_version.code AS previous_code").
+		Select("user_scripts.id,user_scripts.user_id,user_scripts.title,user_scripts.description,user_scripts.script_params,user_scripts.draft_code,user_scripts.review_status,user_scripts.review_note,user_scripts.latest_version,user_scripts.author_share_rate_ppm,user_scripts.platform_fee_rate_ppm,user_scripts.category_id,user_scripts.published,user_scripts.published_at,user_scripts.created_at,user_scripts.updated_at,users.username AS author_username,previous_version.title AS previous_title,previous_version.description AS previous_description,previous_version.script_params AS previous_script_params,previous_version.code AS previous_code").
 		Joins("LEFT JOIN users ON users.id = user_scripts.user_id").
 		Joins("LEFT JOIN script_versions previous_version ON previous_version.script_id = user_scripts.id AND previous_version.version = user_scripts.latest_version").
 		Where("user_scripts.review_status = ?", status).
