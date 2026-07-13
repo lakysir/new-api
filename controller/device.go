@@ -113,3 +113,25 @@ func RevokeMyDevice(c *gin.Context) {
 	}
 	common.ApiSuccess(c, nil)
 }
+
+// DeleteMyDevice permanently removes a REVOKED device and its nodes/capabilities.
+func DeleteMyDevice(c *gin.Context) {
+	deviceId := c.Param("deviceId")
+	if deviceId == "" {
+		common.ApiErrorMsg(c, "device id is required")
+		return
+	}
+	if err := model.DeleteRevokedDevice(c.GetInt("id"), deviceId); err != nil {
+		if errors.Is(err, model.ErrDeviceNotFound) {
+			common.ApiErrorMsg(c, "device not found")
+			return
+		}
+		if errors.Is(err, model.ErrDeviceNotRevoked) {
+			common.ApiErrorMsg(c, "revoke the device before deleting it")
+			return
+		}
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, nil)
+}

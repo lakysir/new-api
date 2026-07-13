@@ -112,6 +112,14 @@ export function revokeDevice(deviceId: string) {
   return unwrap(api.delete(`/api/devices/${deviceId}`))
 }
 
+export function deleteDevice(deviceId: string) {
+  return unwrap(api.delete(`/api/devices/${deviceId}/purge`))
+}
+
+export function deleteNode(nodeId: string) {
+  return unwrap(api.delete(`/api/nodes/${nodeId}`))
+}
+
 export function listNodeCapabilities(nodeId: string) {
   return unwrap<NodeCapability[]>(api.get(`/api/nodes/${nodeId}/capabilities`))
 }

@@ -113,7 +113,29 @@ func UpsertNode(userId int, deviceId, nodeId, region, version string) (*Node, er
 }
 
 // TouchNodePresence records a heartbeat and idle/busy state for a node.
+// ErrNodeDeviceRevoked is returned when a heartbeat arrives for a node whose
+// owning device has been revoked — the caller (WSS handler) must drop the
+// connection so a zombie socket can't resurrect a revoked node to IDLE.
+var ErrNodeDeviceRevoked = errors.New("node's device is revoked")
+
 func TouchNodePresence(nodeId, state string) error {
+	// Refuse to refresh presence for a node whose device is revoked; otherwise a
+	// still-open WSS connection would keep the node online after revocation.
+	var node Node
+	if err := DB.Where("id = ?", nodeId).First(&node).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrNodeNotFound
+		}
+		return err
+	}
+	var device Device
+	if err := DB.Select("status").Where("id = ?", node.DeviceId).First(&device).Error; err == nil {
+		if device.Status == DeviceStatusRevoked {
+			// Keep the node offline regardless of the incoming heartbeat.
+			DB.Model(&Node{}).Where("id = ?", nodeId).Update("state", NodeStateOffline)
+			return ErrNodeDeviceRevoked
+		}
+	}
 	res := DB.Model(&Node{}).Where("id = ?", nodeId).Updates(map[string]any{
 		"last_seen_at": time.Now().Unix(),
 		"state":        state,
@@ -189,6 +211,30 @@ func ListNodesByUser(userId int) ([]Node, error) {
 	var nodes []Node
 	err := DB.Where("user_id = ?", userId).Order("last_seen_at desc").Find(&nodes).Error
 	return nodes, err
+}
+
+// ErrNodeStillOnline is returned when deleting a node that is still online.
+var ErrNodeStillOnline = errors.New("only offline nodes can be deleted")
+
+// DeleteOfflineNode hard-deletes an offline node and its capabilities. Refuses
+// an online node (must go offline first). Cross-checks ownership.
+func DeleteOfflineNode(userId int, nodeId string) error {
+	return DB.Transaction(func(tx *gorm.DB) error {
+		var n Node
+		if err := tx.Where("id = ? AND user_id = ?", nodeId, userId).First(&n).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrNodeNotFound
+			}
+			return err
+		}
+		if n.IsOnline() {
+			return ErrNodeStillOnline
+		}
+		if err := tx.Where("node_id = ?", nodeId).Delete(&NodeCapability{}).Error; err != nil {
+			return err
+		}
+		return tx.Where("id = ?", nodeId).Delete(&Node{}).Error
+	})
 }
 
 // suspendCapabilitiesByDeviceTx suspends all capabilities of a device's nodes

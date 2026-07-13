@@ -310,6 +310,7 @@ func SetApiRouter(router *gin.Engine) {
 				deviceUserRoute.POST("/challenge", middleware.CriticalRateLimit(), controller.CreateDeviceChallenge)
 				deviceUserRoute.POST("/activate", middleware.CriticalRateLimit(), controller.ActivateDevice)
 				deviceUserRoute.DELETE("/:deviceId", controller.RevokeMyDevice)
+				deviceUserRoute.DELETE("/:deviceId/purge", controller.DeleteMyDevice)
 			}
 		}
 
@@ -323,6 +324,7 @@ func SetApiRouter(router *gin.Engine) {
 		{
 			nodeRoute.POST("", controller.RegisterNode)
 			nodeRoute.GET("/mine", controller.ListMyNodes)
+			nodeRoute.DELETE("/:id", controller.DeleteMyNode)
 			nodeRoute.POST("/:id/heartbeat", controller.NodeHeartbeat)
 			nodeRoute.GET("/:id/capabilities", controller.ListCapabilities)
 			nodeRoute.POST("/:id/capabilities/:scriptId/test", controller.CreateCapabilityTest)

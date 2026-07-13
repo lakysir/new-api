@@ -185,3 +185,21 @@ func ListMyNodes(c *gin.Context) {
 	}
 	common.ApiSuccess(c, nodes)
 }
+
+// DeleteMyNode permanently removes an OFFLINE node and its capabilities.
+func DeleteMyNode(c *gin.Context) {
+	nodeId := c.Param("id")
+	if err := model.DeleteOfflineNode(c.GetInt("id"), nodeId); err != nil {
+		if errors.Is(err, model.ErrNodeNotFound) {
+			common.ApiErrorMsg(c, "node not found")
+			return
+		}
+		if errors.Is(err, model.ErrNodeStillOnline) {
+			common.ApiErrorMsg(c, "node is still online; wait until it is offline")
+			return
+		}
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, nil)
+}

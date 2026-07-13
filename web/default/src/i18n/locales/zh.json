@@ -5064,6 +5064,12 @@
     "No scripts yet": "暂无脚本",
     "Optional note": "可选备注",
     "Script id and version required": "需要脚本 ID 和版本",
-    "Script id": "脚本 ID"
+    "Script id": "脚本 ID",
+    "Hide revoked/offline": "隐藏已注销/离线",
+    "Revoke device {{id}}? This is irreversible — its tokens are invalidated and its node goes offline. The browser must re-register as a new device.": "注销设备 {{id}}？此操作不可逆——其令牌立即失效、对应节点下线，该浏览器需重新注册为新设备。",
+    "Device deleted": "设备已删除",
+    "Node deleted": "节点已删除",
+    "Permanently delete revoked device {{id}} and its nodes?": "永久删除已注销设备 {{id}} 及其节点？",
+    "Permanently delete offline node {{id}}?": "永久删除离线节点 {{id}}？"
   }
 }

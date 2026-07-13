@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"sync"
@@ -114,7 +115,15 @@ func HandleNodeControl(c *gin.Context) {
 			if state == "" {
 				state = model.NodeStateIdle
 			}
-			_ = model.TouchNodePresence(nodeID, state)
+			// If the device was revoked while this socket stayed open, presence
+			// is refused and we drop the connection so it can't keep the node
+			// online (the plugin will fail to re-auth and re-register anew).
+			if err := model.TouchNodePresence(nodeID, state); err != nil {
+				if errors.Is(err, model.ErrNodeDeviceRevoked) {
+					_ = wrapped.SendJSON(map[string]any{"type": "revoked"})
+					return
+				}
+			}
 			_ = wrapped.SendJSON(map[string]any{"type": "pong", "ts": time.Now().Unix()})
 		case "task.accept", "task.reject", "task.result_ready", "task.failed", "receipt.submit":
 			// Execution-result events are handled by the REST receipt endpoint in

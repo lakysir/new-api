@@ -329,3 +329,38 @@ func ListUserDevices(userId int) ([]Device, error) {
 	err := DB.Where("user_id = ?", userId).Order("created_at desc").Find(&devices).Error
 	return devices, err
 }
+
+// ErrDeviceNotRevoked is returned when trying to delete a device that is still
+// active — only revoked devices may be purged.
+var ErrDeviceNotRevoked = errors.New("only revoked devices can be deleted")
+
+// DeleteRevokedDevice hard-deletes a revoked device and cascades to its nodes
+// and their capabilities. Refuses to delete an active device (revoke first).
+func DeleteRevokedDevice(userId int, deviceId string) error {
+	return DB.Transaction(func(tx *gorm.DB) error {
+		var d Device
+		if err := tx.Where("id = ? AND user_id = ?", deviceId, userId).First(&d).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrDeviceNotFound
+			}
+			return err
+		}
+		if d.Status != DeviceStatusRevoked {
+			return ErrDeviceNotRevoked
+		}
+		// Cascade: capabilities of the device's nodes, then nodes, then device.
+		var nodeIds []string
+		if err := tx.Model(&Node{}).Where("device_id = ?", deviceId).Pluck("id", &nodeIds).Error; err != nil {
+			return err
+		}
+		if len(nodeIds) > 0 {
+			if err := tx.Where("node_id IN ?", nodeIds).Delete(&NodeCapability{}).Error; err != nil {
+				return err
+			}
+			if err := tx.Where("device_id = ?", deviceId).Delete(&Node{}).Error; err != nil {
+				return err
+			}
+		}
+		return tx.Where("id = ?", deviceId).Delete(&Device{}).Error
+	})
+}

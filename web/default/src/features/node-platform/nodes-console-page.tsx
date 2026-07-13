@@ -32,6 +32,8 @@ import {
 } from '@/components/ui/table'
 
 import {
+  deleteDevice,
+  deleteNode,
   disableCapability,
   listMyDevices,
   listMyNodes,
@@ -51,6 +53,14 @@ export function NodesConsolePage() {
   const [nodes, setNodes] = useState<NodeInfo[]>([])
   const [caps, setCaps] = useState<Record<string, NodeCapability[]>>({})
   const [loading, setLoading] = useState(false)
+  // A user may register dozens/hundreds of devices; hide revoked/offline by
+  // default to keep the list readable.
+  const [hideInactive, setHideInactive] = useState(true)
+
+  const visibleDevices = hideInactive
+    ? devices.filter((d) => d.status === 'active')
+    : devices
+  const visibleNodes = hideInactive ? nodes.filter((n) => nodeOnline(n)) : nodes
 
   async function loadAll() {
     setLoading(true)
@@ -70,9 +80,47 @@ export function NodesConsolePage() {
   }, [])
 
   async function onRevokeDevice(id: string) {
+    // Revoking is irreversible: it kills the device's tokens, takes its node
+    // offline, and the browser must re-register as a NEW device. Confirm first.
+    if (
+      !window.confirm(
+        t(
+          'Revoke device {{id}}? This is irreversible — its tokens are invalidated and its node goes offline. The browser must re-register as a new device.',
+          { id }
+        )
+      )
+    ) {
+      return
+    }
     try {
       await revokeDevice(id)
       toast.success(t('Device revoked'))
+      await loadAll()
+    } catch (e) {
+      toast.error(String((e as Error).message))
+    }
+  }
+
+  async function onDeleteDevice(id: string) {
+    if (!window.confirm(t('Permanently delete revoked device {{id}} and its nodes?', { id }))) {
+      return
+    }
+    try {
+      await deleteDevice(id)
+      toast.success(t('Device deleted'))
+      await loadAll()
+    } catch (e) {
+      toast.error(String((e as Error).message))
+    }
+  }
+
+  async function onDeleteNode(id: string) {
+    if (!window.confirm(t('Permanently delete offline node {{id}}?', { id }))) {
+      return
+    }
+    try {
+      await deleteNode(id)
+      toast.success(t('Node deleted'))
       await loadAll()
     } catch (e) {
       toast.error(String((e as Error).message))
@@ -102,12 +150,22 @@ export function NodesConsolePage() {
     <SectionPageLayout>
       <SectionPageLayout.Title>{t('Devices & Nodes')}</SectionPageLayout.Title>
       <SectionPageLayout.Actions>
+        <label className='text-muted-foreground mr-3 flex items-center gap-1 text-sm'>
+          <input
+            type='checkbox'
+            checked={hideInactive}
+            onChange={(e) => setHideInactive(e.target.checked)}
+          />
+          {t('Hide revoked/offline')}
+        </label>
         <Button variant='outline' onClick={loadAll} disabled={loading}>
           {t('Refresh')}
         </Button>
       </SectionPageLayout.Actions>
       <SectionPageLayout.Content>
-        <div className='mb-2 text-sm font-medium'>{t('Devices')}</div>
+        <div className='mb-2 text-sm font-medium'>
+          {t('Devices')} ({visibleDevices.length}/{devices.length})
+        </div>
         <Table>
           <TableHeader>
             <TableRow>
@@ -119,7 +177,7 @@ export function NodesConsolePage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {devices.map((d) => (
+            {visibleDevices.map((d) => (
               <TableRow key={d.id}>
                 <TableCell className='max-w-[180px] truncate font-mono text-xs'>
                   {d.id}
@@ -127,19 +185,28 @@ export function NodesConsolePage() {
                 <TableCell>{d.name}</TableCell>
                 <TableCell>{d.status === 'active' ? '🟢 active' : '⛔ revoked'}</TableCell>
                 <TableCell>{formatUnix(d.last_seen_at)}</TableCell>
-                <TableCell>
-                  <Button
-                    size='sm'
-                    variant='destructive'
-                    disabled={d.status !== 'active'}
-                    onClick={() => onRevokeDevice(d.id)}
-                  >
-                    {t('Revoke')}
-                  </Button>
+                <TableCell className='space-x-2'>
+                  {d.status === 'active' ? (
+                    <Button
+                      size='sm'
+                      variant='destructive'
+                      onClick={() => onRevokeDevice(d.id)}
+                    >
+                      {t('Revoke')}
+                    </Button>
+                  ) : (
+                    <Button
+                      size='sm'
+                      variant='outline'
+                      onClick={() => onDeleteDevice(d.id)}
+                    >
+                      {t('Delete')}
+                    </Button>
+                  )}
                 </TableCell>
               </TableRow>
             ))}
-            {devices.length === 0 && (
+            {visibleDevices.length === 0 && (
               <TableRow>
                 <TableCell colSpan={5} className='text-muted-foreground text-center'>
                   {loading ? t('Loading...') : t('No devices')}
@@ -149,7 +216,7 @@ export function NodesConsolePage() {
           </TableBody>
         </Table>
 
-        <div className='mt-6 mb-2 text-sm font-medium'>{t('Nodes')}</div>
+        <div className='mt-6 mb-2 text-sm font-medium'>{t('Nodes')} ({visibleNodes.length}/{nodes.length})</div>
         <Table>
           <TableHeader>
             <TableRow>
@@ -162,7 +229,7 @@ export function NodesConsolePage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {nodes.map((n) => (
+            {visibleNodes.map((n) => (
               <TableRow key={n.id}>
                 <TableCell className='max-w-[180px] truncate font-mono text-xs'>
                   {n.id}
@@ -171,14 +238,19 @@ export function NodesConsolePage() {
                 <TableCell>{nodeOnline(n) ? '🟢' : '⚪'}</TableCell>
                 <TableCell>{n.region || '-'}</TableCell>
                 <TableCell>{formatUnix(n.last_seen_at)}</TableCell>
-                <TableCell>
+                <TableCell className='space-x-2'>
                   <Button size='sm' variant='ghost' onClick={() => loadCaps(n.id)}>
                     {t('Capabilities')}
                   </Button>
+                  {!nodeOnline(n) && (
+                    <Button size='sm' variant='outline' onClick={() => onDeleteNode(n.id)}>
+                      {t('Delete')}
+                    </Button>
+                  )}
                 </TableCell>
               </TableRow>
             ))}
-            {nodes.length === 0 && (
+            {visibleNodes.length === 0 && (
               <TableRow>
                 <TableCell colSpan={6} className='text-muted-foreground text-center'>
                   {loading ? t('Loading...') : t('No nodes')}

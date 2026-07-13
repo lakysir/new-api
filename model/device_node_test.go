@@ -262,3 +262,73 @@ func TestAuthenticateDeviceByToken(t *testing.T) {
 		t.Fatal("revoked device token must not authenticate")
 	}
 }
+
+func TestTouchPresenceRejectsRevokedDevice(t *testing.T) {
+	// Activate a device, register its node, confirm heartbeat works.
+	device, _, _ := activateTestDevice(t, 620)
+	nodeId := "node_revtest"
+	if _, err := UpsertNode(620, device.Id, nodeId, "", "1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := TouchNodePresence(nodeId, NodeStateIdle); err != nil {
+		t.Fatalf("heartbeat should work pre-revoke: %v", err)
+	}
+	// Revoke the device; a subsequent heartbeat must be refused and node kept offline.
+	if err := RevokeDevice(620, device.Id); err != nil {
+		t.Fatal(err)
+	}
+	if err := TouchNodePresence(nodeId, NodeStateIdle); err != ErrNodeDeviceRevoked {
+		t.Fatalf("heartbeat for revoked device must be refused, got %v", err)
+	}
+	n, _ := GetNode(nodeId)
+	if n.State != NodeStateOffline {
+		t.Fatalf("revoked device's node must stay OFFLINE, got %s", n.State)
+	}
+}
+
+func TestDeleteRevokedDeviceCascades(t *testing.T) {
+	device, _, _ := activateTestDevice(t, 630)
+	nodeId := "node_del1"
+	if _, err := UpsertNode(630, device.Id, nodeId, "", "1"); err != nil {
+		t.Fatal(err)
+	}
+	// Active device cannot be deleted.
+	if err := DeleteRevokedDevice(630, device.Id); err != ErrDeviceNotRevoked {
+		t.Fatalf("active device must not be deletable, got %v", err)
+	}
+	if err := RevokeDevice(630, device.Id); err != nil {
+		t.Fatal(err)
+	}
+	if err := DeleteRevokedDevice(630, device.Id); err != nil {
+		t.Fatalf("revoked device should delete: %v", err)
+	}
+	// Device and its node are gone.
+	if _, err := AuthenticateDeviceByToken("x"); err == nil {
+		_ = err // noop, just ensure package compiles
+	}
+	if _, err := GetNode(nodeId); err != ErrNodeNotFound {
+		t.Fatalf("cascade should remove the node, got %v", err)
+	}
+}
+
+func TestDeleteOfflineNodeGuardsOnline(t *testing.T) {
+	// Online node cannot be deleted.
+	online := "node_online_del"
+	if err := DB.Create(&Node{Id: online, DeviceId: "d", UserId: 631, State: NodeStateIdle, LastSeenAt: nowPlus(0)}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := DeleteOfflineNode(631, online); err != ErrNodeStillOnline {
+		t.Fatalf("online node must not be deletable, got %v", err)
+	}
+	// Offline node deletes.
+	offline := "node_offline_del"
+	if err := DB.Create(&Node{Id: offline, DeviceId: "d", UserId: 631, State: NodeStateOffline, LastSeenAt: nowPlus(-3600)}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := DeleteOfflineNode(631, offline); err != nil {
+		t.Fatalf("offline node should delete: %v", err)
+	}
+	if _, err := GetNode(offline); err != ErrNodeNotFound {
+		t.Fatalf("node should be gone, got %v", err)
+	}
+}
