@@ -24,7 +24,7 @@ func TestMain(m *testing.M) {
 	sqlDB.SetMaxOpenConns(1)
 	if err := db.AutoMigrate(
 		&model.Order{}, &model.OrderPriceSnapshot{}, &model.ScriptVersion{}, &model.UserScript{},
-		&model.Node{}, &model.NodeCapability{}, &model.Lease{}, &model.TaskAttempt{},
+		&model.Node{}, &model.NodeCapability{}, &model.NodeSiteStatus{}, &model.Lease{}, &model.TaskAttempt{},
 		&model.OutboxEvent{}, &model.ProcessedEvent{},
 	); err != nil {
 		panic(err)

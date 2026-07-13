@@ -57,6 +57,8 @@ func TestMain(m *testing.M) {
 		&Device{},
 		&Node{},
 		&NodeCapability{},
+		&ScriptCategory{},
+		&NodeSiteStatus{},
 		&PricingTemplate{},
 		&Order{},
 		&OrderPriceSnapshot{},

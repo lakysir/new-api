@@ -34,13 +34,26 @@ import {
 } from '@/components/ui/table'
 
 import {
+  createCategory,
+  listCategories,
   listPendingScripts,
   listPublishedScriptVersions,
   reviewScript,
   revokeScriptVersion,
+  setCategoryBalanceScript,
+  type ScriptCategory,
 } from './api'
 import { formatUnix } from './lib/format'
 import type { ScriptVersion } from './types'
+
+// ppm helpers: 10000 ppm = 1%.
+function ppmToPercent(ppm?: number): string {
+  return ((ppm ?? 0) / 10000).toFixed(2)
+}
+function percentToPpm(percent: string): number {
+  const n = Number(percent)
+  return Number.isFinite(n) ? Math.round(n * 10000) : 0
+}
 
 type PendingScript = {
   id: number
@@ -55,6 +68,8 @@ type PendingScript = {
   previous_script_params?: string
   previous_code?: string
   review_status: string
+  author_share_rate_ppm?: number
+  category_id?: number
 }
 
 type DiffLine = { kind: 'same' | 'remove' | 'add'; text: string; number?: number }
@@ -135,16 +150,25 @@ export function ScriptReviewConsolePage() {
   const [previewMode, setPreviewMode] = useState<'changes' | 'code'>('changes')
   const [publishedVersions, setPublishedVersions] = useState<ScriptVersion[]>([])
   const [revokeReasons, setRevokeReasons] = useState<Record<number, string>>({})
+  // Operator sets the platform fee (%) per pending script on approval.
+  const [platformFees, setPlatformFees] = useState<Record<number, string>>({})
+  // Category management state.
+  const [categories, setCategories] = useState<ScriptCategory[]>([])
+  const [newCatName, setNewCatName] = useState('')
+  const [newCatSite, setNewCatSite] = useState('')
+  const [balScript, setBalScript] = useState<Record<number, string>>({}) // catId -> "scriptId:version"
 
   async function load() {
     setLoading(true)
     try {
-      const [pendingScripts, versions] = await Promise.all([
+      const [pendingScripts, versions, cats] = await Promise.all([
         listPendingScripts(),
         listPublishedScriptVersions(),
+        listCategories(),
       ])
       setPending(pendingScripts)
       setPublishedVersions(versions)
+      setCategories(cats)
     } catch (e) {
       toast.error(String((e as Error).message))
     } finally {
@@ -162,8 +186,40 @@ export function ScriptReviewConsolePage() {
       return
     }
     try {
-      await reviewScript(id, approve, notes[id] || '')
+      await reviewScript(id, approve, notes[id] || '', approve ? percentToPpm(platformFees[id] || '0') : 0)
       toast.success(approve ? t('Approved') : t('Rejected'))
+      await load()
+    } catch (e) {
+      toast.error(String((e as Error).message))
+    }
+  }
+
+  async function onCreateCategory() {
+    if (!newCatName.trim()) {
+      toast.error(t('Category name is required'))
+      return
+    }
+    try {
+      await createCategory(newCatName.trim(), newCatSite.trim())
+      toast.success(t('Category created'))
+      setNewCatName('')
+      setNewCatSite('')
+      await load()
+    } catch (e) {
+      toast.error(String((e as Error).message))
+    }
+  }
+
+  async function onSetBalanceScript(catId: number) {
+    const raw = (balScript[catId] || '').trim()
+    const [sid, ver] = raw.split(':').map((x) => Number(x))
+    if (!sid || !ver) {
+      toast.error(t('Enter as scriptId:version'))
+      return
+    }
+    try {
+      await setCategoryBalanceScript(catId, sid, ver)
+      toast.success(t('Balance script set'))
       await load()
     } catch (e) {
       toast.error(String((e as Error).message))
@@ -207,6 +263,8 @@ export function ScriptReviewConsolePage() {
               <TableHead>ID</TableHead>
               <TableHead>{t('Title')}</TableHead>
               <TableHead>{t('Author')}</TableHead>
+              <TableHead>{t('Author share')}</TableHead>
+              <TableHead>{t('Platform fee %')}</TableHead>
               <TableHead>{t('View Code')}</TableHead>
               <TableHead>{t('Note')}</TableHead>
               <TableHead>{t('Decision')}</TableHead>
@@ -218,6 +276,18 @@ export function ScriptReviewConsolePage() {
                 <TableCell>{s.id}</TableCell>
                 <TableCell>{s.title}</TableCell>
                 <TableCell>{s.author_username || `#${s.user_id}`}</TableCell>
+                <TableCell>{ppmToPercent(s.author_share_rate_ppm)}%</TableCell>
+                <TableCell>
+                  <Input
+                    className='h-8 w-20'
+                    type='number'
+                    placeholder='8'
+                    value={platformFees[s.id] ?? ''}
+                    onChange={(e) =>
+                      setPlatformFees((p) => ({ ...p, [s.id]: e.target.value }))
+                    }
+                  />
+                </TableCell>
                 <TableCell>
                   <Button
                     size='sm'
@@ -257,13 +327,79 @@ export function ScriptReviewConsolePage() {
             ))}
             {pending.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className='text-muted-foreground text-center'>
+                <TableCell colSpan={8} className='text-muted-foreground text-center'>
                   {loading ? t('Loading...') : t('No pending scripts')}
                 </TableCell>
               </TableRow>
             )}
           </TableBody>
         </Table>
+
+        {/* Target-site categories: create + designate each category's audited
+            balance-probe script (scriptId:version of a published script). */}
+        <div className='mt-6 rounded-lg border p-4'>
+          <div className='mb-2 text-sm font-medium'>{t('Site categories')}</div>
+          <div className='mb-3 flex flex-wrap items-center gap-2'>
+            <Input
+              className='w-40'
+              placeholder={t('Category name')}
+              value={newCatName}
+              onChange={(e) => setNewCatName(e.target.value)}
+            />
+            <Input
+              className='w-56'
+              placeholder={t('Target site (e.g. dreamina.com)')}
+              value={newCatSite}
+              onChange={(e) => setNewCatSite(e.target.value)}
+            />
+            <Button onClick={onCreateCategory}>{t('Create category')}</Button>
+          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>ID</TableHead>
+                <TableHead>{t('Name')}</TableHead>
+                <TableHead>{t('Site')}</TableHead>
+                <TableHead>{t('Balance script')}</TableHead>
+                <TableHead>{t('Set balance script (scriptId:version)')}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {categories.map((cat) => (
+                <TableRow key={cat.id}>
+                  <TableCell>{cat.id}</TableCell>
+                  <TableCell>{cat.name}</TableCell>
+                  <TableCell>{cat.site || '-'}</TableCell>
+                  <TableCell>
+                    {cat.balance_script_id
+                      ? `#${cat.balance_script_id} v${cat.balance_script_version}`
+                      : '⚠️ ' + t('none')}
+                  </TableCell>
+                  <TableCell className='space-x-2'>
+                    <Input
+                      className='inline-block h-8 w-32'
+                      placeholder='12:1'
+                      value={balScript[cat.id] || ''}
+                      onChange={(e) =>
+                        setBalScript((p) => ({ ...p, [cat.id]: e.target.value }))
+                      }
+                    />
+                    <Button size='sm' onClick={() => onSetBalanceScript(cat.id)}>
+                      {t('Set')}
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {categories.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5} className='text-muted-foreground text-center'>
+                    {t('No categories yet')}
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
 
         <Dialog
           open={!!preview}

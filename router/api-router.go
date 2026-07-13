@@ -250,6 +250,8 @@ func SetApiRouter(router *gin.Engine) {
 			scriptRoute.GET("/platform-key", controller.GetPlatformScriptKey)
 			// Provider offers for a script version (price + online + quota).
 			scriptRoute.GET("/:id/offers", controller.ListScriptOffers)
+			// Target-site categories (public list; operator create/config).
+			scriptRoute.GET("/categories", controller.ListCategories)
 
 			scriptUserRoute := scriptRoute.Group("/")
 			scriptUserRoute.Use(middleware.UserAuth())

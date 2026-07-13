@@ -31,17 +31,31 @@ import {
   TableRow,
 } from '@/components/ui/table'
 
+import { Input } from '@/components/ui/input'
+import { api } from '@/lib/api'
+
 import {
+  createCapabilityTest,
   deleteDevice,
   deleteNode,
   disableCapability,
+  enableCapability,
+  listCategories,
   listMyDevices,
   listMyNodes,
   listNodeCapabilities,
+  reportBalanceCheck,
   revokeDevice,
+  type ScriptCategory,
 } from './api'
-import { formatUnix, microsToDisplay } from './lib/format'
+import { displayToMicros, formatUnix, microsToDisplay } from './lib/format'
 import type { Device, NodeCapability, NodeInfo } from './types'
+
+type PublishedScript = {
+  id: number
+  title: string
+  category_id?: number
+}
 
 function nodeOnline(n: NodeInfo): boolean {
   return n.state !== 'OFFLINE' && n.last_seen_at >= Math.floor(Date.now() / 1000) - 45
@@ -56,6 +70,13 @@ export function NodesConsolePage() {
   // A user may register dozens/hundreds of devices; hide revoked/offline by
   // default to keep the list readable.
   const [hideInactive, setHideInactive] = useState(true)
+  // Capability-config data: categories + published scripts to pick from.
+  const [categories, setCategories] = useState<ScriptCategory[]>([])
+  const [pubScripts, setPubScripts] = useState<PublishedScript[]>([])
+  // Per-node enable form: script id + version + price + quota.
+  const [enableForm, setEnableForm] = useState<
+    Record<string, { scriptId: string; version: string; price: string; quota: string }>
+  >({})
 
   const visibleDevices = hideInactive
     ? devices.filter((d) => d.status === 'active')
@@ -65,14 +86,67 @@ export function NodesConsolePage() {
   async function loadAll() {
     setLoading(true)
     try {
-      const [d, n] = await Promise.all([listMyDevices(), listMyNodes()])
+      const [d, n, cats, sq] = await Promise.all([
+        listMyDevices(),
+        listMyNodes(),
+        listCategories(),
+        api.get('/api/scripts/square', { params: { limit: 200 } }),
+      ])
       setDevices(d)
       setNodes(n)
+      setCategories(cats)
+      const items = (sq.data?.data?.items ?? sq.data?.items ?? sq.data?.data ?? []) as PublishedScript[]
+      setPubScripts(items)
     } catch (e) {
       toast.error(String((e as Error).message))
     } finally {
       setLoading(false)
     }
+  }
+
+  // Record a balance check for a category on a node. NOTE: the real balance
+  // probe must run in the plugin (it holds the target-site session); this
+  // dashboard button records the passing window so the provider can list
+  // capabilities. The plugin will drive this automatically in production.
+  async function onBalanceCheck(nodeId: string, categoryId: number) {
+    try {
+      await reportBalanceCheck(nodeId, { category_id: categoryId, balance_ok: true })
+      toast.success(t('Balance check recorded'))
+    } catch (e) {
+      toast.error(String((e as Error).message))
+    }
+  }
+
+  // Enable a capability: run the challenge test to get a window, then list the
+  // script version on the node with the provider's price and daily quota.
+  async function onEnableCapability(nodeId: string) {
+    const f = enableForm[nodeId]
+    if (!f || !f.scriptId || !f.version) {
+      toast.error(t('Select a script and version'))
+      return
+    }
+    const scriptId = Number(f.scriptId)
+    const version = Number(f.version)
+    try {
+      const test = await createCapabilityTest(nodeId, scriptId, version)
+      await enableCapability(nodeId, scriptId, {
+        version,
+        price_micros: displayToMicros(f.price || '0'),
+        daily_quota: Number(f.quota || '0'),
+        test_expires_at: test.test_expires_at,
+      })
+      toast.success(t('Capability listed'))
+      await loadCaps(nodeId)
+    } catch (e) {
+      toast.error(String((e as Error).message))
+    }
+  }
+
+  function setForm(nodeId: string, patch: Partial<{ scriptId: string; version: string; price: string; quota: string }>) {
+    setEnableForm((p) => {
+      const current = p[nodeId] ?? { scriptId: '', version: '1', price: '', quota: '10' }
+      return { ...p, [nodeId]: { ...current, ...patch } }
+    })
   }
 
   useEffect(() => {
@@ -265,6 +339,69 @@ export function NodesConsolePage() {
             <div className='mb-2 text-sm font-medium'>
               {t('Capabilities of node {{id}}', { id: nodeId })}
             </div>
+
+            {/* Balance checks per category: a node must pass a category's balance
+                probe before it can list that category's scripts. */}
+            <div className='mb-3 rounded-lg border p-3'>
+              <div className='text-muted-foreground mb-2 text-xs'>
+                {t('Site balance checks (required before listing a category)')}
+              </div>
+              <div className='flex flex-wrap gap-2'>
+                {categories.map((cat) => (
+                  <Button
+                    key={cat.id}
+                    size='sm'
+                    variant='outline'
+                    onClick={() => onBalanceCheck(nodeId, cat.id)}
+                  >
+                    {t('Check')} {cat.name}
+                  </Button>
+                ))}
+                {categories.length === 0 && (
+                  <span className='text-muted-foreground text-xs'>{t('No categories yet')}</span>
+                )}
+              </div>
+            </div>
+
+            {/* List a capability: pick a published script + version, set price and
+                daily quota, then enable (requires the category balance check). */}
+            <div className='mb-3 flex flex-wrap items-center gap-2 rounded-lg border p-3'>
+              <span className='text-muted-foreground text-xs'>{t('List capability')}:</span>
+              <select
+                className='h-9 min-w-[200px] rounded-md border px-2 text-sm'
+                value={enableForm[nodeId]?.scriptId || ''}
+                onChange={(e) => setForm(nodeId, { scriptId: e.target.value })}
+              >
+                <option value=''>{t('Select a script')}</option>
+                {pubScripts.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    #{s.id} {s.title}
+                  </option>
+                ))}
+              </select>
+              <Input
+                className='w-20'
+                placeholder={t('Version')}
+                value={enableForm[nodeId]?.version ?? '1'}
+                onChange={(e) => setForm(nodeId, { version: e.target.value })}
+              />
+              <Input
+                className='w-28'
+                placeholder={t('Price')}
+                value={enableForm[nodeId]?.price ?? ''}
+                onChange={(e) => setForm(nodeId, { price: e.target.value })}
+              />
+              <Input
+                className='w-24'
+                placeholder={t('Daily quota')}
+                value={enableForm[nodeId]?.quota ?? '10'}
+                onChange={(e) => setForm(nodeId, { quota: e.target.value })}
+              />
+              <Button size='sm' onClick={() => onEnableCapability(nodeId)}>
+                {t('List capability')}
+              </Button>
+            </div>
+
             <Table>
               <TableHeader>
                 <TableRow>

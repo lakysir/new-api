@@ -44,15 +44,67 @@ type Node struct {
 	Region     string `json:"region" gorm:"type:varchar(32)"`
 	Version    string `json:"version" gorm:"type:varchar(32)"`
 	LastSeenAt int64  `json:"last_seen_at" gorm:"index;default:0"`
-	CreatedAt  int64  `json:"created_at" gorm:"autoCreateTime"`
-	UpdatedAt  int64  `json:"updated_at" gorm:"autoUpdateTime"`
+	// Execution outcome counters drive the scheduler's success-rate ranking.
+	SuccessCount int64 `json:"success_count" gorm:"default:0"`
+	FailureCount int64 `json:"failure_count" gorm:"default:0"`
+	CreatedAt    int64 `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt    int64 `json:"updated_at" gorm:"autoUpdateTime"`
 }
 
 func (Node) TableName() string { return "nodes" }
 
+// SuccessRate returns a Laplace-smoothed success rate in [0,1]:
+// (success + 1) / (success + failure + 2). Smoothing gives a new node a neutral
+// 0.5 so it can earn work, instead of being stuck at 0 forever.
+func (n *Node) SuccessRate() float64 {
+	return float64(n.SuccessCount+1) / float64(n.SuccessCount+n.FailureCount+2)
+}
+
+// RecordTaskOutcome increments a node's success or failure counter after a task
+// completes. Higher success rate ranks a node higher in scheduling; a failed
+// call lowers it, a successful one raises it.
+func RecordTaskOutcome(nodeId string, success bool) error {
+	col := "failure_count"
+	if success {
+		col = "success_count"
+	}
+	res := DB.Model(&Node{}).Where("id = ?", nodeId).
+		UpdateColumn(col, gorm.Expr(col+" + 1"))
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrNodeNotFound
+	}
+	return nil
+}
+
 // IsOnline reports whether the node's last heartbeat is within the timeout.
 func (n *Node) IsOnline() bool {
 	return n.State != NodeStateOffline && n.LastSeenAt >= time.Now().Add(-NodePresenceTimeout).Unix()
+}
+
+// NodeSiteStatus records the result of a node's balance-probe for one category
+// (target site). A node may only list capabilities in a category whose probe
+// has passed and is unexpired — this is how "read balance to check the site is
+// usable" gates going online, without running a generation task.
+type NodeSiteStatus struct {
+	Id            int    `json:"id" gorm:"primaryKey;autoIncrement"`
+	NodeId        string `json:"node_id" gorm:"type:varchar(64);index:idx_node_site,unique;not null"`
+	CategoryId    int    `json:"category_id" gorm:"index:idx_node_site,unique;not null"`
+	UserId        int    `json:"user_id" gorm:"index;not null"`
+	BalanceOk     bool   `json:"balance_ok" gorm:"index"`
+	BalanceMicros int64  `json:"balance_micros" gorm:"default:0"` // reported balance (informational)
+	Tier          string `json:"tier" gorm:"type:varchar(32)"`    // reported account tier
+	CheckedAt     int64  `json:"checked_at" gorm:"default:0"`
+	ExpiresAt     int64  `json:"expires_at" gorm:"index;default:0"`
+}
+
+func (NodeSiteStatus) TableName() string { return "node_site_status" }
+
+// IsValid reports whether a passed balance check is still within its window.
+func (s *NodeSiteStatus) IsValid() bool {
+	return s.BalanceOk && s.ExpiresAt > time.Now().Unix()
 }
 
 // NodeCapability is a script version a node has enabled, with its price, quota,
@@ -63,6 +115,7 @@ type NodeCapability struct {
 	NodeId         string `json:"node_id" gorm:"type:varchar(64);index:idx_node_cap,unique;not null"`
 	ScriptId       int    `json:"script_id" gorm:"index:idx_node_cap,unique;not null"`
 	Version        int    `json:"version" gorm:"index:idx_node_cap,unique;not null"`
+	CategoryId     int    `json:"category_id" gorm:"index;default:0"` // denormalized from the script
 	UserId         int    `json:"user_id" gorm:"index;not null"`
 	PriceMicros    int64  `json:"price_micros" gorm:"default:0"`
 	DailyQuota     int    `json:"daily_quota" gorm:"default:0"`
@@ -149,15 +202,65 @@ func TouchNodePresence(nodeId, state string) error {
 	return nil
 }
 
-// EnableCapability lists (or updates) a script version on a node. It requires
-// the referenced script version to be executable (approved + not revoked) and a
-// valid, unexpired test window (PRD N-003).
+// ErrBalanceCheckRequired is returned when a node has no valid balance-probe
+// for the script's category — it must read the site balance first.
+var ErrBalanceCheckRequired = errors.New("node must pass the category balance check before listing")
+
+// RecordBalanceCheck upserts a node's balance-probe result for a category. A
+// successful probe (balance readable) grants a window during which the node may
+// list capabilities in that category. Called after the plugin runs the
+// category's balance-probe script.
+func RecordBalanceCheck(s *NodeSiteStatus) error {
+	var existing NodeSiteStatus
+	err := DB.Where("node_id = ? AND category_id = ?", s.NodeId, s.CategoryId).First(&existing).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return DB.Create(s).Error
+	}
+	if err != nil {
+		return err
+	}
+	return DB.Model(&NodeSiteStatus{}).Where("id = ?", existing.Id).Updates(map[string]any{
+		"balance_ok": s.BalanceOk, "balance_micros": s.BalanceMicros,
+		"tier": s.Tier, "checked_at": s.CheckedAt, "expires_at": s.ExpiresAt,
+	}).Error
+}
+
+// HasValidBalanceCheck reports whether a node has a passing, unexpired probe for
+// a category.
+func HasValidBalanceCheck(nodeId string, categoryId int) (bool, error) {
+	var s NodeSiteStatus
+	err := DB.Where("node_id = ? AND category_id = ?", nodeId, categoryId).First(&s).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return s.IsValid(), nil
+}
+
+// EnableCapability lists (or updates) a script version on a node. It requires:
+// the referenced version to be executable, a valid challenge-test window, AND a
+// passing balance check for the script's category (the node proved the target
+// site is usable by reading its balance, not by running a generation).
 func EnableCapability(cap *NodeCapability) error {
-	if _, err := GetExecutableScriptVersion(cap.ScriptId, cap.Version); err != nil {
+	sv, err := GetExecutableScriptVersion(cap.ScriptId, cap.Version)
+	if err != nil {
 		return err
 	}
 	if !cap.IsTestValid() {
 		return ErrCapabilityTestRequired
+	}
+	// Denormalize the category and gate on its balance check.
+	cap.CategoryId = sv.CategoryId
+	if cap.CategoryId > 0 {
+		ok, err := HasValidBalanceCheck(cap.NodeId, cap.CategoryId)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return ErrBalanceCheckRequired
+		}
 	}
 	cap.Status = CapabilityStatusActive
 	if cap.RemainingQuota == 0 {
@@ -174,6 +277,7 @@ func EnableCapability(cap *NodeCapability) error {
 		}
 		cap.Id = existing.Id
 		return tx.Model(&NodeCapability{}).Where("id = ?", existing.Id).Updates(map[string]any{
+			"category_id":     cap.CategoryId,
 			"price_micros":    cap.PriceMicros,
 			"daily_quota":     cap.DailyQuota,
 			"remaining_quota": cap.RemainingQuota,

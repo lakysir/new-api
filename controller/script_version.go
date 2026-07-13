@@ -48,6 +48,22 @@ func SubmitScriptForReview(c *gin.Context) {
 	if !ok {
 		return
 	}
+	// The author proposes their share (ppm) and assigns a target-site category.
+	var body struct {
+		AuthorShareRatePpm int64 `json:"author_share_rate_ppm"`
+		CategoryId         int   `json:"category_id"`
+	}
+	_ = c.ShouldBindJSON(&body)
+	if body.AuthorShareRatePpm < 0 || body.AuthorShareRatePpm > 1_000_000 {
+		common.ApiErrorMsg(c, "author_share_rate_ppm must be within [0, 1000000]")
+		return
+	}
+	if body.CategoryId > 0 {
+		if _, err := model.GetScriptCategory(body.CategoryId); err != nil {
+			common.ApiErrorMsg(c, "category not found")
+			return
+		}
+	}
 	script, err := model.GetUserScriptById(id, c.GetInt("id"))
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -80,8 +96,12 @@ func SubmitScriptForReview(c *gin.Context) {
 	}
 	script.ReviewStatus = model.ScriptReviewPending
 	script.ReviewNote = ""
+	script.AuthorShareRatePpm = body.AuthorShareRatePpm
+	script.CategoryId = body.CategoryId
 	if err := model.DB.Model(script).Updates(map[string]any{
 		"review_status": script.ReviewStatus, "review_note": "",
+		"author_share_rate_ppm": body.AuthorShareRatePpm,
+		"category_id":           body.CategoryId,
 	}).Error; err != nil {
 		common.ApiError(c, err)
 		return
@@ -92,6 +112,9 @@ func SubmitScriptForReview(c *gin.Context) {
 type scriptReviewDecisionRequest struct {
 	Approve bool   `json:"approve"`
 	Note    string `json:"note"`
+	// PlatformFeeRatePpm is the platform service fee the operator sets while
+	// approving (parts-per-million of the provider execution price).
+	PlatformFeeRatePpm int64 `json:"platform_fee_rate_ppm"`
 }
 
 // ListPendingScripts returns scripts awaiting review, for the operator console.
@@ -168,14 +191,25 @@ func ReviewScriptDecision(c *gin.Context) {
 		}
 		newStatus = model.ScriptReviewRejected
 	}
-	if err := model.DB.Model(&script).Updates(map[string]any{
-		"review_status": newStatus, "review_note": req.Note,
-	}).Error; err != nil {
+	if req.PlatformFeeRatePpm < 0 || req.PlatformFeeRatePpm > 1_000_000 {
+		common.ApiErrorMsg(c, "platform_fee_rate_ppm must be within [0, 1000000]")
+		return
+	}
+	updates := map[string]any{"review_status": newStatus, "review_note": req.Note}
+	// The operator's platform fee is recorded on approval (feeds the pricing
+	// template at publish, alongside the author's proposed share).
+	if req.Approve {
+		updates["platform_fee_rate_ppm"] = req.PlatformFeeRatePpm
+	}
+	if err := model.DB.Model(&script).Updates(updates).Error; err != nil {
 		common.ApiError(c, err)
 		return
 	}
 	script.ReviewStatus = newStatus
 	script.ReviewNote = req.Note
+	if req.Approve {
+		script.PlatformFeeRatePpm = req.PlatformFeeRatePpm
+	}
 	common.ApiSuccess(c, script)
 }
 
@@ -206,12 +240,29 @@ func PublishScriptVersion(c *gin.Context) {
 		common.ApiErrorMsg(c, "script must be approved before publishing")
 		return
 	}
-	// Validate the template exists if one was supplied.
-	if body.PricingTemplateId > 0 {
-		if _, err := model.GetPricingTemplate(body.PricingTemplateId); err != nil {
+	// Determine the pricing template. Prefer an explicit id; otherwise create an
+	// immutable template from the reviewed author share + platform fee so the
+	// version carries the fees agreed during review.
+	templateId := body.PricingTemplateId
+	if templateId > 0 {
+		if _, err := model.GetPricingTemplate(templateId); err != nil {
 			common.ApiErrorMsg(c, "pricing template not found")
 			return
 		}
+	} else {
+		tpl := &model.PricingTemplate{
+			Currency:           "USD",
+			ProviderPriceMode:  "per_task",
+			AuthorShareRatePPM: script.AuthorShareRatePpm,
+			PlatformFeeRatePPM: script.PlatformFeeRatePpm,
+			FailurePolicy:      "full_refund",
+			RuleVersion:        "v" + strconv.FormatInt(common.GetTimestamp(), 10),
+		}
+		if err := model.CreatePricingTemplate(tpl); err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		templateId = tpl.Id
 	}
 	normalized, codeSha256, _, err := scriptregistry.ValidatePublishable(script.DraftCode)
 	if err != nil {
@@ -227,7 +278,8 @@ func PublishScriptVersion(c *gin.Context) {
 		ScriptParams:      script.ScriptParams,
 		AllowedOrigins:    "[]",
 		TimeoutSeconds:    180,
-		PricingTemplateId: body.PricingTemplateId,
+		CategoryId:        script.CategoryId,
+		PricingTemplateId: templateId,
 		Code:              normalized,
 		CodeSha256:        codeSha256,
 		ReviewStatus:      model.ScriptVersionApproved,

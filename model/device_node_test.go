@@ -372,3 +372,107 @@ func seedIdleNodeCap(t *testing.T, nodeId string, userId, scriptId, version int,
 		t.Fatal(err)
 	}
 }
+
+func TestScheduleRanksBySuccessRate(t *testing.T) {
+	scriptId := 7200
+	v := seedApprovedVersion(t, scriptId)
+	// Three idle nodes, same price; different success histories.
+	seedIdleNodeCap(t, "sr_low", 950, scriptId, v.Version, 100000)  // will be worst
+	seedIdleNodeCap(t, "sr_high", 951, scriptId, v.Version, 100000) // best
+	seedIdleNodeCap(t, "sr_mid", 952, scriptId, v.Version, 100000)
+	// Record outcomes: high = 9/10, mid = 5/10, low = 1/10.
+	for i := 0; i < 9; i++ {
+		_ = RecordTaskOutcome("sr_high", true)
+	}
+	_ = RecordTaskOutcome("sr_high", false)
+	for i := 0; i < 5; i++ {
+		_ = RecordTaskOutcome("sr_mid", true)
+	}
+	for i := 0; i < 5; i++ {
+		_ = RecordTaskOutcome("sr_mid", false)
+	}
+	_ = RecordTaskOutcome("sr_low", true)
+	for i := 0; i < 9; i++ {
+		_ = RecordTaskOutcome("sr_low", false)
+	}
+
+	cands, err := ScheduleCandidates(scriptId, v.Version, 200000, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cands) != 3 {
+		t.Fatalf("expected 3 candidates, got %d", len(cands))
+	}
+	// Highest success rate must rank first, lowest last.
+	if cands[0].NodeId != "sr_high" || cands[2].NodeId != "sr_low" {
+		t.Fatalf("expected order high>mid>low, got %s,%s,%s", cands[0].NodeId, cands[1].NodeId, cands[2].NodeId)
+	}
+}
+
+func TestBusyNodeExcludedSoLowSuccessCanRun(t *testing.T) {
+	scriptId := 7201
+	v := seedApprovedVersion(t, scriptId)
+	seedIdleNodeCap(t, "busy_high", 960, scriptId, v.Version, 100000)
+	seedIdleNodeCap(t, "idle_low", 961, scriptId, v.Version, 100000)
+	for i := 0; i < 20; i++ {
+		_ = RecordTaskOutcome("busy_high", true)
+	}
+	_ = RecordTaskOutcome("idle_low", false)
+	// Mark the high-success node BUSY: it drops out of candidates, so the
+	// low-success idle node becomes the (only) pick — the described fallback.
+	if err := DB.Model(&Node{}).Where("id = ?", "busy_high").Update("state", NodeStateBusy).Error; err != nil {
+		t.Fatal(err)
+	}
+	cands, _ := ScheduleCandidates(scriptId, v.Version, 200000, 10)
+	if len(cands) != 1 || cands[0].NodeId != "idle_low" {
+		t.Fatalf("busy high-success node must be excluded, leaving idle_low; got %+v", cands)
+	}
+}
+
+func TestEnableCapabilityRequiresBalanceCheck(t *testing.T) {
+	scriptId := 7300
+	sv := &ScriptVersion{ScriptId: scriptId, AuthorId: 1, CodeSha256: "sha256:x", ReviewStatus: ScriptVersionApproved, CategoryId: 42}
+	if err := CreateScriptVersion(sv); err != nil {
+		t.Fatal(err)
+	}
+	if err := DB.Create(&Node{Id: "bc_node", DeviceId: "d", UserId: 1, State: NodeStateIdle, LastSeenAt: nowPlus(0)}).Error; err != nil {
+		t.Fatal(err)
+	}
+	cap := &NodeCapability{
+		NodeId: "bc_node", ScriptId: scriptId, Version: sv.Version, UserId: 1,
+		PriceMicros: 100000, DailyQuota: 10, TestExpiresAt: nowPlus(3600),
+	}
+	if err := EnableCapability(cap); err != ErrBalanceCheckRequired {
+		t.Fatalf("expected ErrBalanceCheckRequired, got %v", err)
+	}
+	if err := RecordBalanceCheck(&NodeSiteStatus{
+		NodeId: "bc_node", CategoryId: 42, UserId: 1, BalanceOk: true, ExpiresAt: nowPlus(3600),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := EnableCapability(cap); err != nil {
+		t.Fatalf("enable should succeed after balance check: %v", err)
+	}
+	cands, _ := ScheduleCandidates(scriptId, sv.Version, 200000, 10)
+	if len(cands) != 1 || cands[0].NodeId != "bc_node" {
+		t.Fatalf("balance-checked node should be schedulable, got %+v", cands)
+	}
+}
+
+func TestSetCategoryBalanceScript(t *testing.T) {
+	cat := &ScriptCategory{Name: "Dreamina", Site: "dreamina.com"}
+	if err := CreateScriptCategory(cat); err != nil {
+		t.Fatal(err)
+	}
+	probe := &ScriptVersion{ScriptId: 7400, AuthorId: 1, CodeSha256: "sha256:p", ReviewStatus: ScriptVersionApproved}
+	if err := CreateScriptVersion(probe); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetCategoryBalanceScript(cat.Id, 7400, probe.Version); err != nil {
+		t.Fatalf("set balance script: %v", err)
+	}
+	got, _ := GetScriptCategory(cat.Id)
+	if got.BalanceScriptId != 7400 || got.BalanceScriptVersion != probe.Version {
+		t.Fatalf("balance script not set: %+v", got)
+	}
+}

@@ -42,8 +42,47 @@ async function unwrap<T>(p: Promise<{ data: ApiEnvelope<T> }>): Promise<T> {
 
 // --- Script versions (author + admin) --------------------------------------
 
-export function submitScriptForReview(scriptId: number) {
-  return unwrap(api.post(`/api/scripts/mine/${scriptId}/submit-review`))
+// Author proposes their share (ppm of provider price) and target-site category
+// when submitting for review.
+export function submitScriptForReview(
+  scriptId: number,
+  opts?: { author_share_rate_ppm?: number; category_id?: number }
+) {
+  return unwrap(api.post(`/api/scripts/mine/${scriptId}/submit-review`, opts ?? {}))
+}
+
+export type ScriptCategory = {
+  id: number
+  name: string
+  site: string
+  balance_script_id: number
+  balance_script_version: number
+}
+
+export function listCategories() {
+  return unwrap<ScriptCategory[]>(api.get('/api/scripts/categories'))
+}
+
+export function createCategory(name: string, site: string) {
+  return unwrap<ScriptCategory>(api.post('/api/scripts/categories', { name, site }))
+}
+
+export function setCategoryBalanceScript(categoryId: number, scriptId: number, version: number) {
+  return unwrap(
+    api.post(`/api/scripts/categories/${categoryId}/balance-script`, {
+      script_id: scriptId,
+      version,
+    })
+  )
+}
+
+// Provider reports a node's balance-probe result for a category (plugin runs the
+// probe script; this records the passing window that lets it list capabilities).
+export function reportBalanceCheck(
+  nodeId: string,
+  body: { category_id: number; balance_ok: boolean; balance_micros?: number; tier?: string }
+) {
+  return unwrap(api.post(`/api/nodes/${nodeId}/balance-check`, body))
 }
 
 export function publishScriptVersion(scriptId: number, pricingTemplateId?: number) {
@@ -83,8 +122,20 @@ export function listPublishedScriptVersions() {
   return unwrap<ScriptVersion[]>(api.get('/api/scripts/versions/published'))
 }
 
-export function reviewScript(scriptId: number, approve: boolean, note: string) {
-  return unwrap(api.post(`/api/scripts/${scriptId}/review`, { approve, note }))
+// Operator approves/rejects; on approve sets the platform service fee (ppm).
+export function reviewScript(
+  scriptId: number,
+  approve: boolean,
+  note: string,
+  platformFeeRatePpm?: number
+) {
+  return unwrap(
+    api.post(`/api/scripts/${scriptId}/review`, {
+      approve,
+      note,
+      platform_fee_rate_ppm: platformFeeRatePpm ?? 0,
+    })
+  )
 }
 
 export function revokeScriptVersion(
@@ -128,6 +179,24 @@ export function disableCapability(nodeId: string, scriptId: number, version: num
   return unwrap(
     api.delete(`/api/nodes/${nodeId}/capabilities/${scriptId}?version=${version}`)
   )
+}
+
+// createCapabilityTest validates the script version is executable and returns a
+// test window (test_expires_at) required to enable the capability.
+export function createCapabilityTest(nodeId: string, scriptId: number, version: number) {
+  return unwrap<{ test_expires_at: number }>(
+    api.post(`/api/nodes/${nodeId}/capabilities/${scriptId}/test?version=${version}`)
+  )
+}
+
+// enableCapability lists a script version on a node with the provider's price
+// and daily quota. Requires a valid test window.
+export function enableCapability(
+  nodeId: string,
+  scriptId: number,
+  body: { version: number; price_micros: number; daily_quota: number; test_expires_at: number }
+) {
+  return unwrap<NodeCapability>(api.put(`/api/nodes/${nodeId}/capabilities/${scriptId}`, body))
 }
 
 // --- Orders -----------------------------------------------------------------

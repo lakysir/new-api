@@ -197,6 +197,20 @@ export function AitokenPurchasePage() {
       const result = await session.waitForResult()
       setRelayResult(JSON.stringify(result, null, 2))
       setRelayStatus(t('Result received'))
+      // Submit the client receipt (result hash) so the control plane can compare
+      // both parties' receipts and settle on a match.
+      try {
+        const resultHash = await sha256Hex(JSON.stringify(result ?? null))
+        await api.post(`/api/orders/${order.id}/receipts`, {
+          task_id: order.id,
+          attempt: 1,
+          party: 'client',
+          order_id: order.id,
+          result_hash: resultHash,
+        })
+      } catch {
+        /* receipt submit best-effort; reconciliation retries on next receipt */
+      }
       await refreshOrder()
     } catch (e) {
       setRelayStatus('')

@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 import {
+  listCategories,
   listScriptVersions,
   publishScriptVersion,
   submitScriptForReview,
@@ -291,6 +292,12 @@ export function MyScriptsPage() {
   const [busyId, setBusyId] = useState(0)
   const [historyScript, setHistoryScript] = useState<UserScript | null>(null)
   const [versions, setVersions] = useState<ScriptVersion[]>([])
+  // Submit-for-review dialog: author picks a target-site category and proposes
+  // their share (% of the provider execution price).
+  const [submitTarget, setSubmitTarget] = useState<number>(0)
+  const [submitCategory, setSubmitCategory] = useState<string>('')
+  const [submitShare, setSubmitShare] = useState<string>('3')
+  const [categories, setCategories] = useState<{ id: number; name: string; site: string }[]>([])
 
   const editorTitle = useMemo(
     () =>
@@ -366,12 +373,31 @@ export function MyScriptsPage() {
     await loadMine()
   }
 
-  async function submitReview(id: number) {
+  // Open the submit dialog (collect category + author share before submitting).
+  async function openSubmitDialog(id: number) {
+    setSubmitTarget(id)
+    setSubmitCategory('')
+    setSubmitShare('3')
+    try {
+      setCategories(await listCategories())
+    } catch {
+      /* categories optional */
+    }
+  }
+
+  async function confirmSubmitReview() {
+    const id = submitTarget
     setBusyId(id)
     try {
-      await submitScriptForReview(id)
+      await submitScriptForReview(id, {
+        author_share_rate_ppm: Math.round(Number(submitShare || '0') * 10000),
+        category_id: submitCategory ? Number(submitCategory) : 0,
+      })
       toast.success(t('Submitted for review'))
+      setSubmitTarget(0)
       await loadMine()
+    } catch (err) {
+      toast.error(String((err as Error)?.message || err))
     } finally {
       setBusyId(0)
     }
@@ -514,7 +540,7 @@ export function MyScriptsPage() {
                           busyId === script.id || !script.has_unpublished_changes
                         }
                         onClick={() =>
-                          submitReview(script.id).catch((err) =>
+                          openSubmitDialog(script.id).catch((err) =>
                             toast.error(String(err?.message || err))
                           )
                         }
@@ -688,6 +714,55 @@ export function MyScriptsPage() {
                 }))
               }
             />
+          </div>
+        </Dialog>
+
+        {/* Submit-for-review: author assigns a target-site category and proposes
+            their revenue share (% of the provider execution price). */}
+        <Dialog
+          open={submitTarget > 0}
+          onOpenChange={(open) => {
+            if (!open) setSubmitTarget(0)
+          }}
+          title={t('Submit for review')}
+          description={t('Assign a category and propose your revenue share.')}
+        >
+          <div className='space-y-3'>
+            <div>
+              <label className='mb-1 block text-sm'>{t('Target-site category')}</label>
+              <select
+                className='h-9 w-full rounded-md border px-2 text-sm'
+                value={submitCategory}
+                onChange={(e) => setSubmitCategory(e.target.value)}
+              >
+                <option value=''>{t('(none)')}</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} {c.site ? `(${c.site})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className='mb-1 block text-sm'>{t('Your share %')}</label>
+              <Input
+                type='number'
+                value={submitShare}
+                onChange={(e) => setSubmitShare(e.target.value)}
+                placeholder='3'
+              />
+            </div>
+            <div className='flex justify-end gap-2'>
+              <Button variant='outline' onClick={() => setSubmitTarget(0)}>
+                {t('Cancel')}
+              </Button>
+              <Button
+                disabled={busyId === submitTarget}
+                onClick={() => confirmSubmitReview()}
+              >
+                {t('Submit')}
+              </Button>
+            </div>
           </div>
         </Dialog>
       </SectionPageLayout.Content>

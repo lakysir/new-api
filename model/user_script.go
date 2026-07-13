@@ -22,18 +22,26 @@ const (
 )
 
 type UserScript struct {
-	Id                    int            `json:"id" gorm:"primaryKey;autoIncrement"`
-	UserId                int            `json:"user_id" gorm:"index;not null"`
-	Title                 string         `json:"title" gorm:"type:varchar(128);not null"`
-	Description           string         `json:"description" gorm:"type:text"`
-	ScriptParams          string         `json:"script_params" gorm:"type:text"`
-	DraftCode             string         `json:"draft_code,omitempty" gorm:"type:text"`
-	PublishedCode         string         `json:"published_code,omitempty" gorm:"type:text"`
-	Published             bool           `json:"published" gorm:"index"`
-	PublishedAt           int64          `json:"published_at" gorm:"bigint;default:0"`
-	ReviewStatus          string         `json:"review_status" gorm:"type:varchar(16);index;default:draft"`
-	ReviewNote            string         `json:"review_note,omitempty" gorm:"type:varchar(512)"`
-	LatestVersion         int            `json:"latest_version" gorm:"default:0"`
+	Id            int    `json:"id" gorm:"primaryKey;autoIncrement"`
+	UserId        int    `json:"user_id" gorm:"index;not null"`
+	Title         string `json:"title" gorm:"type:varchar(128);not null"`
+	Description   string `json:"description" gorm:"type:text"`
+	ScriptParams  string `json:"script_params" gorm:"type:text"`
+	DraftCode     string `json:"draft_code,omitempty" gorm:"type:text"`
+	PublishedCode string `json:"published_code,omitempty" gorm:"type:text"`
+	Published     bool   `json:"published" gorm:"index"`
+	PublishedAt   int64  `json:"published_at" gorm:"bigint;default:0"`
+	ReviewStatus  string `json:"review_status" gorm:"type:varchar(16);index;default:draft"`
+	ReviewNote    string `json:"review_note,omitempty" gorm:"type:varchar(512)"`
+	LatestVersion int    `json:"latest_version" gorm:"default:0"`
+	// AuthorShareRatePpm: the author's cut, proposed at submit-review (ppm of the
+	// provider execution price). PlatformFeeRatePpm: platform service fee, set by
+	// the operator at review. Both feed the immutable pricing_template at publish.
+	AuthorShareRatePpm int64 `json:"author_share_rate_ppm" gorm:"default:0"`
+	PlatformFeeRatePpm int64 `json:"platform_fee_rate_ppm" gorm:"default:0"`
+	// CategoryId assigns the script to a target-site category (author sets it).
+	// The category's balance-probe gates whether a node may list this script.
+	CategoryId            int            `json:"category_id" gorm:"default:0;index"`
 	CreatedAt             int64          `json:"created_at" gorm:"autoCreateTime;column:created_at"`
 	UpdatedAt             int64          `json:"updated_at" gorm:"autoUpdateTime;column:updated_at"`
 	DeletedAt             gorm.DeletedAt `json:"-" gorm:"index"`

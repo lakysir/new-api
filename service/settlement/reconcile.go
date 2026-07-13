@@ -44,8 +44,18 @@ func ReconcileAndSettle(orderId, taskId string, attempt int) (*ReconcileResult, 
 		receipt.Receipt{TaskId: taskId, Attempt: attempt, ResultHash: providerReceipt.ResultHash},
 		receipt.Receipt{TaskId: taskId, Attempt: attempt, ResultHash: clientReceipt.ResultHash},
 	)
+	// Resolve the executing node up front so we can record its outcome.
+	var execNodeId string
+	if ta, _ := model.GetTaskAttempt(taskId, attempt); ta != nil {
+		execNodeId = ta.NodeId
+	}
+
 	if !rec.Match {
-		// Route to dispute; a mismatch is a business outcome, not an error.
+		// Mismatch → dispute (business outcome, not an error) and count a failure
+		// against the executing node, lowering its scheduling success rate.
+		if execNodeId != "" {
+			_ = model.RecordTaskOutcome(execNodeId, false)
+		}
 		updated, terr := model.ApplyTransition(orderId, model.OrderDisputed, nil)
 		if terr != nil && terr != model.ErrIllegalTransition {
 			return nil, terr
@@ -62,6 +72,10 @@ func ReconcileAndSettle(orderId, taskId string, attempt int) (*ReconcileResult, 
 		return nil, err
 	}
 	settled, err := Settle(orderId, participants)
+	if err == nil && execNodeId != "" {
+		// Success raises the node's scheduling success rate.
+		_ = model.RecordTaskOutcome(execNodeId, true)
+	}
 	if err != nil {
 		return nil, err
 	}

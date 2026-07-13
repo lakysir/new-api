@@ -35,12 +35,18 @@ func ListOffersForScript(scriptId, version int) ([]ScriptOffer, error) {
 		State          string
 	}
 	var rows []row
+	// A capability only counts if the node also holds a valid balance check for
+	// the capability's category (or the script has no category). LEFT JOIN so
+	// category-less scripts still appear.
+	now := time.Now().Unix()
 	err := DB.Table("node_capabilities AS cap").
 		Select("cap.node_id, cap.price_micros, cap.remaining_quota, n.last_seen_at, n.state").
 		Joins("JOIN nodes n ON n.id = cap.node_id").
+		Joins("LEFT JOIN node_site_status s ON s.node_id = cap.node_id AND s.category_id = cap.category_id").
 		Where("cap.script_id = ? AND cap.version = ?", scriptId, version).
 		Where("cap.status = ?", CapabilityStatusActive).
-		Where("cap.test_expires_at > ?", time.Now().Unix()).
+		Where("cap.test_expires_at > ?", now).
+		Where("cap.category_id = 0 OR (s.balance_ok = ? AND s.expires_at > ?)", true, now).
 		Order("cap.price_micros asc").
 		Scan(&rows).Error
 	if err != nil {
@@ -79,20 +85,30 @@ func ScheduleCandidates(scriptId, version int, maxPriceMicros int64, limit int) 
 	cutoff := time.Now().Add(-NodePresenceTimeout).Unix()
 
 	type row struct {
-		NodeId      string
-		PriceMicros int64
+		NodeId       string
+		PriceMicros  int64
+		SuccessCount int64
+		FailureCount int64
 	}
 	var rows []row
+	// Only IDLE (idle, not busy) nodes are candidates; busy nodes are excluded
+	// by n.state = IDLE. Combined with success-rate ordering below, a
+	// low-success node is only picked when all higher-success nodes are busy
+	// (hence absent from this set) — exactly the desired fallback behavior.
+	now := time.Now().Unix()
 	err := DB.Table("node_capabilities AS cap").
-		Select("cap.node_id AS node_id, cap.price_micros AS price_micros").
+		Select("cap.node_id AS node_id, cap.price_micros AS price_micros, n.success_count AS success_count, n.failure_count AS failure_count").
 		Joins("JOIN nodes n ON n.id = cap.node_id").
+		Joins("LEFT JOIN node_site_status s ON s.node_id = cap.node_id AND s.category_id = cap.category_id").
 		Where("cap.script_id = ? AND cap.version = ?", scriptId, version).
 		Where("cap.status = ?", CapabilityStatusActive).
-		Where("cap.test_expires_at > ?", time.Now().Unix()).
+		Where("cap.test_expires_at > ?", now).
 		Where("cap.remaining_quota > 0").
 		Where("cap.price_micros <= ?", maxPriceMicros).
 		Where("n.state = ?", NodeStateIdle).
 		Where("n.last_seen_at >= ?", cutoff).
+		// Node must have a valid balance check for the category (or no category).
+		Where("cap.category_id = 0 OR (s.balance_ok = ? AND s.expires_at > ?)", true, now).
 		Scan(&rows).Error
 	if err != nil {
 		return nil, err
@@ -100,10 +116,11 @@ func ScheduleCandidates(scriptId, version int, maxPriceMicros int64, limit int) 
 
 	candidates := make([]CandidateNode, 0, len(rows))
 	for _, r := range rows {
+		n := Node{SuccessCount: r.SuccessCount, FailureCount: r.FailureCount}
 		candidates = append(candidates, CandidateNode{
 			NodeId:      r.NodeId,
 			PriceMicros: r.PriceMicros,
-			Score:       scoreCandidate(r.PriceMicros, maxPriceMicros),
+			Score:       scoreCandidate(n.SuccessRate(), r.PriceMicros, maxPriceMicros),
 		})
 	}
 	// Higher score first; tie-break by lower price then node id for determinism.
@@ -125,15 +142,17 @@ func ScheduleCandidates(scriptId, version int, maxPriceMicros int64, limit int) 
 // scoreCandidate is the MVP price-only component of the §10.2 score, normalized
 // to [0,1] where a lower price scores higher. Quality/stability/latency signals
 // are layered in once receipts and metrics exist.
-func scoreCandidate(priceMicros, maxPriceMicros int64) float64 {
-	if maxPriceMicros <= 0 {
-		return 0
+// scoreCandidate ranks a node by success rate (dominant) with price as a minor
+// tie-breaker. Client prefers high-success nodes; a low-success node only wins
+// when the higher ones are busy (excluded from candidates upstream).
+func scoreCandidate(successRate float64, priceMicros, maxPriceMicros int64) float64 {
+	priceScore := 0.0
+	if maxPriceMicros > 0 {
+		priceScore = 1.0 - float64(priceMicros)/float64(maxPriceMicros)
+		if priceScore < 0 {
+			priceScore = 0
+		}
 	}
-	priceScore := 1.0 - float64(priceMicros)/float64(maxPriceMicros)
-	if priceScore < 0 {
-		priceScore = 0
-	}
-	// price weight 0.15 in the full model; other components default to a neutral
-	// baseline until their signals are available.
-	return 0.85*0.5 + 0.15*priceScore
+	// Success rate weight 0.85 dominates; price weight 0.15 breaks near-ties.
+	return 0.85*successRate + 0.15*priceScore
 }

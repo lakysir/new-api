@@ -27,7 +27,8 @@ type ScriptVersion struct {
 	Title             string `json:"title" gorm:"type:varchar(128)"`
 	Description       string `json:"description" gorm:"type:text"`
 	TaskType          string `json:"task_type" gorm:"type:varchar(64)"`
-	ScriptParams      string `json:"script_params" gorm:"type:text"` // params JSON Schema
+	CategoryId        int    `json:"category_id" gorm:"default:0;index"` // target-site category
+	ScriptParams      string `json:"script_params" gorm:"type:text"`     // params JSON Schema
 	ResultSchema      string `json:"result_schema,omitempty" gorm:"type:text"`
 	AllowedOrigins    string `json:"allowed_origins" gorm:"type:text"` // JSON array
 	TimeoutSeconds    int    `json:"timeout_seconds" gorm:"default:180"`
