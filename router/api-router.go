@@ -274,6 +274,8 @@ func SetApiRouter(router *gin.Engine) {
 			scriptAdminRoute := scriptRoute.Group("/")
 			scriptAdminRoute.Use(middleware.AdminAuth())
 			{
+				scriptAdminRoute.POST("/categories", controller.CreateCategory)
+				scriptAdminRoute.POST("/categories/:id/balance-script", controller.SetCategoryBalanceScript)
 				scriptAdminRoute.GET("/pending", controller.ListPendingScripts)
 				scriptAdminRoute.GET("/versions/published", controller.ListPublishedScriptVersions)
 				scriptAdminRoute.POST("/:id/review", controller.ReviewScriptDecision)
