@@ -47,7 +47,7 @@ type UserScript struct {
 	DeletedAt             gorm.DeletedAt `json:"-" gorm:"index"`
 	CodePreview           string         `json:"code_preview,omitempty" gorm:"-"`
 	PreviewTruncated      bool           `json:"preview_truncated,omitempty" gorm:"-"`
-	AuthorUsername        string         `json:"author_username,omitempty" gorm:"-"`
+	AuthorUsername        string         `json:"author_username,omitempty" gorm:"->;-:migration"`
 	HasUnpublishedChanges bool           `json:"has_unpublished_changes" gorm:"-"`
 	PreviousTitle         string         `json:"previous_title,omitempty" gorm:"-"`
 	PreviousDescription   string         `json:"previous_description,omitempty" gorm:"-"`

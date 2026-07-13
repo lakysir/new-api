@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -149,6 +149,8 @@ export function ScriptReviewConsolePage() {
   const [preview, setPreview] = useState<PendingScript | null>(null)
   const [previewMode, setPreviewMode] = useState<'changes' | 'code'>('changes')
   const [publishedVersions, setPublishedVersions] = useState<ScriptVersion[]>([])
+  const [publishedCategory, setPublishedCategory] = useState('all')
+  const [historyScriptId, setHistoryScriptId] = useState(0)
   const [revokeReasons, setRevokeReasons] = useState<Record<number, string>>({})
   // Operator sets the platform fee (%) per pending script on approval.
   const [platformFees, setPlatformFees] = useState<Record<number, string>>({})
@@ -157,6 +159,33 @@ export function ScriptReviewConsolePage() {
   const [newCatName, setNewCatName] = useState('')
   const [newCatSite, setNewCatSite] = useState('')
   const [balScript, setBalScript] = useState<Record<number, string>>({}) // catId -> "scriptId:version"
+
+  const categoryNames = useMemo(
+    () => new Map(categories.map((category) => [category.id, category.name])),
+    [categories]
+  )
+  const publishedGroups = useMemo(() => {
+    const groups = new Map<number, ScriptVersion[]>()
+    for (const version of publishedVersions) {
+      const versions = groups.get(version.script_id) || []
+      versions.push(version)
+      groups.set(version.script_id, versions)
+    }
+    return Array.from(groups.values())
+      .map((versions) => versions.sort((a, b) => b.version - a.version))
+      .filter(
+        (versions) =>
+          publishedCategory === 'all' ||
+          versions[0].category_id === Number(publishedCategory)
+      )
+  }, [publishedCategory, publishedVersions])
+  const historyVersions = useMemo(
+    () =>
+      publishedVersions
+        .filter((version) => version.script_id === historyScriptId)
+        .sort((a, b) => b.version - a.version),
+    [historyScriptId, publishedVersions]
+  )
 
   async function load() {
     setLoading(true)
@@ -487,8 +516,23 @@ export function ScriptReviewConsolePage() {
         </Dialog>
 
         <div className='mt-6'>
-          <div className='mb-2 text-sm font-medium'>
-            {t('Published Versions')}
+          <div className='mb-2 flex flex-wrap items-center justify-between gap-2'>
+            <div className='text-sm font-medium'>{t('Published Scripts')}</div>
+            <label className='flex items-center gap-2 text-sm'>
+              <span>{t('Category')}</span>
+              <select
+                className='h-8 rounded-md border bg-background px-2 text-sm'
+                value={publishedCategory}
+                onChange={(event) => setPublishedCategory(event.target.value)}
+              >
+                <option value='all'>{t('All categories')}</option>
+                {categories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
           <div className='overflow-auto rounded-md border'>
             <Table>
@@ -496,6 +540,7 @@ export function ScriptReviewConsolePage() {
                 <TableRow>
                   <TableHead>{t('Script')}</TableHead>
                   <TableHead>{t('Version')}</TableHead>
+                  <TableHead>{t('Category')}</TableHead>
                   <TableHead>{t('Author')}</TableHead>
                   <TableHead>{t('Published')}</TableHead>
                   <TableHead>{t('Status')}</TableHead>
@@ -504,58 +549,74 @@ export function ScriptReviewConsolePage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {publishedVersions.map((version) => (
-                  <TableRow key={version.id}>
-                    <TableCell>
-                      <div className='font-medium'>{version.title}</div>
-                      <div className='text-muted-foreground text-xs'>
-                        #{version.script_id}
-                      </div>
-                    </TableCell>
-                    <TableCell>v{version.version}</TableCell>
-                    <TableCell>
-                      {version.author_username || `#${version.author_id}`}
-                    </TableCell>
-                    <TableCell>{formatUnix(version.published_at)}</TableCell>
-                    <TableCell>
-                      {version.revoked_at ? t('Revoked') : t('Published')}
-                    </TableCell>
-                    <TableCell>
-                      {version.revoked_at ? (
-                        version.revoked_reason || '-'
-                      ) : (
-                        <Input
-                          className='h-8 min-w-48'
-                          placeholder={`${t('Reason')} (${t('Required')})`}
-                          value={revokeReasons[version.id] || ''}
-                          onChange={(event) =>
-                            setRevokeReasons((current) => ({
-                              ...current,
-                              [version.id]: event.target.value,
-                            }))
-                          }
-                        />
-                      )}
-                    </TableCell>
-                    <TableCell className='text-right'>
-                      <Button
-                        size='sm'
-                        variant='destructive'
-                        disabled={
-                          !!version.revoked_at ||
-                          !revokeReasons[version.id]?.trim()
-                        }
-                        onClick={() => onRevoke(version)}
-                      >
-                        {t('Revoke version')}
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {publishedVersions.length === 0 ? (
+                {publishedGroups.map((versions) => {
+                  const version = versions[0]
+                  return (
+                    <TableRow key={version.id}>
+                      <TableCell>
+                        <div className='font-medium'>{version.title}</div>
+                        <div className='text-muted-foreground text-xs'>
+                          #{version.script_id}
+                        </div>
+                      </TableCell>
+                      <TableCell>v{version.version}</TableCell>
+                      <TableCell>
+                        {categoryNames.get(version.category_id) ||
+                          t('Uncategorized')}
+                      </TableCell>
+                      <TableCell>
+                        {version.author_username || `#${version.author_id}`}
+                      </TableCell>
+                      <TableCell>{formatUnix(version.published_at)}</TableCell>
+                      <TableCell>
+                        {version.revoked_at ? t('Revoked') : t('Published')}
+                      </TableCell>
+                      <TableCell>
+                        {version.revoked_at ? (
+                          version.revoked_reason || '-'
+                        ) : (
+                          <Input
+                            className='h-8 min-w-48'
+                            placeholder={`${t('Reason')} (${t('Required')})`}
+                            value={revokeReasons[version.id] || ''}
+                            onChange={(event) =>
+                              setRevokeReasons((current) => ({
+                                ...current,
+                                [version.id]: event.target.value,
+                              }))
+                            }
+                          />
+                        )}
+                      </TableCell>
+                      <TableCell className='text-right'>
+                        <div className='flex justify-end gap-2'>
+                          <Button
+                            size='sm'
+                            variant='outline'
+                            onClick={() => setHistoryScriptId(version.script_id)}
+                          >
+                            {t('History')} ({versions.length})
+                          </Button>
+                          <Button
+                            size='sm'
+                            variant='destructive'
+                            disabled={
+                              !!version.revoked_at ||
+                              !revokeReasons[version.id]?.trim()
+                            }
+                            onClick={() => onRevoke(version)}
+                          >
+                            {t('Revoke version')}
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+                {publishedGroups.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={7}
+                      colSpan={8}
                       className='text-muted-foreground py-8 text-center'
                     >
                       {loading ? t('Loading...') : t('No published versions')}
@@ -566,6 +627,40 @@ export function ScriptReviewConsolePage() {
             </Table>
           </div>
         </div>
+
+        <Dialog
+          open={historyScriptId > 0}
+          onOpenChange={(open) => {
+            if (!open) setHistoryScriptId(0)
+          }}
+          title={t('Version history')}
+          description={historyVersions[0]?.title || ''}
+        >
+          <div className='max-h-[60vh] space-y-2 overflow-auto'>
+            {historyVersions.map((version) => (
+              <div
+                key={version.id}
+                className='grid gap-2 rounded-md border p-3 text-sm sm:grid-cols-[80px_1fr_auto] sm:items-center'
+              >
+                <div className='font-medium'>v{version.version}</div>
+                <div>
+                  <div>{formatUnix(version.published_at)}</div>
+                  <div className='text-muted-foreground text-xs'>
+                    {categoryNames.get(version.category_id) || t('Uncategorized')}
+                    {' / '}
+                    {version.author_username || `#${version.author_id}`}
+                  </div>
+                  {version.revoked_at ? (
+                    <div className='text-destructive text-xs'>
+                      {t('Revoked')}: {version.revoked_reason || '-'}
+                    </div>
+                  ) : null}
+                </div>
+                <div>{version.revoked_at ? t('Revoked') : t('Published')}</div>
+              </div>
+            ))}
+          </div>
+        </Dialog>
       </SectionPageLayout.Content>
     </SectionPageLayout>
   )
