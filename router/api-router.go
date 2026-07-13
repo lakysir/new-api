@@ -271,6 +271,7 @@ func SetApiRouter(router *gin.Engine) {
 			scriptAdminRoute.Use(middleware.AdminAuth())
 			{
 				scriptAdminRoute.GET("/pending", controller.ListPendingScripts)
+				scriptAdminRoute.GET("/versions/published", controller.ListPublishedScriptVersions)
 				scriptAdminRoute.POST("/:id/review", controller.ReviewScriptDecision)
 				scriptAdminRoute.POST("/:id/versions/:version/revoke", controller.RevokeScriptVersion)
 			}

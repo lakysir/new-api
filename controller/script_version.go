@@ -104,6 +104,15 @@ func ListPendingScripts(c *gin.Context) {
 	common.ApiSuccess(c, scripts)
 }
 
+func ListPublishedScriptVersions(c *gin.Context) {
+	versions, err := model.ListPublishedScriptVersions()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, versions)
+}
+
 // GetPlatformScriptKey returns the platform's Ed25519 script-signing public key
 // and key id. The public key is not a secret — plugins fetch it to verify
 // market-script signatures (S-005), so this endpoint needs no auth. Returns an
@@ -333,6 +342,10 @@ func RevokeScriptVersion(c *gin.Context) {
 	var req revokeVersionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		common.ApiError(c, err)
+		return
+	}
+	if strings.TrimSpace(req.Reason) == "" {
+		common.ApiErrorMsg(c, "revoke reason is required")
 		return
 	}
 	if req.Severity == "" {

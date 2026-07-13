@@ -79,6 +79,10 @@ export function listPendingScripts() {
   >(api.get('/api/scripts/pending'))
 }
 
+export function listPublishedScriptVersions() {
+  return unwrap<ScriptVersion[]>(api.get('/api/scripts/versions/published'))
+}
+
 export function reviewScript(scriptId: number, approve: boolean, note: string) {
   return unwrap(api.post(`/api/scripts/${scriptId}/review`, { approve, note }))
 }

@@ -36,6 +36,7 @@ export type ScriptVersion = {
   script_id: number
   version: number
   author_id: number
+  author_username?: string
   title: string
   code_sha256: string
   signature_key_id?: string

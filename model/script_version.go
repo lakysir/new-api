@@ -42,6 +42,7 @@ type ScriptVersion struct {
 	RevokedReason     string `json:"revoked_reason,omitempty" gorm:"type:varchar(512)"`
 	RevokeSeverity    string `json:"revoke_severity,omitempty" gorm:"type:varchar(16)"`
 	CreatedAt         int64  `json:"created_at" gorm:"autoCreateTime"`
+	AuthorUsername    string `json:"author_username,omitempty" gorm:"-"`
 }
 
 func (ScriptVersion) TableName() string {
@@ -155,6 +156,17 @@ func ListScriptVersions(scriptId int) ([]ScriptVersion, error) {
 	err := DB.Where("script_id = ?", scriptId).
 		Order("version desc").
 		Omit("code").
+		Find(&versions).Error
+	return versions, err
+}
+
+func ListPublishedScriptVersions() ([]ScriptVersion, error) {
+	var versions []ScriptVersion
+	err := DB.Table("script_versions").
+		Select("script_versions.id,script_versions.script_id,script_versions.version,script_versions.author_id,script_versions.title,script_versions.code_sha256,script_versions.signature_key_id,script_versions.signature,script_versions.review_status,script_versions.published_at,script_versions.revoked_at,script_versions.revoked_reason,script_versions.revoke_severity,users.username AS author_username").
+		Joins("LEFT JOIN users ON users.id = script_versions.author_id").
+		Order("script_versions.published_at desc,script_versions.id desc").
+		Limit(500).
 		Find(&versions).Error
 	return versions, err
 }

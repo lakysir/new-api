@@ -33,7 +33,14 @@ import {
   TableRow,
 } from '@/components/ui/table'
 
-import { listPendingScripts, reviewScript, revokeScriptVersion } from './api'
+import {
+  listPendingScripts,
+  listPublishedScriptVersions,
+  reviewScript,
+  revokeScriptVersion,
+} from './api'
+import { formatUnix } from './lib/format'
+import type { ScriptVersion } from './types'
 
 type PendingScript = {
   id: number
@@ -126,16 +133,18 @@ export function ScriptReviewConsolePage() {
   const [notes, setNotes] = useState<Record<number, string>>({})
   const [preview, setPreview] = useState<PendingScript | null>(null)
   const [previewMode, setPreviewMode] = useState<'changes' | 'code'>('changes')
-
-  // Revoke form state.
-  const [revScript, setRevScript] = useState('')
-  const [revVersion, setRevVersion] = useState('')
-  const [revReason, setRevReason] = useState('')
+  const [publishedVersions, setPublishedVersions] = useState<ScriptVersion[]>([])
+  const [revokeReasons, setRevokeReasons] = useState<Record<number, string>>({})
 
   async function load() {
     setLoading(true)
     try {
-      setPending(await listPendingScripts())
+      const [pendingScripts, versions] = await Promise.all([
+        listPendingScripts(),
+        listPublishedScriptVersions(),
+      ])
+      setPending(pendingScripts)
+      setPublishedVersions(versions)
     } catch (e) {
       toast.error(String((e as Error).message))
     } finally {
@@ -161,16 +170,22 @@ export function ScriptReviewConsolePage() {
     }
   }
 
-  async function onRevoke() {
-    const sid = Number(revScript)
-    const ver = Number(revVersion)
-    if (!sid || !ver) {
-      toast.error(t('Script id and version required'))
+  async function onRevoke(version: ScriptVersion) {
+    const reason = revokeReasons[version.id]?.trim()
+    if (!reason) {
+      toast.error(`${t('Reason')}: ${t('Required')}`)
       return
     }
     try {
-      await revokeScriptVersion(sid, ver, revReason || 'operator revoke', 'normal')
+      await revokeScriptVersion(
+        version.script_id,
+        version.version,
+        reason,
+        'normal'
+      )
       toast.success(t('Version revoked'))
+      setRevokeReasons((current) => ({ ...current, [version.id]: '' }))
+      await load()
     } catch (e) {
       toast.error(String((e as Error).message))
     }
@@ -335,35 +350,84 @@ export function ScriptReviewConsolePage() {
           )}
         </Dialog>
 
-        <div className='mt-6 rounded-lg border p-4'>
-          <div className='mb-2 text-sm font-medium'>{t('Revoke a published version')}</div>
-          <div className='flex flex-wrap items-center gap-2'>
-            <Input
-              className='w-32'
-              placeholder={t('Script id')}
-              value={revScript}
-              onChange={(e) => setRevScript(e.target.value)}
-            />
-            <Input
-              className='w-28'
-              placeholder={t('Version')}
-              value={revVersion}
-              onChange={(e) => setRevVersion(e.target.value)}
-            />
-            <Input
-              className='w-64'
-              placeholder={t('Reason')}
-              value={revReason}
-              onChange={(e) => setRevReason(e.target.value)}
-            />
-            <Button variant='destructive' onClick={onRevoke}>
-              {t('Revoke version')}
-            </Button>
+        <div className='mt-6'>
+          <div className='mb-2 text-sm font-medium'>
+            {t('Published Versions')}
           </div>
-          <div className='text-muted-foreground mt-2 text-xs'>
-            {t(
-              'Revoking stops new tasks and suspends all node capabilities bound to that version. Frozen code and signature are never modified.'
-            )}
+          <div className='overflow-auto rounded-md border'>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t('Script')}</TableHead>
+                  <TableHead>{t('Version')}</TableHead>
+                  <TableHead>{t('Author')}</TableHead>
+                  <TableHead>{t('Published')}</TableHead>
+                  <TableHead>{t('Status')}</TableHead>
+                  <TableHead>{t('Reason')}</TableHead>
+                  <TableHead className='text-right'>{t('Actions')}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {publishedVersions.map((version) => (
+                  <TableRow key={version.id}>
+                    <TableCell>
+                      <div className='font-medium'>{version.title}</div>
+                      <div className='text-muted-foreground text-xs'>
+                        #{version.script_id}
+                      </div>
+                    </TableCell>
+                    <TableCell>v{version.version}</TableCell>
+                    <TableCell>
+                      {version.author_username || `#${version.author_id}`}
+                    </TableCell>
+                    <TableCell>{formatUnix(version.published_at)}</TableCell>
+                    <TableCell>
+                      {version.revoked_at ? t('Revoked') : t('Published')}
+                    </TableCell>
+                    <TableCell>
+                      {version.revoked_at ? (
+                        version.revoked_reason || '-'
+                      ) : (
+                        <Input
+                          className='h-8 min-w-48'
+                          placeholder={`${t('Reason')} (${t('Required')})`}
+                          value={revokeReasons[version.id] || ''}
+                          onChange={(event) =>
+                            setRevokeReasons((current) => ({
+                              ...current,
+                              [version.id]: event.target.value,
+                            }))
+                          }
+                        />
+                      )}
+                    </TableCell>
+                    <TableCell className='text-right'>
+                      <Button
+                        size='sm'
+                        variant='destructive'
+                        disabled={
+                          !!version.revoked_at ||
+                          !revokeReasons[version.id]?.trim()
+                        }
+                        onClick={() => onRevoke(version)}
+                      >
+                        {t('Revoke version')}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {publishedVersions.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={7}
+                      className='text-muted-foreground py-8 text-center'
+                    >
+                      {loading ? t('Loading...') : t('No published versions')}
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+              </TableBody>
+            </Table>
           </div>
         </div>
       </SectionPageLayout.Content>
