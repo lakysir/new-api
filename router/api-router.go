@@ -248,6 +248,8 @@ func SetApiRouter(router *gin.Engine) {
 			// Platform script-signing public key (public; used by plugins to
 			// verify market-script signatures — no secret exposed).
 			scriptRoute.GET("/platform-key", controller.GetPlatformScriptKey)
+			// Provider offers for a script version (price + online + quota).
+			scriptRoute.GET("/:id/offers", controller.ListScriptOffers)
 
 			scriptUserRoute := scriptRoute.Group("/")
 			scriptUserRoute.Use(middleware.UserAuth())
@@ -318,6 +320,10 @@ func SetApiRouter(router *gin.Engine) {
 		// Sec-WebSocket-Protocol (browsers can't set WS headers), so it is NOT
 		// behind DeviceOrUserAuth — the handler authenticates itself.
 		apiRouter.GET("/nodes/control", controller.HandleNodeControl)
+
+		// E2EE data-plane relay (WSS). Forwards opaque ciphertext frames between
+		// the two sides of a task; self-authenticating via device token.
+		apiRouter.GET("/relay", controller.HandleDataPlaneRelay)
 
 		nodeRoute := apiRouter.Group("/nodes")
 		nodeRoute.Use(middleware.CORS(), middleware.DeviceOrUserAuth())

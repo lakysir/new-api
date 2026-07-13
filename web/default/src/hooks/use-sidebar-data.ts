@@ -92,6 +92,11 @@ export function useSidebarData(): SidebarData {
             icon: ScrollText,
           },
           {
+            title: t('Buy AI Token'),
+            url: '/buy-aitoken',
+            icon: Wallet,
+          },
+          {
             title: t('Usage Logs'),
             url: '/usage-logs/common',
             icon: FileText,

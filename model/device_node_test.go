@@ -332,3 +332,43 @@ func TestDeleteOfflineNodeGuardsOnline(t *testing.T) {
 		t.Fatalf("node should be gone, got %v", err)
 	}
 }
+
+func TestListOffersAndCapabilityPrice(t *testing.T) {
+	scriptId := 7100
+	v := seedApprovedVersion(t, scriptId)
+	// Two providers with different prices for the same version.
+	seedIdleNodeCap(t, "off_node_a", 900, scriptId, v.Version, 500000)
+	seedIdleNodeCap(t, "off_node_b", 901, scriptId, v.Version, 300000)
+
+	offers, err := ListOffersForScript(scriptId, v.Version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(offers) != 2 {
+		t.Fatalf("expected 2 offers, got %d", len(offers))
+	}
+	// Cheapest first.
+	if offers[0].PriceMicros != 300000 {
+		t.Fatalf("offers must be cheapest-first, got %d", offers[0].PriceMicros)
+	}
+	// Chosen node price resolves.
+	price, ok, err := GetCapabilityPrice("off_node_a", scriptId, v.Version)
+	if err != nil || !ok || price != 500000 {
+		t.Fatalf("capability price wrong: price=%d ok=%v err=%v", price, ok, err)
+	}
+}
+
+// seedIdleNodeCap creates an online idle node + an active tested capability.
+func seedIdleNodeCap(t *testing.T, nodeId string, userId, scriptId, version int, priceMicros int64) {
+	t.Helper()
+	if err := DB.Create(&Node{Id: nodeId, DeviceId: "d-" + nodeId, UserId: userId, State: NodeStateIdle, LastSeenAt: nowPlus(0)}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := DB.Create(&NodeCapability{
+		NodeId: nodeId, ScriptId: scriptId, Version: version, UserId: userId,
+		PriceMicros: priceMicros, DailyQuota: 100, RemainingQuota: 100,
+		Status: CapabilityStatusActive, TestExpiresAt: nowPlus(3600),
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+}

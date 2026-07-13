@@ -132,14 +132,45 @@ export function disableCapability(nodeId: string, scriptId: number, version: num
 
 // --- Orders -----------------------------------------------------------------
 
+export type ScriptOffer = {
+  node_id: string
+  price_micros: number
+  online: boolean
+  remaining_quota: number
+}
+
+export function listScriptOffers(scriptId: number, version: number) {
+  return unwrap<ScriptOffer[]>(
+    api.get(`/api/scripts/${scriptId}/offers?version=${version}`)
+  )
+}
+
 export function quoteOrder(body: {
   script_id: number
   version: number
-  bid_micros: number
+  node_id?: string
   relay_gb?: number
   storage_gb_hours?: number
 }) {
-  return unwrap<PriceBreakdown>(api.post('/api/orders/quote', body))
+  return unwrap<{ breakdown: PriceBreakdown; chosen_node_id: string }>(
+    api.post('/api/orders/quote', body)
+  )
+}
+
+export function createOrder(
+  body: {
+    script_id: number
+    version: number
+    node_id?: string
+    input_hash: string
+    relay_gb?: number
+    storage_gb_hours?: number
+  },
+  idempotencyKey: string
+) {
+  return unwrap<{ order: Order; created: boolean }>(
+    api.post('/api/orders', body, { headers: { 'Idempotency-Key': idempotencyKey } })
+  )
 }
 
 export function getOrder(id: string) {

@@ -74,13 +74,16 @@ func CanTransition(from, to string) bool {
 
 // Order is a client's paid execution request against a fixed script version.
 type Order struct {
-	Id                string `json:"id" gorm:"primaryKey;type:varchar(64)"`
-	ClientId          int    `json:"client_id" gorm:"index;not null"`
-	ScriptId          int    `json:"script_id" gorm:"index;not null"`
-	Version           int    `json:"version" gorm:"not null"`
-	State             string `json:"state" gorm:"type:varchar(24);index;default:CREATED"`
-	InputHash         string `json:"input_hash" gorm:"type:varchar(80)"`
-	IdempotencyKey    string `json:"idempotency_key" gorm:"type:varchar(80);uniqueIndex"`
+	Id             string `json:"id" gorm:"primaryKey;type:varchar(64)"`
+	ClientId       int    `json:"client_id" gorm:"index;not null"`
+	ScriptId       int    `json:"script_id" gorm:"index;not null"`
+	Version        int    `json:"version" gorm:"not null"`
+	State          string `json:"state" gorm:"type:varchar(24);index;default:CREATED"`
+	InputHash      string `json:"input_hash" gorm:"type:varchar(80)"`
+	IdempotencyKey string `json:"idempotency_key" gorm:"type:varchar(80);uniqueIndex"`
+	// ChosenNodeId is the provider node the client selected (empty = scheduler
+	// picks the cheapest eligible node within budget).
+	ChosenNodeId      string `json:"chosen_node_id" gorm:"type:varchar(64)"`
 	MaxAmountMicros   int64  `json:"max_amount_micros" gorm:"default:0"`
 	FinalAmountMicros int64  `json:"final_amount_micros" gorm:"default:0"`
 	LockVersion       int64  `json:"lock_version" gorm:"default:0"`

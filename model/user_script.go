@@ -13,38 +13,38 @@ const UserScriptMaxCodeLength = 1024 * 1024
 // Script review lifecycle for a draft (UserScript). Publishing an approved
 // draft freezes an immutable ScriptVersion; the draft itself can keep evolving.
 const (
-	ScriptReviewDraft      = "draft"      // author is still editing
-	ScriptReviewPending    = "pending"    // submitted, awaiting review
-	ScriptReviewApproved   = "approved"   // review passed, publishable
-	ScriptReviewRejected   = "rejected"   // review failed, back to author
+	ScriptReviewDraft      = "draft"    // author is still editing
+	ScriptReviewPending    = "pending"  // submitted, awaiting review
+	ScriptReviewApproved   = "approved" // review passed, publishable
+	ScriptReviewRejected   = "rejected" // review failed, back to author
 	ScriptReviewPublishing = "publishing"
 	ScriptReviewPublished  = "published"
 )
 
 type UserScript struct {
-	Id               int            `json:"id" gorm:"primaryKey;autoIncrement"`
-	UserId           int            `json:"user_id" gorm:"index;not null"`
-	Title            string         `json:"title" gorm:"type:varchar(128);not null"`
-	Description      string         `json:"description" gorm:"type:text"`
-	ScriptParams     string         `json:"script_params" gorm:"type:text"`
-	DraftCode        string         `json:"draft_code,omitempty" gorm:"type:text"`
-	PublishedCode    string         `json:"published_code,omitempty" gorm:"type:text"`
-	Published        bool           `json:"published" gorm:"index"`
-	PublishedAt      int64          `json:"published_at" gorm:"bigint;default:0"`
-	ReviewStatus     string         `json:"review_status" gorm:"type:varchar(16);index;default:draft"`
-	ReviewNote       string         `json:"review_note,omitempty" gorm:"type:varchar(512)"`
-	LatestVersion    int            `json:"latest_version" gorm:"default:0"`
-	CreatedAt        int64          `json:"created_at" gorm:"autoCreateTime;column:created_at"`
-	UpdatedAt        int64          `json:"updated_at" gorm:"autoUpdateTime;column:updated_at"`
-	DeletedAt        gorm.DeletedAt `json:"-" gorm:"index"`
-	CodePreview      string         `json:"code_preview,omitempty" gorm:"-"`
-	PreviewTruncated bool           `json:"preview_truncated,omitempty" gorm:"-"`
-	AuthorUsername          string `json:"author_username,omitempty" gorm:"-"`
-	HasUnpublishedChanges   bool   `json:"has_unpublished_changes" gorm:"-"`
-	PreviousTitle           string `json:"previous_title,omitempty" gorm:"-"`
-	PreviousDescription     string `json:"previous_description,omitempty" gorm:"-"`
-	PreviousScriptParams    string `json:"previous_script_params,omitempty" gorm:"-"`
-	PreviousCode            string `json:"previous_code,omitempty" gorm:"-"`
+	Id                    int            `json:"id" gorm:"primaryKey;autoIncrement"`
+	UserId                int            `json:"user_id" gorm:"index;not null"`
+	Title                 string         `json:"title" gorm:"type:varchar(128);not null"`
+	Description           string         `json:"description" gorm:"type:text"`
+	ScriptParams          string         `json:"script_params" gorm:"type:text"`
+	DraftCode             string         `json:"draft_code,omitempty" gorm:"type:text"`
+	PublishedCode         string         `json:"published_code,omitempty" gorm:"type:text"`
+	Published             bool           `json:"published" gorm:"index"`
+	PublishedAt           int64          `json:"published_at" gorm:"bigint;default:0"`
+	ReviewStatus          string         `json:"review_status" gorm:"type:varchar(16);index;default:draft"`
+	ReviewNote            string         `json:"review_note,omitempty" gorm:"type:varchar(512)"`
+	LatestVersion         int            `json:"latest_version" gorm:"default:0"`
+	CreatedAt             int64          `json:"created_at" gorm:"autoCreateTime;column:created_at"`
+	UpdatedAt             int64          `json:"updated_at" gorm:"autoUpdateTime;column:updated_at"`
+	DeletedAt             gorm.DeletedAt `json:"-" gorm:"index"`
+	CodePreview           string         `json:"code_preview,omitempty" gorm:"-"`
+	PreviewTruncated      bool           `json:"preview_truncated,omitempty" gorm:"-"`
+	AuthorUsername        string         `json:"author_username,omitempty" gorm:"-"`
+	HasUnpublishedChanges bool           `json:"has_unpublished_changes" gorm:"-"`
+	PreviousTitle         string         `json:"previous_title,omitempty" gorm:"-"`
+	PreviousDescription   string         `json:"previous_description,omitempty" gorm:"-"`
+	PreviousScriptParams  string         `json:"previous_script_params,omitempty" gorm:"-"`
+	PreviousCode          string         `json:"previous_code,omitempty" gorm:"-"`
 }
 
 func (UserScript) TableName() string {

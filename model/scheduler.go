@@ -13,6 +13,63 @@ type CandidateNode struct {
 	Score       float64 `json:"score"`
 }
 
+// ScriptOffer is a Provider's public offer for a script version: its execution
+// price and online/quality signal. Clients browse offers before ordering.
+type ScriptOffer struct {
+	NodeId         string `json:"node_id"`
+	PriceMicros    int64  `json:"price_micros"`
+	Online         bool   `json:"online"`
+	RemainingQuota int    `json:"remaining_quota"`
+}
+
+// ListOffersForScript returns all active, tested offers for a script version
+// (online or not), cheapest first — the client-facing "how much does one
+// execution cost" catalog (architecture §13.2).
+func ListOffersForScript(scriptId, version int) ([]ScriptOffer, error) {
+	cutoff := time.Now().Add(-NodePresenceTimeout).Unix()
+	type row struct {
+		NodeId         string
+		PriceMicros    int64
+		RemainingQuota int
+		LastSeenAt     int64
+		State          string
+	}
+	var rows []row
+	err := DB.Table("node_capabilities AS cap").
+		Select("cap.node_id, cap.price_micros, cap.remaining_quota, n.last_seen_at, n.state").
+		Joins("JOIN nodes n ON n.id = cap.node_id").
+		Where("cap.script_id = ? AND cap.version = ?", scriptId, version).
+		Where("cap.status = ?", CapabilityStatusActive).
+		Where("cap.test_expires_at > ?", time.Now().Unix()).
+		Order("cap.price_micros asc").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	offers := make([]ScriptOffer, 0, len(rows))
+	for _, r := range rows {
+		offers = append(offers, ScriptOffer{
+			NodeId:         r.NodeId,
+			PriceMicros:    r.PriceMicros,
+			Online:         r.State != NodeStateOffline && r.LastSeenAt >= cutoff,
+			RemainingQuota: r.RemainingQuota,
+		})
+	}
+	return offers, nil
+}
+
+// GetCapabilityPrice returns a specific node's price for a script version, and
+// whether that capability is currently active. Used to resolve the provider
+// price a client selected.
+func GetCapabilityPrice(nodeId string, scriptId, version int) (int64, bool, error) {
+	var cap NodeCapability
+	err := DB.Where("node_id = ? AND script_id = ? AND version = ?", nodeId, scriptId, version).First(&cap).Error
+	if err != nil {
+		return 0, false, err
+	}
+	return cap.PriceMicros, cap.Status == CapabilityStatusActive && cap.IsTestValid(), nil
+}
+
 // ScheduleCandidates returns eligible nodes for a script version whose price is
 // within maxPriceMicros, ranked by score (architecture §10). Candidate filter
 // mirrors §10.1: online + IDLE + active capability + valid test + quota + price.

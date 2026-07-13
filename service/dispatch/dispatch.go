@@ -76,6 +76,22 @@ func Dispatch(orderId string, attempt int) (*Result, error) {
 		return nil, ErrNoCandidates
 	}
 	best := candidates[0]
+	// If the client chose a specific provider offer, prefer it (must be among
+	// the eligible candidates — online/idle/tested/quota/price).
+	if o.ChosenNodeId != "" {
+		matched := false
+		for _, cnd := range candidates {
+			if cnd.NodeId == o.ChosenNodeId {
+				best = cnd
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			// Chosen node not currently eligible (offline/busy): no dispatch yet.
+			return nil, ErrNoCandidates
+		}
+	}
 
 	taskId := orderId // 1:1 order:task in the MVP
 	var result *Result

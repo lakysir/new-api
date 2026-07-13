@@ -2,6 +2,7 @@ package controller
 
 import (
 	"errors"
+	"strconv"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
@@ -9,16 +10,38 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// ListScriptOffers returns the provider offers (price + online + quota) for a
+// script version — the client-facing "how much does one execution cost" list.
+func ListScriptOffers(c *gin.Context) {
+	scriptId, err := strconv.Atoi(c.Param("id"))
+	if err != nil || scriptId <= 0 {
+		common.ApiErrorMsg(c, "invalid script id")
+		return
+	}
+	version, err := strconv.Atoi(c.Query("version"))
+	if err != nil || version <= 0 {
+		common.ApiErrorMsg(c, "version query param is required")
+		return
+	}
+	offers, err := model.ListOffersForScript(scriptId, version)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, offers)
+}
+
 type quoteRequest struct {
 	ScriptId       int     `json:"script_id"`
 	Version        int     `json:"version"`
-	BidMicros      int64   `json:"bid_micros"`
+	NodeId         string  `json:"node_id"` // optional: chosen provider offer
 	RelayGB        float64 `json:"relay_gb"`
 	StorageGBHours float64 `json:"storage_gb_hours"`
 }
 
-// QuoteOrder returns an itemized price breakdown for a provider bid without
-// creating an order.
+// QuoteOrder returns an itemized price breakdown for a script version using the
+// real provider price (chosen offer or cheapest). The client never sets the
+// provider's cut.
 func QuoteOrder(c *gin.Context) {
 	var req quoteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -26,20 +49,20 @@ func QuoteOrder(c *gin.Context) {
 		return
 	}
 	q, err := order.GetQuote(order.QuoteRequest{
-		ScriptId: req.ScriptId, Version: req.Version, BidMicros: req.BidMicros,
+		ScriptId: req.ScriptId, Version: req.Version, NodeId: req.NodeId,
 		RelayGB: req.RelayGB, StorageGBHours: req.StorageGBHours,
 	})
 	if err != nil {
 		common.ApiErrorMsg(c, err.Error())
 		return
 	}
-	common.ApiSuccess(c, q.Breakdown)
+	common.ApiSuccess(c, gin.H{"breakdown": q.Breakdown, "chosen_node_id": q.ChosenNodeId})
 }
 
 type createOrderRequest struct {
 	ScriptId       int     `json:"script_id"`
 	Version        int     `json:"version"`
-	BidMicros      int64   `json:"bid_micros"`
+	NodeId         string  `json:"node_id"` // optional: chosen provider offer
 	InputHash      string  `json:"input_hash"`
 	RelayGB        float64 `json:"relay_gb"`
 	StorageGBHours float64 `json:"storage_gb_hours"`
@@ -63,7 +86,7 @@ func CreateOrder(c *gin.Context) {
 		ClientId:       c.GetInt("id"),
 		ScriptId:       req.ScriptId,
 		Version:        req.Version,
-		BidMicros:      req.BidMicros,
+		NodeId:         req.NodeId,
 		InputHash:      req.InputHash,
 		IdempotencyKey: idempotencyKey,
 		RelayGB:        req.RelayGB,
