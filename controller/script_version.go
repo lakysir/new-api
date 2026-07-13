@@ -1,0 +1,355 @@
+package controller
+
+import (
+	"encoding/json"
+	"errors"
+	"net/http"
+	"strconv"
+
+	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service/scriptregistry"
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+)
+
+// platformSigner builds the Ed25519 signer from configured platform keys. It
+// returns (nil, nil) when unconfigured so dev publishing can proceed unsigned;
+// production gates this via the upline checklist.
+func platformSigner() (*scriptregistry.Signer, error) {
+	if common.ScriptSigningKeySeed == "" {
+		return nil, nil
+	}
+	return scriptregistry.NewSigner(common.ScriptSigningKeyId, common.ScriptSigningKeySeed)
+}
+
+// SubmitScriptForReview moves an author's draft into the pending-review state.
+// The draft must have code and must expose the runGeneratedTest entry.
+func SubmitScriptForReview(c *gin.Context) {
+	id, ok := parseScriptId(c)
+	if !ok {
+		return
+	}
+	script, err := model.GetUserScriptById(id, c.GetInt("id"))
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			common.ApiErrorMsg(c, "script not found")
+			return
+		}
+		common.ApiError(c, err)
+		return
+	}
+	if _, _, _, err := scriptregistry.ValidatePublishable(script.DraftCode); err != nil {
+		common.ApiErrorMsg(c, err.Error())
+		return
+	}
+	script.ReviewStatus = model.ScriptReviewPending
+	script.ReviewNote = ""
+	if err := model.DB.Model(script).Updates(map[string]any{
+		"review_status": script.ReviewStatus, "review_note": "",
+	}).Error; err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, script)
+}
+
+type scriptReviewDecisionRequest struct {
+	Approve bool   `json:"approve"`
+	Note    string `json:"note"`
+}
+
+// ListPendingScripts returns scripts awaiting review, for the operator console.
+func ListPendingScripts(c *gin.Context) {
+	scripts, err := model.ListScriptsByReviewStatus(model.ScriptReviewPending)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, scripts)
+}
+
+// GetPlatformScriptKey returns the platform's Ed25519 script-signing public key
+// and key id. The public key is not a secret — plugins fetch it to verify
+// market-script signatures (S-005), so this endpoint needs no auth. Returns an
+// empty key in dev mode (unsigned publishing).
+func GetPlatformScriptKey(c *gin.Context) {
+	signer, err := platformSigner()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if signer == nil {
+		common.ApiSuccess(c, gin.H{"key_id": "", "public_key": "", "signing_enabled": false})
+		return
+	}
+	common.ApiSuccess(c, gin.H{
+		"key_id":          signer.KeyID(),
+		"public_key":      signer.PublicKeyBase64(),
+		"signing_enabled": true,
+	})
+}
+
+// ReviewScriptDecision is the operator endpoint to approve or reject a pending
+// draft. Approval only marks the draft publishable; it does not freeze a
+// version (publishing does that).
+func ReviewScriptDecision(c *gin.Context) {
+	id, ok := parseScriptId(c)
+	if !ok {
+		return
+	}
+	var req scriptReviewDecisionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	var script model.UserScript
+	if err := model.DB.Where("id = ?", id).First(&script).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			common.ApiErrorMsg(c, "script not found")
+			return
+		}
+		common.ApiError(c, err)
+		return
+	}
+	if script.ReviewStatus != model.ScriptReviewPending {
+		common.ApiErrorMsg(c, "script is not pending review")
+		return
+	}
+	newStatus := model.ScriptReviewApproved
+	if !req.Approve {
+		newStatus = model.ScriptReviewRejected
+	}
+	if err := model.DB.Model(&script).Updates(map[string]any{
+		"review_status": newStatus, "review_note": req.Note,
+	}).Error; err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	script.ReviewStatus = newStatus
+	script.ReviewNote = req.Note
+	common.ApiSuccess(c, script)
+}
+
+// PublishScriptVersion freezes an approved draft into a new immutable, signed
+// ScriptVersion. Republishing after edits creates a new version and never
+// overwrites prior code (architecture §5.3).
+func PublishScriptVersion(c *gin.Context) {
+	id, ok := parseScriptId(c)
+	if !ok {
+		return
+	}
+	// Optional pricing_template_id binds this version to an immutable pricing
+	// template; when omitted the order layer falls back to a zero-fee default.
+	var body struct {
+		PricingTemplateId int `json:"pricing_template_id"`
+	}
+	_ = c.ShouldBindJSON(&body)
+	script, err := model.GetUserScriptById(id, c.GetInt("id"))
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			common.ApiErrorMsg(c, "script not found")
+			return
+		}
+		common.ApiError(c, err)
+		return
+	}
+	if script.ReviewStatus != model.ScriptReviewApproved {
+		common.ApiErrorMsg(c, "script must be approved before publishing")
+		return
+	}
+	// Validate the template exists if one was supplied.
+	if body.PricingTemplateId > 0 {
+		if _, err := model.GetPricingTemplate(body.PricingTemplateId); err != nil {
+			common.ApiErrorMsg(c, "pricing template not found")
+			return
+		}
+	}
+	normalized, codeSha256, _, err := scriptregistry.ValidatePublishable(script.DraftCode)
+	if err != nil {
+		common.ApiErrorMsg(c, err.Error())
+		return
+	}
+
+	version := &model.ScriptVersion{
+		ScriptId:          script.Id,
+		AuthorId:          script.UserId,
+		Title:             script.Title,
+		ScriptParams:      script.ScriptParams,
+		AllowedOrigins:    "[]",
+		TimeoutSeconds:    180,
+		PricingTemplateId: body.PricingTemplateId,
+		Code:              normalized,
+		CodeSha256:        codeSha256,
+		ReviewStatus:      model.ScriptVersionApproved,
+		PublishedAt:       common.GetTimestamp(),
+	}
+
+	// Assign the next version number first so it is part of the signed manifest.
+	if err := model.CreateScriptVersion(version); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+
+	if err := signPublishedVersion(version); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+
+	// Keep the legacy published-code path working during migration.
+	script.PublishedCode = normalized
+	script.Published = true
+	script.PublishedAt = version.PublishedAt
+	_ = model.DB.Model(script).Updates(map[string]any{
+		"published_code": normalized, "published": true, "published_at": version.PublishedAt,
+	}).Error
+
+	common.ApiSuccess(c, gin.H{
+		"script_id":   version.ScriptId,
+		"version":     version.Version,
+		"code_sha256": version.CodeSha256,
+		"signed":      version.Signature != "",
+	})
+}
+
+// signPublishedVersion signs the manifest for a freshly created version and
+// persists the signature. Unsigned dev publishes are allowed but marked so.
+func signPublishedVersion(version *model.ScriptVersion) error {
+	signer, err := platformSigner()
+	if err != nil {
+		return err
+	}
+	if signer == nil {
+		return nil // dev mode: unsigned, execution gate will still hash-check
+	}
+	manifest := scriptregistry.Manifest{
+		ScriptID:       strconv.Itoa(version.ScriptId),
+		Version:        strconv.Itoa(version.Version),
+		Title:          version.Title,
+		TaskType:       version.TaskType,
+		AllowedOrigins: decodeOrigins(version.AllowedOrigins),
+		ParamsSchema:   version.ScriptParams,
+		ResultSchema:   version.ResultSchema,
+		TimeoutSeconds: version.TimeoutSeconds,
+		CodeSha256:     version.CodeSha256,
+		ReviewStatus:   version.ReviewStatus,
+		PublishedAt:    version.PublishedAt,
+	}
+	if _, err := signer.Sign(&manifest); err != nil {
+		return err
+	}
+	return model.DB.Model(&model.ScriptVersion{}).Where("id = ?", version.Id).Updates(map[string]any{
+		"signature":        manifest.Signature,
+		"signature_key_id": manifest.SignatureKeyID,
+	}).Error
+}
+
+func decodeOrigins(raw string) []string {
+	out := []string{}
+	if raw == "" {
+		return out
+	}
+	_ = json.Unmarshal([]byte(raw), &out)
+	return out
+}
+
+type revokeVersionRequest struct {
+	Reason   string `json:"reason"`
+	Severity string `json:"severity"`
+}
+
+// RevokeScriptVersion is the operator endpoint to revoke a published version.
+// It stops new tasks and never mutates the frozen code/hash/signature.
+func RevokeScriptVersion(c *gin.Context) {
+	scriptId, err := strconv.Atoi(c.Param("id"))
+	if err != nil || scriptId <= 0 {
+		common.ApiErrorMsg(c, "invalid script id")
+		return
+	}
+	version, err := strconv.Atoi(c.Param("version"))
+	if err != nil || version <= 0 {
+		common.ApiErrorMsg(c, "invalid version")
+		return
+	}
+	var req revokeVersionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if req.Severity == "" {
+		req.Severity = "normal"
+	}
+	if err := model.RevokeScriptVersion(scriptId, version, req.Reason, req.Severity); err != nil {
+		if errors.Is(err, model.ErrScriptVersionNotFound) {
+			common.ApiErrorMsg(c, "script version not found")
+			return
+		}
+		common.ApiError(c, err)
+		return
+	}
+	// Cascade: suspend any node capabilities bound to the revoked version so no
+	// new tasks are dispatched to them (PRD N-007).
+	suspended, _ := model.SuspendCapabilitiesByScriptVersion(scriptId, version)
+	common.ApiSuccess(c, gin.H{"suspended_capabilities": suspended})
+}
+
+// ListScriptVersions returns a script's version history (no code bodies).
+func ListScriptVersions(c *gin.Context) {
+	scriptId, err := strconv.Atoi(c.Param("id"))
+	if err != nil || scriptId <= 0 {
+		common.ApiErrorMsg(c, "invalid script id")
+		return
+	}
+	versions, err := model.ListScriptVersions(scriptId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, versions)
+}
+
+// GetFixedScriptVersion returns the manifest + code for a fixed, non-revoked,
+// approved version. This is the interface order execution must use (S-005):
+// plugins verify code_sha256 and signature before running.
+func GetFixedScriptVersion(c *gin.Context) {
+	scriptId, err := strconv.Atoi(c.Param("id"))
+	if err != nil || scriptId <= 0 {
+		common.ApiErrorMsg(c, "invalid script id")
+		return
+	}
+	version, err := strconv.Atoi(c.Param("version"))
+	if err != nil || version <= 0 {
+		common.ApiErrorMsg(c, "invalid version")
+		return
+	}
+	v, err := model.GetExecutableScriptVersion(scriptId, version)
+	if err != nil {
+		switch {
+		case errors.Is(err, model.ErrScriptVersionRevoked):
+			c.JSON(http.StatusGone, gin.H{"success": false, "message": "script version revoked", "error_code": "SCRIPT_REVOKED"})
+		case errors.Is(err, model.ErrScriptVersionNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "script version not found", "error_code": "SCRIPT_NOT_FOUND"})
+		default:
+			common.ApiError(c, err)
+		}
+		return
+	}
+	common.ApiSuccess(c, gin.H{
+		"manifest": gin.H{
+			"scriptId":       strconv.Itoa(v.ScriptId),
+			"version":        strconv.Itoa(v.Version),
+			"title":          v.Title,
+			"taskType":       v.TaskType,
+			"allowedOrigins": decodeOrigins(v.AllowedOrigins),
+			"paramsSchema":   v.ScriptParams,
+			"resultSchema":   v.ResultSchema,
+			"timeoutSeconds": v.TimeoutSeconds,
+			"codeSha256":     v.CodeSha256,
+			"reviewStatus":   v.ReviewStatus,
+			"publishedAt":    v.PublishedAt,
+			"signatureKeyId": v.SignatureKeyId,
+			"signature":      v.Signature,
+		},
+		"code": v.Code,
+	})
+}

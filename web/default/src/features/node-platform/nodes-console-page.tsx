@@ -1,0 +1,243 @@
+/*
+Copyright (C) 2023-2026 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
+import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
+
+import { SectionPageLayout } from '@/components/layout'
+import { Button } from '@/components/ui/button'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+
+import {
+  disableCapability,
+  listMyDevices,
+  listMyNodes,
+  listNodeCapabilities,
+  revokeDevice,
+} from './api'
+import { formatUnix, microsToDisplay } from './lib/format'
+import type { Device, NodeCapability, NodeInfo } from './types'
+
+function nodeOnline(n: NodeInfo): boolean {
+  return n.state !== 'OFFLINE' && n.last_seen_at >= Math.floor(Date.now() / 1000) - 45
+}
+
+export function NodesConsolePage() {
+  const { t } = useTranslation()
+  const [devices, setDevices] = useState<Device[]>([])
+  const [nodes, setNodes] = useState<NodeInfo[]>([])
+  const [caps, setCaps] = useState<Record<string, NodeCapability[]>>({})
+  const [loading, setLoading] = useState(false)
+
+  async function loadAll() {
+    setLoading(true)
+    try {
+      const [d, n] = await Promise.all([listMyDevices(), listMyNodes()])
+      setDevices(d)
+      setNodes(n)
+    } catch (e) {
+      toast.error(String((e as Error).message))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadAll()
+  }, [])
+
+  async function onRevokeDevice(id: string) {
+    try {
+      await revokeDevice(id)
+      toast.success(t('Device revoked'))
+      await loadAll()
+    } catch (e) {
+      toast.error(String((e as Error).message))
+    }
+  }
+
+  async function loadCaps(nodeId: string) {
+    try {
+      const list = await listNodeCapabilities(nodeId)
+      setCaps((p) => ({ ...p, [nodeId]: list }))
+    } catch (e) {
+      toast.error(String((e as Error).message))
+    }
+  }
+
+  async function onDisable(nodeId: string, scriptId: number, version: number) {
+    try {
+      await disableCapability(nodeId, scriptId, version)
+      toast.success(t('Capability disabled'))
+      await loadCaps(nodeId)
+    } catch (e) {
+      toast.error(String((e as Error).message))
+    }
+  }
+
+  return (
+    <SectionPageLayout>
+      <SectionPageLayout.Title>{t('Devices & Nodes')}</SectionPageLayout.Title>
+      <SectionPageLayout.Actions>
+        <Button variant='outline' onClick={loadAll} disabled={loading}>
+          {t('Refresh')}
+        </Button>
+      </SectionPageLayout.Actions>
+      <SectionPageLayout.Content>
+        <div className='mb-2 text-sm font-medium'>{t('Devices')}</div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>ID</TableHead>
+              <TableHead>{t('Name')}</TableHead>
+              <TableHead>{t('Status')}</TableHead>
+              <TableHead>{t('Last Seen')}</TableHead>
+              <TableHead>{t('Actions')}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {devices.map((d) => (
+              <TableRow key={d.id}>
+                <TableCell className='max-w-[180px] truncate font-mono text-xs'>
+                  {d.id}
+                </TableCell>
+                <TableCell>{d.name}</TableCell>
+                <TableCell>{d.status === 'active' ? '🟢 active' : '⛔ revoked'}</TableCell>
+                <TableCell>{formatUnix(d.last_seen_at)}</TableCell>
+                <TableCell>
+                  <Button
+                    size='sm'
+                    variant='destructive'
+                    disabled={d.status !== 'active'}
+                    onClick={() => onRevokeDevice(d.id)}
+                  >
+                    {t('Revoke')}
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+            {devices.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={5} className='text-muted-foreground text-center'>
+                  {loading ? t('Loading...') : t('No devices')}
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+
+        <div className='mt-6 mb-2 text-sm font-medium'>{t('Nodes')}</div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>ID</TableHead>
+              <TableHead>{t('State')}</TableHead>
+              <TableHead>{t('Online')}</TableHead>
+              <TableHead>{t('Region')}</TableHead>
+              <TableHead>{t('Last Seen')}</TableHead>
+              <TableHead>{t('Actions')}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {nodes.map((n) => (
+              <TableRow key={n.id}>
+                <TableCell className='max-w-[180px] truncate font-mono text-xs'>
+                  {n.id}
+                </TableCell>
+                <TableCell>{n.state}</TableCell>
+                <TableCell>{nodeOnline(n) ? '🟢' : '⚪'}</TableCell>
+                <TableCell>{n.region || '-'}</TableCell>
+                <TableCell>{formatUnix(n.last_seen_at)}</TableCell>
+                <TableCell>
+                  <Button size='sm' variant='ghost' onClick={() => loadCaps(n.id)}>
+                    {t('Capabilities')}
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+            {nodes.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={6} className='text-muted-foreground text-center'>
+                  {loading ? t('Loading...') : t('No nodes')}
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+
+        {Object.entries(caps).map(([nodeId, list]) => (
+          <div key={nodeId} className='mt-6'>
+            <div className='mb-2 text-sm font-medium'>
+              {t('Capabilities of node {{id}}', { id: nodeId })}
+            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t('Script')}</TableHead>
+                  <TableHead>{t('Version')}</TableHead>
+                  <TableHead>{t('Price')}</TableHead>
+                  <TableHead>{t('Quota')}</TableHead>
+                  <TableHead>{t('Status')}</TableHead>
+                  <TableHead>{t('Actions')}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {list.map((c) => (
+                  <TableRow key={c.id}>
+                    <TableCell>#{c.script_id}</TableCell>
+                    <TableCell>v{c.version}</TableCell>
+                    <TableCell>{microsToDisplay(c.price_micros)}</TableCell>
+                    <TableCell>
+                      {c.remaining_quota}/{c.daily_quota}
+                    </TableCell>
+                    <TableCell>{c.status}</TableCell>
+                    <TableCell>
+                      <Button
+                        size='sm'
+                        variant='destructive'
+                        disabled={c.status !== 'active'}
+                        onClick={() => onDisable(nodeId, c.script_id, c.version)}
+                      >
+                        {t('Disable')}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {list.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6} className='text-muted-foreground text-center'>
+                      {t('No capabilities')}
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        ))}
+      </SectionPageLayout.Content>
+    </SectionPageLayout>
+  )
+}

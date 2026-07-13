@@ -92,6 +92,11 @@ export function useSidebarData(): SidebarData {
             icon: ScrollText,
           },
           {
+            title: t('Script Versions'),
+            url: '/script-versions',
+            icon: ScrollText,
+          },
+          {
             title: t('Usage Logs'),
             url: '/usage-logs/common',
             icon: FileText,
@@ -112,6 +117,16 @@ export function useSidebarData(): SidebarData {
           {
             title: t('Wallet'),
             url: '/wallet',
+            icon: Wallet,
+          },
+          {
+            title: t('Devices & Nodes'),
+            url: '/nodes-console',
+            icon: ScrollText,
+          },
+          {
+            title: t('Node Wallet'),
+            url: '/node-wallet',
             icon: Wallet,
           },
           {
@@ -144,6 +159,12 @@ export function useSidebarData(): SidebarData {
             title: t('Redemption Codes'),
             url: '/redemption-codes',
             icon: Ticket,
+          },
+          {
+            title: t('Script Review'),
+            url: '/script-review',
+            icon: ScrollText,
+            requiredRole: ROLE.ADMIN,
           },
           {
             title: t('Subscriptions'),

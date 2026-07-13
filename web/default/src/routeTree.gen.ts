@@ -15,6 +15,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as authRouteRouteImport } from './routes/(auth)/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SetupIndexRouteImport } from './routes/setup/index'
+import { Route as ScriptsIndexRouteImport } from './routes/scripts/index'
 import { Route as RankingsIndexRouteImport } from './routes/rankings/index'
 import { Route as PricingIndexRouteImport } from './routes/pricing/index'
 import { Route as AboutIndexRouteImport } from './routes/about/index'
@@ -42,9 +43,14 @@ import { Route as AuthenticatedUsageLogsIndexRouteImport } from './routes/_authe
 import { Route as AuthenticatedSystemSettingsIndexRouteImport } from './routes/_authenticated/system-settings/index'
 import { Route as AuthenticatedSystemInfoIndexRouteImport } from './routes/_authenticated/system-info/index'
 import { Route as AuthenticatedSubscriptionsIndexRouteImport } from './routes/_authenticated/subscriptions/index'
+import { Route as AuthenticatedScriptVersionsIndexRouteImport } from './routes/_authenticated/script-versions/index'
+import { Route as AuthenticatedScriptReviewIndexRouteImport } from './routes/_authenticated/script-review/index'
 import { Route as AuthenticatedRedemptionCodesIndexRouteImport } from './routes/_authenticated/redemption-codes/index'
 import { Route as AuthenticatedProfileIndexRouteImport } from './routes/_authenticated/profile/index'
 import { Route as AuthenticatedPlaygroundIndexRouteImport } from './routes/_authenticated/playground/index'
+import { Route as AuthenticatedNodesConsoleIndexRouteImport } from './routes/_authenticated/nodes-console/index'
+import { Route as AuthenticatedNodeWalletIndexRouteImport } from './routes/_authenticated/node-wallet/index'
+import { Route as AuthenticatedMyScriptsIndexRouteImport } from './routes/_authenticated/my-scripts/index'
 import { Route as AuthenticatedModelsIndexRouteImport } from './routes/_authenticated/models/index'
 import { Route as AuthenticatedKeysIndexRouteImport } from './routes/_authenticated/keys/index'
 import { Route as AuthenticatedDashboardIndexRouteImport } from './routes/_authenticated/dashboard/index'
@@ -96,6 +102,11 @@ const IndexRoute = IndexRouteImport.update({
 const SetupIndexRoute = SetupIndexRouteImport.update({
   id: '/setup/',
   path: '/setup/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ScriptsIndexRoute = ScriptsIndexRouteImport.update({
+  id: '/scripts/',
+  path: '/scripts/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RankingsIndexRoute = RankingsIndexRouteImport.update({
@@ -239,6 +250,18 @@ const AuthenticatedSubscriptionsIndexRoute =
     path: '/subscriptions/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedScriptVersionsIndexRoute =
+  AuthenticatedScriptVersionsIndexRouteImport.update({
+    id: '/script-versions/',
+    path: '/script-versions/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedScriptReviewIndexRoute =
+  AuthenticatedScriptReviewIndexRouteImport.update({
+    id: '/script-review/',
+    path: '/script-review/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedRedemptionCodesIndexRoute =
   AuthenticatedRedemptionCodesIndexRouteImport.update({
     id: '/redemption-codes/',
@@ -255,6 +278,24 @@ const AuthenticatedPlaygroundIndexRoute =
   AuthenticatedPlaygroundIndexRouteImport.update({
     id: '/playground/',
     path: '/playground/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedNodesConsoleIndexRoute =
+  AuthenticatedNodesConsoleIndexRouteImport.update({
+    id: '/nodes-console/',
+    path: '/nodes-console/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedNodeWalletIndexRoute =
+  AuthenticatedNodeWalletIndexRouteImport.update({
+    id: '/node-wallet/',
+    path: '/node-wallet/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedMyScriptsIndexRoute =
+  AuthenticatedMyScriptsIndexRouteImport.update({
+    id: '/my-scripts/',
+    path: '/my-scripts/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedModelsIndexRoute =
@@ -423,6 +464,7 @@ export interface FileRoutesByFullPath {
   '/about/': typeof AboutIndexRoute
   '/pricing/': typeof PricingIndexRoute
   '/rankings/': typeof RankingsIndexRoute
+  '/scripts/': typeof ScriptsIndexRoute
   '/setup/': typeof SetupIndexRoute
   '/user/reset': typeof authUserResetRoute
   '/chat/$chatId': typeof AuthenticatedChatChatIdRoute
@@ -434,9 +476,14 @@ export interface FileRoutesByFullPath {
   '/dashboard/': typeof AuthenticatedDashboardIndexRoute
   '/keys/': typeof AuthenticatedKeysIndexRoute
   '/models/': typeof AuthenticatedModelsIndexRoute
+  '/my-scripts/': typeof AuthenticatedMyScriptsIndexRoute
+  '/node-wallet/': typeof AuthenticatedNodeWalletIndexRoute
+  '/nodes-console/': typeof AuthenticatedNodesConsoleIndexRoute
   '/playground/': typeof AuthenticatedPlaygroundIndexRoute
   '/profile/': typeof AuthenticatedProfileIndexRoute
   '/redemption-codes/': typeof AuthenticatedRedemptionCodesIndexRoute
+  '/script-review/': typeof AuthenticatedScriptReviewIndexRoute
+  '/script-versions/': typeof AuthenticatedScriptVersionsIndexRoute
   '/subscriptions/': typeof AuthenticatedSubscriptionsIndexRoute
   '/system-info/': typeof AuthenticatedSystemInfoIndexRoute
   '/system-settings/': typeof AuthenticatedSystemSettingsIndexRoute
@@ -482,6 +529,7 @@ export interface FileRoutesByTo {
   '/about': typeof AboutIndexRoute
   '/pricing': typeof PricingIndexRoute
   '/rankings': typeof RankingsIndexRoute
+  '/scripts': typeof ScriptsIndexRoute
   '/setup': typeof SetupIndexRoute
   '/user/reset': typeof authUserResetRoute
   '/chat/$chatId': typeof AuthenticatedChatChatIdRoute
@@ -493,9 +541,14 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AuthenticatedDashboardIndexRoute
   '/keys': typeof AuthenticatedKeysIndexRoute
   '/models': typeof AuthenticatedModelsIndexRoute
+  '/my-scripts': typeof AuthenticatedMyScriptsIndexRoute
+  '/node-wallet': typeof AuthenticatedNodeWalletIndexRoute
+  '/nodes-console': typeof AuthenticatedNodesConsoleIndexRoute
   '/playground': typeof AuthenticatedPlaygroundIndexRoute
   '/profile': typeof AuthenticatedProfileIndexRoute
   '/redemption-codes': typeof AuthenticatedRedemptionCodesIndexRoute
+  '/script-review': typeof AuthenticatedScriptReviewIndexRoute
+  '/script-versions': typeof AuthenticatedScriptVersionsIndexRoute
   '/subscriptions': typeof AuthenticatedSubscriptionsIndexRoute
   '/system-info': typeof AuthenticatedSystemInfoIndexRoute
   '/system-settings': typeof AuthenticatedSystemSettingsIndexRoute
@@ -545,6 +598,7 @@ export interface FileRoutesById {
   '/about/': typeof AboutIndexRoute
   '/pricing/': typeof PricingIndexRoute
   '/rankings/': typeof RankingsIndexRoute
+  '/scripts/': typeof ScriptsIndexRoute
   '/setup/': typeof SetupIndexRoute
   '/(auth)/user/reset': typeof authUserResetRoute
   '/_authenticated/chat/$chatId': typeof AuthenticatedChatChatIdRoute
@@ -556,9 +610,14 @@ export interface FileRoutesById {
   '/_authenticated/dashboard/': typeof AuthenticatedDashboardIndexRoute
   '/_authenticated/keys/': typeof AuthenticatedKeysIndexRoute
   '/_authenticated/models/': typeof AuthenticatedModelsIndexRoute
+  '/_authenticated/my-scripts/': typeof AuthenticatedMyScriptsIndexRoute
+  '/_authenticated/node-wallet/': typeof AuthenticatedNodeWalletIndexRoute
+  '/_authenticated/nodes-console/': typeof AuthenticatedNodesConsoleIndexRoute
   '/_authenticated/playground/': typeof AuthenticatedPlaygroundIndexRoute
   '/_authenticated/profile/': typeof AuthenticatedProfileIndexRoute
   '/_authenticated/redemption-codes/': typeof AuthenticatedRedemptionCodesIndexRoute
+  '/_authenticated/script-review/': typeof AuthenticatedScriptReviewIndexRoute
+  '/_authenticated/script-versions/': typeof AuthenticatedScriptVersionsIndexRoute
   '/_authenticated/subscriptions/': typeof AuthenticatedSubscriptionsIndexRoute
   '/_authenticated/system-info/': typeof AuthenticatedSystemInfoIndexRoute
   '/_authenticated/system-settings/': typeof AuthenticatedSystemSettingsIndexRoute
@@ -607,6 +666,7 @@ export interface FileRouteTypes {
     | '/about/'
     | '/pricing/'
     | '/rankings/'
+    | '/scripts/'
     | '/setup/'
     | '/user/reset'
     | '/chat/$chatId'
@@ -618,9 +678,14 @@ export interface FileRouteTypes {
     | '/dashboard/'
     | '/keys/'
     | '/models/'
+    | '/my-scripts/'
+    | '/node-wallet/'
+    | '/nodes-console/'
     | '/playground/'
     | '/profile/'
     | '/redemption-codes/'
+    | '/script-review/'
+    | '/script-versions/'
     | '/subscriptions/'
     | '/system-info/'
     | '/system-settings/'
@@ -666,6 +731,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/pricing'
     | '/rankings'
+    | '/scripts'
     | '/setup'
     | '/user/reset'
     | '/chat/$chatId'
@@ -677,9 +743,14 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/keys'
     | '/models'
+    | '/my-scripts'
+    | '/node-wallet'
+    | '/nodes-console'
     | '/playground'
     | '/profile'
     | '/redemption-codes'
+    | '/script-review'
+    | '/script-versions'
     | '/subscriptions'
     | '/system-info'
     | '/system-settings'
@@ -728,6 +799,7 @@ export interface FileRouteTypes {
     | '/about/'
     | '/pricing/'
     | '/rankings/'
+    | '/scripts/'
     | '/setup/'
     | '/(auth)/user/reset'
     | '/_authenticated/chat/$chatId'
@@ -739,9 +811,14 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard/'
     | '/_authenticated/keys/'
     | '/_authenticated/models/'
+    | '/_authenticated/my-scripts/'
+    | '/_authenticated/node-wallet/'
+    | '/_authenticated/nodes-console/'
     | '/_authenticated/playground/'
     | '/_authenticated/profile/'
     | '/_authenticated/redemption-codes/'
+    | '/_authenticated/script-review/'
+    | '/_authenticated/script-versions/'
     | '/_authenticated/subscriptions/'
     | '/_authenticated/system-info/'
     | '/_authenticated/system-settings/'
@@ -782,6 +859,7 @@ export interface RootRouteChildren {
   AboutIndexRoute: typeof AboutIndexRoute
   PricingIndexRoute: typeof PricingIndexRoute
   RankingsIndexRoute: typeof RankingsIndexRoute
+  ScriptsIndexRoute: typeof ScriptsIndexRoute
   SetupIndexRoute: typeof SetupIndexRoute
   PricingModelIdIndexRoute: typeof PricingModelIdIndexRoute
 }
@@ -828,6 +906,13 @@ declare module '@tanstack/react-router' {
       path: '/setup'
       fullPath: '/setup/'
       preLoaderRoute: typeof SetupIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/scripts/': {
+      id: '/scripts/'
+      path: '/scripts'
+      fullPath: '/scripts/'
+      preLoaderRoute: typeof ScriptsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/rankings/': {
@@ -1019,6 +1104,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSubscriptionsIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/script-versions/': {
+      id: '/_authenticated/script-versions/'
+      path: '/script-versions'
+      fullPath: '/script-versions/'
+      preLoaderRoute: typeof AuthenticatedScriptVersionsIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/script-review/': {
+      id: '/_authenticated/script-review/'
+      path: '/script-review'
+      fullPath: '/script-review/'
+      preLoaderRoute: typeof AuthenticatedScriptReviewIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/redemption-codes/': {
       id: '/_authenticated/redemption-codes/'
       path: '/redemption-codes'
@@ -1038,6 +1137,27 @@ declare module '@tanstack/react-router' {
       path: '/playground'
       fullPath: '/playground/'
       preLoaderRoute: typeof AuthenticatedPlaygroundIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/nodes-console/': {
+      id: '/_authenticated/nodes-console/'
+      path: '/nodes-console'
+      fullPath: '/nodes-console/'
+      preLoaderRoute: typeof AuthenticatedNodesConsoleIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/node-wallet/': {
+      id: '/_authenticated/node-wallet/'
+      path: '/node-wallet'
+      fullPath: '/node-wallet/'
+      preLoaderRoute: typeof AuthenticatedNodeWalletIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/my-scripts/': {
+      id: '/_authenticated/my-scripts/'
+      path: '/my-scripts'
+      fullPath: '/my-scripts/'
+      preLoaderRoute: typeof AuthenticatedMyScriptsIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/models/': {
@@ -1306,9 +1426,14 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedDashboardIndexRoute: typeof AuthenticatedDashboardIndexRoute
   AuthenticatedKeysIndexRoute: typeof AuthenticatedKeysIndexRoute
   AuthenticatedModelsIndexRoute: typeof AuthenticatedModelsIndexRoute
+  AuthenticatedMyScriptsIndexRoute: typeof AuthenticatedMyScriptsIndexRoute
+  AuthenticatedNodeWalletIndexRoute: typeof AuthenticatedNodeWalletIndexRoute
+  AuthenticatedNodesConsoleIndexRoute: typeof AuthenticatedNodesConsoleIndexRoute
   AuthenticatedPlaygroundIndexRoute: typeof AuthenticatedPlaygroundIndexRoute
   AuthenticatedProfileIndexRoute: typeof AuthenticatedProfileIndexRoute
   AuthenticatedRedemptionCodesIndexRoute: typeof AuthenticatedRedemptionCodesIndexRoute
+  AuthenticatedScriptReviewIndexRoute: typeof AuthenticatedScriptReviewIndexRoute
+  AuthenticatedScriptVersionsIndexRoute: typeof AuthenticatedScriptVersionsIndexRoute
   AuthenticatedSubscriptionsIndexRoute: typeof AuthenticatedSubscriptionsIndexRoute
   AuthenticatedSystemInfoIndexRoute: typeof AuthenticatedSystemInfoIndexRoute
   AuthenticatedUsageLogsIndexRoute: typeof AuthenticatedUsageLogsIndexRoute
@@ -1329,10 +1454,15 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDashboardIndexRoute: AuthenticatedDashboardIndexRoute,
   AuthenticatedKeysIndexRoute: AuthenticatedKeysIndexRoute,
   AuthenticatedModelsIndexRoute: AuthenticatedModelsIndexRoute,
+  AuthenticatedMyScriptsIndexRoute: AuthenticatedMyScriptsIndexRoute,
+  AuthenticatedNodeWalletIndexRoute: AuthenticatedNodeWalletIndexRoute,
+  AuthenticatedNodesConsoleIndexRoute: AuthenticatedNodesConsoleIndexRoute,
   AuthenticatedPlaygroundIndexRoute: AuthenticatedPlaygroundIndexRoute,
   AuthenticatedProfileIndexRoute: AuthenticatedProfileIndexRoute,
   AuthenticatedRedemptionCodesIndexRoute:
     AuthenticatedRedemptionCodesIndexRoute,
+  AuthenticatedScriptReviewIndexRoute: AuthenticatedScriptReviewIndexRoute,
+  AuthenticatedScriptVersionsIndexRoute: AuthenticatedScriptVersionsIndexRoute,
   AuthenticatedSubscriptionsIndexRoute: AuthenticatedSubscriptionsIndexRoute,
   AuthenticatedSystemInfoIndexRoute: AuthenticatedSystemInfoIndexRoute,
   AuthenticatedUsageLogsIndexRoute: AuthenticatedUsageLogsIndexRoute,
@@ -1360,6 +1490,7 @@ const rootRouteChildren: RootRouteChildren = {
   AboutIndexRoute: AboutIndexRoute,
   PricingIndexRoute: PricingIndexRoute,
   RankingsIndexRoute: RankingsIndexRoute,
+  ScriptsIndexRoute: ScriptsIndexRoute,
   SetupIndexRoute: SetupIndexRoute,
   PricingModelIdIndexRoute: PricingModelIdIndexRoute,
 }

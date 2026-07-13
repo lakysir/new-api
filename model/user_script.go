@@ -10,6 +10,15 @@ import (
 
 const UserScriptMaxCodeLength = 1024 * 1024
 
+// Script review lifecycle for a draft (UserScript). Publishing an approved
+// draft freezes an immutable ScriptVersion; the draft itself can keep evolving.
+const (
+	ScriptReviewDraft    = "draft"    // author is still editing
+	ScriptReviewPending  = "pending"  // submitted, awaiting review
+	ScriptReviewApproved = "approved" // review passed, publishable
+	ScriptReviewRejected = "rejected" // review failed, back to author
+)
+
 type UserScript struct {
 	Id               int            `json:"id" gorm:"primaryKey;autoIncrement"`
 	UserId           int            `json:"user_id" gorm:"index;not null"`
@@ -20,6 +29,9 @@ type UserScript struct {
 	PublishedCode    string         `json:"published_code,omitempty" gorm:"type:text"`
 	Published        bool           `json:"published" gorm:"index"`
 	PublishedAt      int64          `json:"published_at" gorm:"bigint;default:0"`
+	ReviewStatus     string         `json:"review_status" gorm:"type:varchar(16);index;default:draft"`
+	ReviewNote       string         `json:"review_note,omitempty" gorm:"type:varchar(512)"`
+	LatestVersion    int            `json:"latest_version" gorm:"default:0"`
 	CreatedAt        int64          `json:"created_at" gorm:"autoCreateTime;column:created_at"`
 	UpdatedAt        int64          `json:"updated_at" gorm:"autoUpdateTime;column:updated_at"`
 	DeletedAt        gorm.DeletedAt `json:"-" gorm:"index"`
@@ -136,6 +148,20 @@ func ListUserScripts(userId int) ([]UserScript, error) {
 	var scripts []UserScript
 	err := DB.Select("id,user_id,title,description,script_params,published,published_at,created_at,updated_at").
 		Where("user_id = ?", userId).
+		Order("updated_at desc,id desc").
+		Find(&scripts).Error
+	if err != nil {
+		return nil, err
+	}
+	return scripts, nil
+}
+
+// ListScriptsByReviewStatus returns scripts in a given review status without
+// code bodies. Used by the operator review console (admin).
+func ListScriptsByReviewStatus(status string) ([]UserScript, error) {
+	var scripts []UserScript
+	err := DB.Select("id,user_id,title,description,script_params,review_status,review_note,latest_version,published,published_at,created_at,updated_at").
+		Where("review_status = ?", status).
 		Order("updated_at desc,id desc").
 		Find(&scripts).Error
 	if err != nil {

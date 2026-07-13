@@ -245,6 +245,9 @@ func SetApiRouter(router *gin.Engine) {
 		{
 			scriptRoute.GET("/square", controller.ListScriptSquare)
 			scriptRoute.GET("/square/:id", controller.GetScriptSquareDetail)
+			// Platform script-signing public key (public; used by plugins to
+			// verify market-script signatures — no secret exposed).
+			scriptRoute.GET("/platform-key", controller.GetPlatformScriptKey)
 
 			scriptUserRoute := scriptRoute.Group("/")
 			scriptUserRoute.Use(middleware.UserAuth())
@@ -255,6 +258,28 @@ func SetApiRouter(router *gin.Engine) {
 				scriptUserRoute.PUT("/mine/:id", controller.SaveMyScriptDraft)
 				scriptUserRoute.POST("/mine/:id/publish", controller.PublishMyScript)
 				scriptUserRoute.DELETE("/mine/:id", controller.DeleteMyScript)
+
+				// Trusted version lifecycle: submit for review, publish an
+				// immutable signed version, and read version history.
+				scriptUserRoute.POST("/mine/:id/submit-review", controller.SubmitScriptForReview)
+				scriptUserRoute.POST("/mine/:id/publish-version", controller.PublishScriptVersion)
+				scriptUserRoute.GET("/mine/:id/versions", controller.ListScriptVersions)
+			}
+
+			// Operator review + revoke, and fixed-version fetch used by order
+			// execution (signature + hash verified plugin-side).
+			scriptAdminRoute := scriptRoute.Group("/")
+			scriptAdminRoute.Use(middleware.AdminAuth())
+			{
+				scriptAdminRoute.GET("/pending", controller.ListPendingScripts)
+				scriptAdminRoute.POST("/:id/review", controller.ReviewScriptDecision)
+				scriptAdminRoute.POST("/:id/versions/:version/revoke", controller.RevokeScriptVersion)
+			}
+
+			scriptVersionRoute := scriptRoute.Group("/")
+			scriptVersionRoute.Use(middleware.UserAuth())
+			{
+				scriptVersionRoute.GET("/:id/versions/:version", controller.GetFixedScriptVersion)
 			}
 		}
 
@@ -268,6 +293,63 @@ func SetApiRouter(router *gin.Engine) {
 
 			scriptApiRoute.POST("/scripts", middleware.CriticalRateLimit(), controller.ApiSaveMyScriptDraft)
 			scriptApiRoute.PUT("/scripts/:id", middleware.CriticalRateLimit(), controller.ApiSaveMyScriptDraft)
+		}
+
+		// Provider device identity and node/capability management (Stage C).
+		deviceRoute := apiRouter.Group("/devices")
+		{
+			// Refresh only needs the refresh token, not a user session.
+			deviceRoute.POST("/refresh", middleware.CriticalRateLimit(), controller.RefreshDeviceSession)
+
+			deviceUserRoute := deviceRoute.Group("/")
+			deviceUserRoute.Use(middleware.UserAuth())
+			{
+				deviceUserRoute.GET("/mine", controller.ListMyDevices)
+				deviceUserRoute.POST("/challenge", middleware.CriticalRateLimit(), controller.CreateDeviceChallenge)
+				deviceUserRoute.POST("/activate", middleware.CriticalRateLimit(), controller.ActivateDevice)
+				deviceUserRoute.DELETE("/:deviceId", controller.RevokeMyDevice)
+			}
+		}
+
+		nodeRoute := apiRouter.Group("/nodes")
+		nodeRoute.Use(middleware.UserAuth())
+		{
+			nodeRoute.POST("", controller.RegisterNode)
+			nodeRoute.GET("/mine", controller.ListMyNodes)
+			nodeRoute.POST("/:id/heartbeat", controller.NodeHeartbeat)
+			nodeRoute.GET("/:id/capabilities", controller.ListCapabilities)
+			nodeRoute.POST("/:id/capabilities/:scriptId/test", controller.CreateCapabilityTest)
+			nodeRoute.PUT("/:id/capabilities/:scriptId", controller.EnableCapability)
+			nodeRoute.DELETE("/:id/capabilities/:scriptId", controller.DisableCapability)
+		}
+
+		// Client orders: quote, create (idempotent), status, cancel (Stage D).
+		orderRoute := apiRouter.Group("/orders")
+		orderRoute.Use(middleware.UserAuth())
+		{
+			orderRoute.POST("/quote", controller.QuoteOrder)
+			orderRoute.POST("", middleware.CriticalRateLimit(), controller.CreateOrder)
+			orderRoute.GET("/:id", controller.GetOrder)
+			orderRoute.POST("/:id/cancel", controller.CancelOrder)
+			// Signed dual-party receipts drive settlement/dispute (Stage E).
+			orderRoute.POST("/:id/receipts", controller.SubmitReceipt)
+		}
+
+		// Ledger: balances and simulated (USD_TEST) deposits (Stage F).
+		ledgerRoute := apiRouter.Group("/ledger")
+		ledgerRoute.Use(middleware.UserAuth())
+		{
+			ledgerRoute.GET("/balances", controller.GetMyLedgerBalances)
+			ledgerRoute.POST("/deposit/simulate", middleware.CriticalRateLimit(), controller.SimulatedDeposit)
+		}
+
+		// Payment: deposit address, fee estimate, withdrawal (Stage G).
+		paymentRoute := apiRouter.Group("/payment")
+		paymentRoute.Use(middleware.UserAuth())
+		{
+			paymentRoute.POST("/deposit-address", controller.CreateDepositAddress)
+			paymentRoute.POST("/withdrawals/estimate", controller.EstimateWithdrawalFee)
+			paymentRoute.POST("/withdrawals", middleware.CriticalRateLimit(), controller.RequestWithdrawal)
 		}
 
 		usageRoute := apiRouter.Group("/usage")

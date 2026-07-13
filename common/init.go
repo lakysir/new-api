@@ -61,6 +61,12 @@ func InitEnv() {
 	} else {
 		CryptoSecret = SessionSecret
 	}
+	if os.Getenv("SCRIPT_SIGNING_KEY_ID") != "" {
+		ScriptSigningKeyId = os.Getenv("SCRIPT_SIGNING_KEY_ID")
+	}
+	if os.Getenv("SCRIPT_SIGNING_KEY_SEED") != "" {
+		ScriptSigningKeySeed = os.Getenv("SCRIPT_SIGNING_KEY_SEED")
+	}
 	if os.Getenv("SQLITE_PATH") != "" {
 		SQLitePath = os.Getenv("SQLITE_PATH")
 	}

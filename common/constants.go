@@ -75,6 +75,13 @@ var DefaultCollapseSidebar = false // default value of collapse sidebar
 var SessionSecret = uuid.New().String()
 var CryptoSecret = uuid.New().String()
 
+// ScriptSigningKeyId / ScriptSigningKeySeed configure the Ed25519 platform key
+// used to sign immutable market-script versions. The seed is a base64-encoded
+// 32-byte Ed25519 seed (or 64-byte private key). When empty, publishing falls
+// back to an unsigned version in dev; production must set it via KMS/secret ref.
+var ScriptSigningKeyId = "dev-script-key"
+var ScriptSigningKeySeed = ""
+
 var OptionMap map[string]string
 var OptionMapRWMutex sync.RWMutex
 
