@@ -64,8 +64,11 @@ export function listPendingScripts() {
     Array<{
       id: number
       user_id: number
+      author_username: string
       title: string
       description: string
+      script_params?: string
+      draft_code: string
       review_status: string
       latest_version?: number
     }>

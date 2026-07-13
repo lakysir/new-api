@@ -25,6 +25,7 @@ type ScriptVersion struct {
 	Version           int    `json:"version" gorm:"index:idx_script_version,unique;not null"`
 	AuthorId          int    `json:"author_id" gorm:"index;not null"`
 	Title             string `json:"title" gorm:"type:varchar(128)"`
+	Description       string `json:"description" gorm:"type:text"`
 	TaskType          string `json:"task_type" gorm:"type:varchar(64)"`
 	ScriptParams      string `json:"script_params" gorm:"type:text"` // params JSON Schema
 	ResultSchema      string `json:"result_schema,omitempty" gorm:"type:text"`

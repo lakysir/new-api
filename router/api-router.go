@@ -256,7 +256,6 @@ func SetApiRouter(router *gin.Engine) {
 				scriptUserRoute.POST("/mine", controller.SaveMyScriptDraft)
 				scriptUserRoute.GET("/mine/:id", controller.GetMyScript)
 				scriptUserRoute.PUT("/mine/:id", controller.SaveMyScriptDraft)
-				scriptUserRoute.POST("/mine/:id/publish", controller.PublishMyScript)
 				scriptUserRoute.DELETE("/mine/:id", controller.DeleteMyScript)
 
 				// Trusted version lifecycle: submit for review, publish an

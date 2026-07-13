@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
@@ -23,6 +24,23 @@ func platformSigner() (*scriptregistry.Signer, error) {
 	return scriptregistry.NewSigner(common.ScriptSigningKeyId, common.ScriptSigningKeySeed)
 }
 
+func draftMatchesLatestVersion(script *model.UserScript) (bool, error) {
+	if script.LatestVersion <= 0 {
+		return false, nil
+	}
+	version, err := model.GetScriptVersion(script.Id, script.LatestVersion)
+	if err != nil {
+		return false, err
+	}
+	normalized, codeSha256, _, err := scriptregistry.ValidatePublishable(script.DraftCode)
+	if err != nil {
+		return false, err
+	}
+	return version.Title == script.Title && version.Description == script.Description &&
+		version.ScriptParams == script.ScriptParams && version.Code == normalized &&
+		version.CodeSha256 == codeSha256, nil
+}
+
 // SubmitScriptForReview moves an author's draft into the pending-review state.
 // The draft must have code and must expose the runGeneratedTest entry.
 func SubmitScriptForReview(c *gin.Context) {
@@ -37,6 +55,23 @@ func SubmitScriptForReview(c *gin.Context) {
 			return
 		}
 		common.ApiError(c, err)
+		return
+	}
+	if script.ReviewStatus == model.ScriptReviewPending {
+		common.ApiErrorMsg(c, "script is already pending review")
+		return
+	}
+	if script.ReviewStatus == model.ScriptReviewApproved || script.ReviewStatus == model.ScriptReviewPublishing {
+		common.ApiErrorMsg(c, "script is already approved for publishing")
+		return
+	}
+	unchanged, err := draftMatchesLatestVersion(script)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if unchanged {
+		common.ApiErrorMsg(c, "draft has no changes since the latest published version")
 		return
 	}
 	if _, _, _, err := scriptregistry.ValidatePublishable(script.DraftCode); err != nil {
@@ -118,6 +153,10 @@ func ReviewScriptDecision(c *gin.Context) {
 	}
 	newStatus := model.ScriptReviewApproved
 	if !req.Approve {
+		if strings.TrimSpace(req.Note) == "" {
+			common.ApiErrorMsg(c, "rejection reason is required")
+			return
+		}
 		newStatus = model.ScriptReviewRejected
 	}
 	if err := model.DB.Model(&script).Updates(map[string]any{
@@ -175,6 +214,7 @@ func PublishScriptVersion(c *gin.Context) {
 		ScriptId:          script.Id,
 		AuthorId:          script.UserId,
 		Title:             script.Title,
+		Description:       script.Description,
 		ScriptParams:      script.ScriptParams,
 		AllowedOrigins:    "[]",
 		TimeoutSeconds:    180,
@@ -184,14 +224,32 @@ func PublishScriptVersion(c *gin.Context) {
 		ReviewStatus:      model.ScriptVersionApproved,
 		PublishedAt:       common.GetTimestamp(),
 	}
+	claim := model.DB.Model(&model.UserScript{}).
+		Where("id = ? AND user_id = ? AND review_status = ?", script.Id, script.UserId, model.ScriptReviewApproved).
+		Update("review_status", model.ScriptReviewPublishing)
+	if claim.Error != nil {
+		common.ApiError(c, claim.Error)
+		return
+	}
+	if claim.RowsAffected != 1 {
+		common.ApiErrorMsg(c, "script is already being published or is no longer approved")
+		return
+	}
+	restoreApproval := func() {
+		_ = model.DB.Model(&model.UserScript{}).
+			Where("id = ? AND review_status = ?", script.Id, model.ScriptReviewPublishing).
+			Update("review_status", model.ScriptReviewApproved).Error
+	}
 
 	// Assign the next version number first so it is part of the signed manifest.
 	if err := model.CreateScriptVersion(version); err != nil {
+		restoreApproval()
 		common.ApiError(c, err)
 		return
 	}
 
 	if err := signPublishedVersion(version); err != nil {
+		restoreApproval()
 		common.ApiError(c, err)
 		return
 	}
@@ -202,6 +260,7 @@ func PublishScriptVersion(c *gin.Context) {
 	script.PublishedAt = version.PublishedAt
 	_ = model.DB.Model(script).Updates(map[string]any{
 		"published_code": normalized, "published": true, "published_at": version.PublishedAt,
+		"review_status": model.ScriptReviewDraft, "review_note": "",
 	}).Error
 
 	common.ApiSuccess(c, gin.H{

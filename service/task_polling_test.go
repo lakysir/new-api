@@ -14,10 +14,30 @@ import (
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/types"
 	"github.com/bytedance/gopkg/util/gopool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestIsRetryableTaskQueryError(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+		err        *types.OpenAIError
+		want       bool
+	}{
+		{name: "upstream axios timeout returned with HTTP 200", statusCode: http.StatusOK, err: &types.OpenAIError{Code: "upstream_error", Type: "server_error", Message: "timeout of 120000ms exceeded"}, want: true},
+		{name: "rate limited", statusCode: http.StatusTooManyRequests, err: &types.OpenAIError{Message: "rate limited"}, want: true},
+		{name: "gateway failure", statusCode: http.StatusBadGateway, err: &types.OpenAIError{Message: "bad gateway"}, want: true},
+		{name: "explicit client error", statusCode: http.StatusBadRequest, err: &types.OpenAIError{Code: "invalid_request", Type: "invalid_request_error", Message: "invalid task id"}, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, isRetryableTaskQueryError(tt.statusCode, tt.err))
+		})
+	}
+}
 
 type taskPollingFetchAdaptor struct {
 	mu           sync.Mutex

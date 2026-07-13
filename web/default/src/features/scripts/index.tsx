@@ -15,6 +15,13 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  listScriptVersions,
+  publishScriptVersion,
+  submitScriptForReview,
+} from '@/features/node-platform/api'
+import { formatUnix } from '@/features/node-platform/lib/format'
+import type { ScriptVersion } from '@/features/node-platform/types'
 import { api } from '@/lib/api'
 
 type UserScript = {
@@ -30,6 +37,10 @@ type UserScript = {
   updated_at: number
   code_preview?: string
   preview_truncated?: boolean
+  review_status?: 'draft' | 'pending' | 'approved' | 'rejected' | 'publishing'
+  review_note?: string
+  latest_version?: number
+  has_unpublished_changes: boolean
 }
 
 const emptyForm = {
@@ -56,6 +67,21 @@ const emptyForm = {
 function formatTime(value?: number) {
   if (!value) return '-'
   return new Date(value * 1000).toLocaleString()
+}
+
+function reviewStatusKey(status: UserScript['review_status']) {
+  switch (status) {
+    case 'pending':
+      return 'Submitted for review'
+    case 'approved':
+      return 'Approved'
+    case 'rejected':
+      return 'Rejected'
+    case 'publishing':
+      return 'Publishing...'
+    default:
+      return 'Draft'
+  }
 }
 
 async function unwrap<T>(
@@ -254,6 +280,9 @@ export function MyScriptsPage() {
   const [previewScript, setPreviewScript] = useState<UserScript | null>(null)
   const [editing, setEditing] = useState(emptyForm)
   const [editorOpen, setEditorOpen] = useState(false)
+  const [busyId, setBusyId] = useState(0)
+  const [historyScript, setHistoryScript] = useState<UserScript | null>(null)
+  const [versions, setVersions] = useState<ScriptVersion[]>([])
 
   const editorTitle = useMemo(
     () =>
@@ -322,17 +351,43 @@ export function MyScriptsPage() {
     await loadMine()
   }
 
-  async function publishScript(id: number) {
-    await unwrap(api.post(`/api/scripts/mine/${id}/publish`))
-    toast.success(t('Script published'))
-    await loadMine()
-  }
-
   async function deleteScript(id: number) {
     if (!window.confirm(t('Delete script #{{id}}?', { id }))) return
     await unwrap(api.delete(`/api/scripts/mine/${id}`))
     toast.success(t('Script deleted'))
     await loadMine()
+  }
+
+  async function submitReview(id: number) {
+    setBusyId(id)
+    try {
+      await submitScriptForReview(id)
+      toast.success(t('Submitted for review'))
+      await loadMine()
+    } finally {
+      setBusyId(0)
+    }
+  }
+
+  async function publishVersion(id: number) {
+    setBusyId(id)
+    try {
+      const result = (await publishScriptVersion(id)) as { version?: number }
+      toast.success(t('Published version {{v}}', { v: result?.version ?? '?' }))
+      await loadMine()
+    } finally {
+      setBusyId(0)
+    }
+  }
+
+  async function openHistory(script: UserScript) {
+    setBusyId(script.id)
+    try {
+      setVersions(await listScriptVersions(script.id))
+      setHistoryScript(script)
+    } finally {
+      setBusyId(0)
+    }
   }
 
   return (
@@ -367,8 +422,8 @@ export function MyScriptsPage() {
                 <TableHead>ID</TableHead>
                 <TableHead>{t('Title')}</TableHead>
                 <TableHead>{t('Description')}</TableHead>
-                <TableHead>{t('Status')}</TableHead>
-                <TableHead>{t('Created At')}</TableHead>
+                <TableHead>{t('Review')}</TableHead>
+                <TableHead>{t('Latest Version')}</TableHead>
                 <TableHead>{t('Updated At')}</TableHead>
                 <TableHead className='text-right'>{t('Actions')}</TableHead>
               </TableRow>
@@ -384,11 +439,26 @@ export function MyScriptsPage() {
                     {script.description}
                   </TableCell>
                   <TableCell>
-                    {script.published ? t('Published') : t('Draft')}
+                    <div className='space-y-1'>
+                      <div>{t(reviewStatusKey(script.review_status))}</div>
+                      {script.review_note ? (
+                        <div className='text-muted-foreground max-w-48 truncate text-xs'>
+                          {script.review_note}
+                        </div>
+                      ) : null}
+                    </div>
                   </TableCell>
-                  <TableCell>{formatTime(script.created_at)}</TableCell>
+                  <TableCell>
+                    {script.latest_version ? `v${script.latest_version}` : '-'}
+                    {script.published && script.has_unpublished_changes ? (
+                      <div className='text-muted-foreground text-xs'>
+                        {t('Unpublished changes')}
+                      </div>
+                    ) : null}
+                  </TableCell>
                   <TableCell>{formatTime(script.updated_at)}</TableCell>
-                  <TableCell className='space-x-2 text-right'>
+                  <TableCell>
+                    <div className='flex min-w-80 flex-wrap justify-end gap-2'>
                     <Button
                       type='button'
                       variant='outline'
@@ -413,17 +483,49 @@ export function MyScriptsPage() {
                     >
                       {t('Edit')}
                     </Button>
+                    {script.review_status === 'approved' ? (
+                      <Button
+                        type='button'
+                        size='sm'
+                        disabled={busyId === script.id}
+                        onClick={() =>
+                          publishVersion(script.id).catch((err) =>
+                            toast.error(String(err?.message || err))
+                          )
+                        }
+                      >
+                        {t('Publish version')}
+                      </Button>
+                    ) : script.review_status !== 'pending' &&
+                      script.review_status !== 'publishing' ? (
+                      <Button
+                        type='button'
+                        variant='secondary'
+                        size='sm'
+                        disabled={
+                          busyId === script.id || !script.has_unpublished_changes
+                        }
+                        onClick={() =>
+                          submitReview(script.id).catch((err) =>
+                            toast.error(String(err?.message || err))
+                          )
+                        }
+                      >
+                        {t('Submit review')}
+                      </Button>
+                    ) : null}
                     <Button
                       type='button'
-                      variant='secondary'
+                      variant='ghost'
                       size='sm'
+                      disabled={busyId === script.id || !script.latest_version}
                       onClick={() =>
-                        publishScript(script.id).catch((err) =>
+                        openHistory(script).catch((err) =>
                           toast.error(String(err?.message || err))
                         )
                       }
                     >
-                      {t('Publish')}
+                      {t('History')}
                     </Button>
                     <Button
                       type='button'
@@ -437,9 +539,20 @@ export function MyScriptsPage() {
                     >
                       {t('Delete')}
                     </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
+              {myScripts.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={7}
+                    className='text-muted-foreground py-10 text-center'
+                  >
+                    {loading ? t('Loading...') : t('No scripts yet')}
+                  </TableCell>
+                </TableRow>
+              ) : null}
             </TableBody>
           </Table>
         </div>
@@ -452,12 +565,56 @@ export function MyScriptsPage() {
         />
 
         <Dialog
+          open={!!historyScript}
+          onOpenChange={(open) => {
+            if (!open) {
+              setHistoryScript(null)
+              setVersions([])
+            }
+          }}
+          title={
+            historyScript
+              ? t('Version history for script #{{id}}', { id: historyScript.id })
+              : ''
+          }
+          description={historyScript?.title}
+          contentClassName='sm:max-w-4xl'
+          contentHeight='56vh'
+        >
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t('Version')}</TableHead>
+                <TableHead>{t('Code hash')}</TableHead>
+                <TableHead>{t('Signed')}</TableHead>
+                <TableHead>{t('Published')}</TableHead>
+                <TableHead>{t('Revoked')}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {versions.map((version) => (
+                <TableRow key={version.id}>
+                  <TableCell>v{version.version}</TableCell>
+                  <TableCell className='max-w-64 truncate font-mono text-xs'>
+                    {version.code_sha256}
+                  </TableCell>
+                  <TableCell>{version.signature ? t('Yes') : t('No')}</TableCell>
+                  <TableCell>{formatUnix(version.published_at)}</TableCell>
+                  <TableCell>
+                    {version.revoked_at
+                      ? version.revoked_reason || t('Revoked')
+                      : '-'}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Dialog>
+
+        <Dialog
           open={editorOpen}
           onOpenChange={setEditorOpen}
           title={editorTitle}
-          description={t(
-            'Saving only updates the draft; publishing copies the current draft to the square version.'
-          )}
           contentClassName='sm:max-w-4xl'
           contentHeight='520px'
           footer={

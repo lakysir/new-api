@@ -16,10 +16,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { createFileRoute } from '@tanstack/react-router'
-
-import { ScriptVersionsPage } from '@/features/node-platform/script-versions-page'
+import { createFileRoute, redirect } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/_authenticated/script-versions/')({
-  component: ScriptVersionsPage,
+  beforeLoad: () => {
+    throw redirect({ to: '/my-scripts' })
+  },
 })

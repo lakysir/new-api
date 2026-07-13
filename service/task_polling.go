@@ -18,6 +18,7 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/relay/channel/task/taskcommon"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/types"
 
 	"github.com/bytedance/gopkg/util/gopool"
 	"github.com/samber/lo"
@@ -493,9 +494,10 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		if err = common.Unmarshal(responseBody, &errorResult); err == nil {
 			openaiError := errorResult.TryToOpenAIError()
 			if openaiError != nil {
-				// 返回规范的 OpenAI 错误格式，提取错误信息，判断错误是否为任务失败
-				if openaiError.Code == "429" {
-					// 429 错误通常表示请求过多或速率限制，暂时不认为是任务失败，保持原状态等待下一轮轮询
+				// The error came from the status-query request, not necessarily the
+				// asynchronous job. Keep transient query failures non-terminal.
+				if isRetryableTaskQueryError(resp.StatusCode, openaiError) {
+					logger.LogWarn(ctx, fmt.Sprintf("Task %s status query returned retryable error: %s", taskId, openaiError.Message))
 					return nil
 				}
 
@@ -589,6 +591,27 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 	}
 
 	return nil
+}
+
+func isRetryableTaskQueryError(statusCode int, err *types.OpenAIError) bool {
+	if statusCode == http.StatusRequestTimeout || statusCode == http.StatusTooManyRequests || statusCode >= 500 {
+		return true
+	}
+	if err == nil {
+		return false
+	}
+	code := strings.ToLower(fmt.Sprint(err.Code))
+	errType := strings.ToLower(err.Type)
+	if code == "408" || code == "429" || code == "upstream_error" || errType == "upstream_error" || errType == "server_error" {
+		return true
+	}
+	message := strings.ToLower(err.Message)
+	for _, marker := range []string{"timeout", "timed out", "deadline exceeded", "connection reset", "connection refused", "temporary unavailable"} {
+		if strings.Contains(message, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func redactVideoResponseBody(body []byte) []byte {

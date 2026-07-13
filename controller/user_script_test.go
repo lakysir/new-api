@@ -41,7 +41,7 @@ func setupUserScriptControllerTestDB(t *testing.T) *gorm.DB {
 	}
 	model.DB = db
 	model.LOG_DB = db
-	if err := db.AutoMigrate(&model.UserScript{}); err != nil {
+	if err := db.AutoMigrate(&model.UserScript{}, &model.ScriptVersion{}); err != nil {
 		t.Fatalf("failed to migrate user scripts: %v", err)
 	}
 	t.Cleanup(func() {
@@ -69,6 +69,25 @@ func seedUserScript(t *testing.T, db *gorm.DB, title string, published bool, upd
 	if err := db.Create(&script).Error; err != nil {
 		t.Fatalf("failed to seed script: %v", err)
 	}
+	if published {
+		script.LatestVersion = 1
+		if err := db.Model(&script).Update("latest_version", script.LatestVersion).Error; err != nil {
+			t.Fatalf("failed to set latest script version: %v", err)
+		}
+		version := model.ScriptVersion{
+			ScriptId:     script.Id,
+			AuthorId:     script.UserId,
+			Version:      1,
+			Title:        script.Title,
+			Description:  script.Description,
+			Code:         script.PublishedCode,
+			ReviewStatus: model.ScriptVersionApproved,
+			PublishedAt:  updatedAt,
+		}
+		if err := db.Create(&version).Error; err != nil {
+			t.Fatalf("failed to seed script version: %v", err)
+		}
+	}
 	return script
 }
 
@@ -91,6 +110,11 @@ func TestApiListPublishedScriptsReturnsOnlyPublishedMetadata(t *testing.T) {
 	older := seedUserScript(t, db, "older", true, 10)
 	newer := seedUserScript(t, db, "newer", true, 20)
 	seedUserScript(t, db, "draft", false, 30)
+	if err := db.Model(&newer).Updates(map[string]any{
+		"title": "edited draft title", "description": "edited draft description",
+	}).Error; err != nil {
+		t.Fatalf("failed to edit published script draft: %v", err)
+	}
 
 	recorder, response := requestPublishedScripts(t, "/api/script-api/scripts/published?page=1&page_size=20")
 	if !response.Success {
@@ -101,6 +125,9 @@ func TestApiListPublishedScriptsReturnsOnlyPublishedMetadata(t *testing.T) {
 	}
 	if response.Data.Items[0].Id != newer.Id || response.Data.Items[1].Id != older.Id {
 		t.Fatalf("expected scripts ordered newest first, got %+v", response.Data.Items)
+	}
+	if response.Data.Items[0].Title != "newer" || response.Data.Items[0].Description != "newer description" {
+		t.Fatalf("square metadata must come from the published version: %+v", response.Data.Items[0])
 	}
 	body := recorder.Body.String()
 	for _, secret := range []string{"draft-secret", "published-secret", "code_preview", "published_code", "draft_code"} {
@@ -127,5 +154,18 @@ func TestApiListPublishedScriptsPaginatesAndCapsPageSize(t *testing.T) {
 	_, capped := requestPublishedScripts(t, "/api/script-api/scripts/published?page=1&page_size=999")
 	if capped.Data.PageSize != 100 {
 		t.Fatalf("expected page size capped at 100, got %d", capped.Data.PageSize)
+	}
+}
+
+func TestApiListPublishedScriptsExcludesLegacyUnreviewedPublish(t *testing.T) {
+	db := setupUserScriptControllerTestDB(t)
+	legacy := seedUserScript(t, db, "legacy", false, 10)
+	if err := db.Model(&legacy).Update("published", true).Error; err != nil {
+		t.Fatalf("failed to mark legacy script published: %v", err)
+	}
+
+	_, response := requestPublishedScripts(t, "/api/script-api/scripts/published?page=1&page_size=20")
+	if !response.Success || response.Data.Total != 0 || len(response.Data.Items) != 0 {
+		t.Fatalf("legacy unreviewed publish must not enter square: %+v", response)
 	}
 }

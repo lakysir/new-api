@@ -92,11 +92,6 @@ export function useSidebarData(): SidebarData {
             icon: ScrollText,
           },
           {
-            title: t('Script Versions'),
-            url: '/script-versions',
-            icon: ScrollText,
-          },
-          {
             title: t('Usage Logs'),
             url: '/usage-logs/common',
             icon: FileText,

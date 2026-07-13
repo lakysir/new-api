@@ -83,6 +83,10 @@ func ListMyScripts(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	for i := range scripts {
+		matches, matchErr := draftMatchesLatestVersion(&scripts[i])
+		scripts[i].HasUnpublishedChanges = matchErr != nil || !matches
+	}
 	common.ApiSuccess(c, scripts)
 }
 
@@ -120,34 +124,6 @@ func SaveMyScriptDraft(c *gin.Context) {
 	}
 	script, err := model.UpsertUserScriptDraft(c.GetInt("id"), id, req.Title, req.Description, req.ScriptParams, scriptCodeFromRequest(req))
 	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	common.ApiSuccess(c, script)
-}
-
-func PublishMyScript(c *gin.Context) {
-	id, ok := parseScriptId(c)
-	if !ok {
-		return
-	}
-	script, err := model.GetUserScriptById(id, c.GetInt("id"))
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			common.ApiErrorMsg(c, "script not found")
-			return
-		}
-		common.ApiError(c, err)
-		return
-	}
-	if script.DraftCode == "" {
-		common.ApiErrorMsg(c, "draft code is empty")
-		return
-	}
-	script.PublishedCode = script.DraftCode
-	script.Published = true
-	script.PublishedAt = common.GetTimestamp()
-	if err := model.DB.Save(script).Error; err != nil {
 		common.ApiError(c, err)
 		return
 	}

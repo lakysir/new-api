@@ -13,10 +13,11 @@ const UserScriptMaxCodeLength = 1024 * 1024
 // Script review lifecycle for a draft (UserScript). Publishing an approved
 // draft freezes an immutable ScriptVersion; the draft itself can keep evolving.
 const (
-	ScriptReviewDraft    = "draft"    // author is still editing
-	ScriptReviewPending  = "pending"  // submitted, awaiting review
-	ScriptReviewApproved = "approved" // review passed, publishable
-	ScriptReviewRejected = "rejected" // review failed, back to author
+	ScriptReviewDraft      = "draft"      // author is still editing
+	ScriptReviewPending    = "pending"    // submitted, awaiting review
+	ScriptReviewApproved   = "approved"   // review passed, publishable
+	ScriptReviewRejected   = "rejected"   // review failed, back to author
+	ScriptReviewPublishing = "publishing"
 )
 
 type UserScript struct {
@@ -37,6 +38,8 @@ type UserScript struct {
 	DeletedAt        gorm.DeletedAt `json:"-" gorm:"index"`
 	CodePreview      string         `json:"code_preview,omitempty" gorm:"-"`
 	PreviewTruncated bool           `json:"preview_truncated,omitempty" gorm:"-"`
+	AuthorUsername          string `json:"author_username,omitempty" gorm:"-"`
+	HasUnpublishedChanges   bool   `json:"has_unpublished_changes" gorm:"-"`
 }
 
 func (UserScript) TableName() string {
@@ -98,13 +101,18 @@ func ListPublishedUserScripts(offset int, limit int) ([]UserScript, int64, error
 		limit = 20
 	}
 	var total int64
-	if err := DB.Model(&UserScript{}).Where("published = ?", true).Count(&total).Error; err != nil {
+	publishedVersionExists := "EXISTS (SELECT 1 FROM script_versions sv WHERE sv.script_id = user_scripts.id AND sv.version = user_scripts.latest_version AND sv.review_status = ? AND sv.revoked_at = 0)"
+	if err := DB.Model(&UserScript{}).Where("published = ?", true).
+		Where(publishedVersionExists, ScriptVersionApproved).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 	var scripts []UserScript
-	err := DB.Select("id,user_id,title,description,script_params,published,published_at,created_at,updated_at,published_code").
+	err := DB.Table("user_scripts").
+		Select("user_scripts.id,user_scripts.user_id,script_versions.title,script_versions.description,script_versions.script_params,user_scripts.published,script_versions.published_at,user_scripts.created_at,script_versions.published_at AS updated_at,script_versions.code AS published_code").
+		Joins("JOIN script_versions ON script_versions.script_id = user_scripts.id AND script_versions.version = user_scripts.latest_version").
 		Where("published = ?", true).
-		Order("updated_at desc,id desc").
+		Where(publishedVersionExists, ScriptVersionApproved).
+		Order("user_scripts.updated_at desc,user_scripts.id desc").
 		Offset(offset).
 		Limit(limit).
 		Find(&scripts).Error
@@ -122,7 +130,12 @@ func ListPublishedUserScripts(offset int, limit int) ([]UserScript, int64, error
 
 func GetPublishedUserScript(id int) (*UserScript, error) {
 	var script UserScript
-	err := DB.Where("id = ? AND published = ?", id, true).First(&script).Error
+	err := DB.Table("user_scripts").
+		Select("user_scripts.id,user_scripts.user_id,script_versions.title,script_versions.description,script_versions.script_params,user_scripts.published,script_versions.published_at,user_scripts.created_at,script_versions.published_at AS updated_at,script_versions.code AS published_code").
+		Joins("JOIN script_versions ON script_versions.script_id = user_scripts.id AND script_versions.version = user_scripts.latest_version").
+		Where("user_scripts.id = ? AND published = ?", id, true).
+		Where("EXISTS (SELECT 1 FROM script_versions sv WHERE sv.script_id = user_scripts.id AND sv.version = user_scripts.latest_version AND sv.review_status = ? AND sv.revoked_at = 0)", ScriptVersionApproved).
+		First(&script).Error
 	if err != nil {
 		return nil, err
 	}
@@ -135,8 +148,11 @@ func GetPublishedUserScript(id int) (*UserScript, error) {
 
 func GetPublishedUserScriptCode(id int) (*UserScript, error) {
 	var script UserScript
-	err := DB.Select("id,user_id,title,description,script_params,published,published_at,created_at,updated_at,published_code").
-		Where("id = ? AND published = ?", id, true).
+	err := DB.Table("user_scripts").
+		Select("user_scripts.id,user_scripts.user_id,script_versions.title,script_versions.description,script_versions.script_params,user_scripts.published,script_versions.published_at,user_scripts.created_at,script_versions.published_at AS updated_at,script_versions.code AS published_code").
+		Joins("JOIN script_versions ON script_versions.script_id = user_scripts.id AND script_versions.version = user_scripts.latest_version").
+		Where("user_scripts.id = ? AND published = ?", id, true).
+		Where("EXISTS (SELECT 1 FROM script_versions sv WHERE sv.script_id = user_scripts.id AND sv.version = user_scripts.latest_version AND sv.review_status = ? AND sv.revoked_at = 0)", ScriptVersionApproved).
 		First(&script).Error
 	if err != nil {
 		return nil, err
@@ -146,9 +162,9 @@ func GetPublishedUserScriptCode(id int) (*UserScript, error) {
 
 func ListUserScripts(userId int) ([]UserScript, error) {
 	var scripts []UserScript
-	err := DB.Select("id,user_id,title,description,script_params,published,published_at,created_at,updated_at").
+	err := DB.Select("id,user_id,title,description,script_params,published,published_at,review_status,review_note,latest_version,created_at,updated_at").
 		Where("user_id = ?", userId).
-		Order("updated_at desc,id desc").
+		Order("user_scripts.updated_at desc,user_scripts.id desc").
 		Find(&scripts).Error
 	if err != nil {
 		return nil, err
@@ -160,9 +176,11 @@ func ListUserScripts(userId int) ([]UserScript, error) {
 // code bodies. Used by the operator review console (admin).
 func ListScriptsByReviewStatus(status string) ([]UserScript, error) {
 	var scripts []UserScript
-	err := DB.Select("id,user_id,title,description,script_params,review_status,review_note,latest_version,published,published_at,created_at,updated_at").
-		Where("review_status = ?", status).
-		Order("updated_at desc,id desc").
+	err := DB.Table("user_scripts").
+		Select("user_scripts.id,user_scripts.user_id,user_scripts.title,user_scripts.description,user_scripts.script_params,user_scripts.draft_code,user_scripts.review_status,user_scripts.review_note,user_scripts.latest_version,user_scripts.published,user_scripts.published_at,user_scripts.created_at,user_scripts.updated_at,users.username AS author_username").
+		Joins("LEFT JOIN users ON users.id = user_scripts.user_id").
+		Where("user_scripts.review_status = ?", status).
+		Order("user_scripts.updated_at desc,user_scripts.id desc").
 		Find(&scripts).Error
 	if err != nil {
 		return nil, err
@@ -189,10 +207,16 @@ func UpsertUserScriptDraft(userId int, id int, title string, description string,
 		if err != nil {
 			return nil, err
 		}
+		draftChanged := script.Title != title || script.Description != description ||
+			script.ScriptParams != scriptParams || script.DraftCode != code
 		script.Title = title
 		script.Description = description
 		script.ScriptParams = scriptParams
 		script.DraftCode = code
+		if draftChanged {
+			script.ReviewStatus = ScriptReviewDraft
+			script.ReviewNote = ""
+		}
 		if err := DB.Save(script).Error; err != nil {
 			return nil, err
 		}

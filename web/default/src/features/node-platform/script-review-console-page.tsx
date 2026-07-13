@@ -20,6 +20,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
+import { Dialog } from '@/components/dialog'
 import { SectionPageLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -37,8 +38,11 @@ import { listPendingScripts, reviewScript, revokeScriptVersion } from './api'
 type PendingScript = {
   id: number
   user_id: number
+  author_username: string
   title: string
   description: string
+  script_params?: string
+  draft_code: string
   review_status: string
 }
 
@@ -47,6 +51,7 @@ export function ScriptReviewConsolePage() {
   const [pending, setPending] = useState<PendingScript[]>([])
   const [loading, setLoading] = useState(false)
   const [notes, setNotes] = useState<Record<number, string>>({})
+  const [preview, setPreview] = useState<PendingScript | null>(null)
 
   // Revoke form state.
   const [revScript, setRevScript] = useState('')
@@ -69,6 +74,10 @@ export function ScriptReviewConsolePage() {
   }, [])
 
   async function decide(id: number, approve: boolean) {
+    if (!approve && !notes[id]?.trim()) {
+      toast.error(`${t('Reason')}: ${t('Required')}`)
+      return
+    }
     try {
       await reviewScript(id, approve, notes[id] || '')
       toast.success(approve ? t('Approved') : t('Rejected'))
@@ -109,6 +118,7 @@ export function ScriptReviewConsolePage() {
               <TableHead>ID</TableHead>
               <TableHead>{t('Title')}</TableHead>
               <TableHead>{t('Author')}</TableHead>
+              <TableHead>{t('View Code')}</TableHead>
               <TableHead>{t('Note')}</TableHead>
               <TableHead>{t('Decision')}</TableHead>
             </TableRow>
@@ -118,11 +128,16 @@ export function ScriptReviewConsolePage() {
               <TableRow key={s.id}>
                 <TableCell>{s.id}</TableCell>
                 <TableCell>{s.title}</TableCell>
-                <TableCell>#{s.user_id}</TableCell>
+                <TableCell>{s.author_username || `#${s.user_id}`}</TableCell>
+                <TableCell>
+                  <Button size='sm' variant='outline' onClick={() => setPreview(s)}>
+                    {t('View Code')}
+                  </Button>
+                </TableCell>
                 <TableCell>
                   <Input
                     className='h-8 w-48'
-                    placeholder={t('Optional note')}
+                    placeholder={`${t('Reason')} (${t('Required')})`}
                     value={notes[s.id] || ''}
                     onChange={(e) =>
                       setNotes((p) => ({ ...p, [s.id]: e.target.value }))
@@ -136,6 +151,7 @@ export function ScriptReviewConsolePage() {
                   <Button
                     size='sm'
                     variant='destructive'
+                    disabled={!notes[s.id]?.trim()}
                     onClick={() => decide(s.id, false)}
                   >
                     {t('Reject')}
@@ -145,13 +161,38 @@ export function ScriptReviewConsolePage() {
             ))}
             {pending.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className='text-muted-foreground text-center'>
+                <TableCell colSpan={6} className='text-muted-foreground text-center'>
                   {loading ? t('Loading...') : t('No pending scripts')}
                 </TableCell>
               </TableRow>
             )}
           </TableBody>
         </Table>
+
+        <Dialog
+          open={!!preview}
+          onOpenChange={(open) => {
+            if (!open) setPreview(null)
+          }}
+          title={preview ? `${preview.title} #${preview.id}` : ''}
+          description={preview?.description}
+          contentClassName='sm:max-w-4xl'
+          contentHeight='62vh'
+        >
+          {preview?.script_params ? (
+            <div className='mb-3 rounded-lg border bg-muted/30 p-3'>
+              <div className='text-muted-foreground mb-2 text-xs font-medium'>
+                {t('Script Params')}
+              </div>
+              <pre className='overflow-auto font-mono text-xs whitespace-pre-wrap'>
+                {preview.script_params}
+              </pre>
+            </div>
+          ) : null}
+          <pre className='overflow-auto rounded-lg border bg-muted/40 p-3 font-mono text-xs whitespace-pre-wrap'>
+            {preview?.draft_code || ''}
+          </pre>
+        </Dialog>
 
         <div className='mt-6 rounded-lg border p-4'>
           <div className='mb-2 text-sm font-medium'>{t('Revoke a published version')}</div>
