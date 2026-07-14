@@ -366,13 +366,14 @@ func SetApiRouter(router *gin.Engine) {
 			orderRoute.POST("/:id/receipts", controller.SubmitReceipt)
 		}
 
-		// Ledger: balances and simulated (USD_TEST) deposits (Stage F).
+		// Ledger: balances, earnings, and recharging the marketplace available
+		// balance from the caller's main wallet quota (Stage F).
 		ledgerRoute := apiRouter.Group("/ledger")
 		ledgerRoute.Use(middleware.CORS(), middleware.DeviceOrUserAuth())
 		{
 			ledgerRoute.GET("/balances", controller.GetMyLedgerBalances)
 			ledgerRoute.GET("/earnings", controller.GetMyEarnings)
-			ledgerRoute.POST("/deposit/simulate", middleware.CriticalRateLimit(), controller.SimulatedDeposit)
+			ledgerRoute.POST("/recharge", middleware.CriticalRateLimit(), controller.RechargeAvailable)
 		}
 
 		// Payment: deposit address, fee estimate, withdrawal (Stage G).

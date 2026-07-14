@@ -23,7 +23,6 @@ import type {
   CapabilityStat,
   Device,
   EarningsSummary,
-  FeeQuote,
   LedgerBalances,
   NodeCapability,
   NodeInfo,
@@ -333,25 +332,11 @@ export function listProviderCapabilityStats() {
   return unwrap<CapabilityStat[]>(api.get('/api/nodes/capability-stats'))
 }
 
-export function simulateDeposit(amountMicros: number, reference: string) {
-  return unwrap(
-    api.post('/api/ledger/deposit/simulate', {
-      amount_micros: amountMicros,
-      reference,
-    })
+// rechargeAvailable funds the caller's marketplace available balance by
+// deducting the equivalent amount (1:1 in USD) from their main /wallet quota.
+// This is a real transfer, not a simulation.
+export function rechargeAvailable(amountMicros: number) {
+  return unwrap<{ transaction_id: number; type: string; quota_deducted: number }>(
+    api.post('/api/ledger/recharge', { amount_micros: amountMicros })
   )
-}
-
-export function estimateWithdrawalFee(amountMicros: number) {
-  return unwrap<FeeQuote>(
-    api.post('/api/payment/withdrawals/estimate', { amount_micros: amountMicros })
-  )
-}
-
-export function requestWithdrawal(body: {
-  owner_type: 'provider' | 'author'
-  to_address: string
-  amount_micros: number
-}) {
-  return unwrap(api.post('/api/payment/withdrawals', body))
 }

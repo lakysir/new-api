@@ -51,7 +51,7 @@ import {
   revokeDevice,
 } from './api'
 import { EarningsSummary } from './earnings-summary'
-import { displayToMicros, formatUnix, microsToDisplay } from './lib/format'
+import { displayToMicros, formatUnix, microsToCurrency } from './lib/format'
 import type {
   CapabilityStat,
   Device,
@@ -689,12 +689,12 @@ export function NodesConsolePage() {
                   <TableRow key={c.id}>
                     <TableCell>#{c.script_id}</TableCell>
                     <TableCell>v{c.version}</TableCell>
-                    <TableCell>{microsToDisplay(c.price_micros)}</TableCell>
+                    <TableCell>{microsToCurrency(c.price_micros)}</TableCell>
                     <TableCell>
                       {c.remaining_quota}/{c.daily_quota}
                     </TableCell>
                     <TableCell>{rate}</TableCell>
-                    <TableCell>{microsToDisplay(stat?.revenue_micros)}</TableCell>
+                    <TableCell>{microsToCurrency(stat?.revenue_micros)}</TableCell>
                     <TableCell>{c.status}</TableCell>
                     <TableCell>
                       <Button

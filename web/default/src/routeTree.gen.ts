@@ -49,7 +49,6 @@ import { Route as AuthenticatedRedemptionCodesIndexRouteImport } from './routes/
 import { Route as AuthenticatedProfileIndexRouteImport } from './routes/_authenticated/profile/index'
 import { Route as AuthenticatedPlaygroundIndexRouteImport } from './routes/_authenticated/playground/index'
 import { Route as AuthenticatedNodesConsoleIndexRouteImport } from './routes/_authenticated/nodes-console/index'
-import { Route as AuthenticatedNodeWalletIndexRouteImport } from './routes/_authenticated/node-wallet/index'
 import { Route as AuthenticatedMyScriptsIndexRouteImport } from './routes/_authenticated/my-scripts/index'
 import { Route as AuthenticatedModelsIndexRouteImport } from './routes/_authenticated/models/index'
 import { Route as AuthenticatedKeysIndexRouteImport } from './routes/_authenticated/keys/index'
@@ -287,12 +286,6 @@ const AuthenticatedNodesConsoleIndexRoute =
     path: '/nodes-console/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const AuthenticatedNodeWalletIndexRoute =
-  AuthenticatedNodeWalletIndexRouteImport.update({
-    id: '/node-wallet/',
-    path: '/node-wallet/',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
 const AuthenticatedMyScriptsIndexRoute =
   AuthenticatedMyScriptsIndexRouteImport.update({
     id: '/my-scripts/',
@@ -485,7 +478,6 @@ export interface FileRoutesByFullPath {
   '/keys/': typeof AuthenticatedKeysIndexRoute
   '/models/': typeof AuthenticatedModelsIndexRoute
   '/my-scripts/': typeof AuthenticatedMyScriptsIndexRoute
-  '/node-wallet/': typeof AuthenticatedNodeWalletIndexRoute
   '/nodes-console/': typeof AuthenticatedNodesConsoleIndexRoute
   '/playground/': typeof AuthenticatedPlaygroundIndexRoute
   '/profile/': typeof AuthenticatedProfileIndexRoute
@@ -551,7 +543,6 @@ export interface FileRoutesByTo {
   '/keys': typeof AuthenticatedKeysIndexRoute
   '/models': typeof AuthenticatedModelsIndexRoute
   '/my-scripts': typeof AuthenticatedMyScriptsIndexRoute
-  '/node-wallet': typeof AuthenticatedNodeWalletIndexRoute
   '/nodes-console': typeof AuthenticatedNodesConsoleIndexRoute
   '/playground': typeof AuthenticatedPlaygroundIndexRoute
   '/profile': typeof AuthenticatedProfileIndexRoute
@@ -621,7 +612,6 @@ export interface FileRoutesById {
   '/_authenticated/keys/': typeof AuthenticatedKeysIndexRoute
   '/_authenticated/models/': typeof AuthenticatedModelsIndexRoute
   '/_authenticated/my-scripts/': typeof AuthenticatedMyScriptsIndexRoute
-  '/_authenticated/node-wallet/': typeof AuthenticatedNodeWalletIndexRoute
   '/_authenticated/nodes-console/': typeof AuthenticatedNodesConsoleIndexRoute
   '/_authenticated/playground/': typeof AuthenticatedPlaygroundIndexRoute
   '/_authenticated/profile/': typeof AuthenticatedProfileIndexRoute
@@ -690,7 +680,6 @@ export interface FileRouteTypes {
     | '/keys/'
     | '/models/'
     | '/my-scripts/'
-    | '/node-wallet/'
     | '/nodes-console/'
     | '/playground/'
     | '/profile/'
@@ -756,7 +745,6 @@ export interface FileRouteTypes {
     | '/keys'
     | '/models'
     | '/my-scripts'
-    | '/node-wallet'
     | '/nodes-console'
     | '/playground'
     | '/profile'
@@ -825,7 +813,6 @@ export interface FileRouteTypes {
     | '/_authenticated/keys/'
     | '/_authenticated/models/'
     | '/_authenticated/my-scripts/'
-    | '/_authenticated/node-wallet/'
     | '/_authenticated/nodes-console/'
     | '/_authenticated/playground/'
     | '/_authenticated/profile/'
@@ -1159,13 +1146,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedNodesConsoleIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/node-wallet/': {
-      id: '/_authenticated/node-wallet/'
-      path: '/node-wallet'
-      fullPath: '/node-wallet/'
-      preLoaderRoute: typeof AuthenticatedNodeWalletIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
     '/_authenticated/my-scripts/': {
       id: '/_authenticated/my-scripts/'
       path: '/my-scripts'
@@ -1448,7 +1428,6 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedKeysIndexRoute: typeof AuthenticatedKeysIndexRoute
   AuthenticatedModelsIndexRoute: typeof AuthenticatedModelsIndexRoute
   AuthenticatedMyScriptsIndexRoute: typeof AuthenticatedMyScriptsIndexRoute
-  AuthenticatedNodeWalletIndexRoute: typeof AuthenticatedNodeWalletIndexRoute
   AuthenticatedNodesConsoleIndexRoute: typeof AuthenticatedNodesConsoleIndexRoute
   AuthenticatedPlaygroundIndexRoute: typeof AuthenticatedPlaygroundIndexRoute
   AuthenticatedProfileIndexRoute: typeof AuthenticatedProfileIndexRoute
@@ -1477,7 +1456,6 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedKeysIndexRoute: AuthenticatedKeysIndexRoute,
   AuthenticatedModelsIndexRoute: AuthenticatedModelsIndexRoute,
   AuthenticatedMyScriptsIndexRoute: AuthenticatedMyScriptsIndexRoute,
-  AuthenticatedNodeWalletIndexRoute: AuthenticatedNodeWalletIndexRoute,
   AuthenticatedNodesConsoleIndexRoute: AuthenticatedNodesConsoleIndexRoute,
   AuthenticatedPlaygroundIndexRoute: AuthenticatedPlaygroundIndexRoute,
   AuthenticatedProfileIndexRoute: AuthenticatedProfileIndexRoute,

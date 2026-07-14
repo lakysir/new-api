@@ -21,7 +21,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { getEarnings, getPlatformEarnings } from './api'
-import { microsToDisplay } from './lib/format'
+import { microsToCurrency } from './lib/format'
 import type { EarningsSummary as EarningsSummaryData } from './types'
 
 // EarningsSummary renders the balance + day/week/month income cards shared by the
@@ -59,7 +59,6 @@ export function EarningsSummary({
     }
   }, [role, refreshKey])
 
-  const currency = data?.currency || ''
   const cards: Array<[string, number | undefined]> = [
     [balanceLabel, data?.balance_micros],
     [t('Today'), data?.day_micros],
@@ -73,7 +72,7 @@ export function EarningsSummary({
         <div key={label} className='rounded-lg border p-4'>
           <div className='text-muted-foreground text-xs'>{label}</div>
           <div className='mt-1 text-lg font-semibold'>
-            {microsToDisplay(value)} {currency}
+            {microsToCurrency(value)}
           </div>
         </div>
       ))}

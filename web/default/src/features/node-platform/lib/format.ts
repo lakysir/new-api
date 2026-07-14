@@ -20,11 +20,26 @@ For commercial licensing, please contact support@quantumnous.com
 // Money on the wire is integer micro-USD (1 USD = 1,000,000 micros). Format for
 // display and parse user input back to micros.
 
+import { formatBillingCurrencyFromUSD } from '@/lib/currency'
+
 const MICROS_PER_UNIT = 1_000_000
 
 export function microsToDisplay(micros?: number): string {
   if (!micros && micros !== 0) return '-'
   return (micros / MICROS_PER_UNIT).toFixed(6).replace(/\.?0+$/, '')
+}
+
+// microsToCurrency renders a micro-USD amount in the admin-configured display
+// currency (USD / CNY / custom symbol), using the same settings and exchange
+// rate that drive the /pricing page. Marketplace balances are stored as USD, so
+// tokens display mode falls back to USD here (billing amounts are never tokens).
+export function microsToCurrency(micros?: number): string {
+  if (micros == null) return '-'
+  return formatBillingCurrencyFromUSD(micros / MICROS_PER_UNIT, {
+    digitsLarge: 2,
+    digitsSmall: 6,
+    abbreviate: false,
+  })
 }
 
 export function displayToMicros(value: string): number {

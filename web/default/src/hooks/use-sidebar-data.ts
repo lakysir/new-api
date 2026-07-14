@@ -125,11 +125,6 @@ export function useSidebarData(): SidebarData {
             icon: ScrollText,
           },
           {
-            title: t('Node Wallet'),
-            url: '/node-wallet',
-            icon: Wallet,
-          },
-          {
             title: t('Profile'),
             url: '/profile',
             icon: User,

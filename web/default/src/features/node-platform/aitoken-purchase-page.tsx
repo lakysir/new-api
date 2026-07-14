@@ -22,8 +22,10 @@ import { toast } from 'sonner'
 
 import { SectionPageLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { api } from '@/lib/api'
+import { formatQuotaWithCurrency } from '@/lib/currency'
+import { api, getSelf } from '@/lib/api'
 
 import {
   createOrder,
@@ -34,10 +36,11 @@ import {
   listScriptOffers,
   listAvailableScriptVersions,
   quoteOrder,
+  rechargeAvailable,
   type ScriptOffer,
 } from './api'
 import { ClientRelaySession } from './lib/client-relay-session'
-import { microsToDisplay } from './lib/format'
+import { displayToMicros, microsToCurrency } from './lib/format'
 import type { LedgerBalances, Order, PriceBreakdown, ScriptVersion } from './types'
 
 type PublishedScript = { id: number; title: string; description?: string; latest_version?: number }
@@ -134,6 +137,10 @@ export function AitokenPurchasePage() {
   const [relayResult, setRelayResult] = useState<string>('')
   const [relayStatus, setRelayStatus] = useState<string>('')
   const [offersLoading, setOffersLoading] = useState(false)
+  // Recharge (top up the marketplace available balance from the main wallet).
+  const [walletQuota, setWalletQuota] = useState<number | null>(null)
+  const [rechargeAmt, setRechargeAmt] = useState('1')
+  const [recharging, setRecharging] = useState(false)
 
   // selectScript switches the active script and picks a version. When
   // loadParams is true (an explicit user switch) the config editor is reset to
@@ -199,9 +206,34 @@ export function AitokenPurchasePage() {
 
   async function loadBalance() {
     try {
-      setBal(await getLedgerBalances())
+      const [balances, self] = await Promise.all([getLedgerBalances(), getSelf()])
+      setBal(balances)
+      // getSelf returns the standard API envelope; the wallet quota lives on data.
+      const quota = self?.data?.quota
+      setWalletQuota(typeof quota === 'number' ? quota : null)
     } catch (e) {
       toast.error(String((e as Error).message))
+    }
+  }
+
+  // onRecharge transfers funds from the main /wallet balance into the
+  // marketplace available balance (1:1 in USD). The backend debits the wallet
+  // quota and credits the available-balance ledger atomically.
+  async function onRecharge() {
+    const amountMicros = displayToMicros(rechargeAmt)
+    if (amountMicros <= 0) {
+      toast.error(t('Enter an amount greater than zero'))
+      return
+    }
+    setRecharging(true)
+    try {
+      await rechargeAvailable(amountMicros)
+      toast.success(t('Recharged from wallet'))
+      await loadBalance()
+    } catch (e) {
+      toast.error(String((e as Error).message))
+    } finally {
+      setRecharging(false)
     }
   }
 
@@ -459,10 +491,31 @@ export function AitokenPurchasePage() {
             <div key={String(label)} className='rounded-lg border p-3'>
               <div className='text-muted-foreground text-xs'>{t(label as string)}</div>
               <div className='mt-1 text-lg font-semibold'>
-                {microsToDisplay(v as number)} {bal?.currency || ''}
+                {microsToCurrency(v as number)}
               </div>
             </div>
           ))}
+        </div>
+
+        {/* Recharge available balance from the main wallet (real 1:1 transfer). */}
+        <div className='mb-4 rounded-lg border p-4'>
+          <div className='mb-1 text-sm font-medium'>{t('Recharge available balance')}</div>
+          <div className='text-muted-foreground mb-2 text-xs'>
+            {t('Funds are transferred from your wallet balance at a 1:1 rate.')}
+            {walletQuota != null && (
+              <> {t('Wallet balance')}: {formatQuotaWithCurrency(walletQuota)}</>
+            )}
+          </div>
+          <div className='flex flex-wrap items-center gap-2'>
+            <Input
+              className='w-40'
+              value={rechargeAmt}
+              onChange={(e) => setRechargeAmt(e.target.value)}
+            />
+            <Button onClick={onRecharge} disabled={recharging}>
+              {recharging ? t('Recharging...') : t('Recharge')}
+            </Button>
+          </div>
         </div>
 
         {/* Script + version + offers */}
@@ -521,7 +574,7 @@ export function AitokenPurchasePage() {
                       }}
                     />
                     <span className='font-mono text-xs'>{o.node_id}</span>
-                    <span className='font-semibold'>{microsToDisplay(o.price_micros)}</span>
+                    <span className='font-semibold'>{microsToCurrency(o.price_micros)}</span>
                     <span>{o.online ? t('Online') : t('Offline')}</span>
                     <span className='text-muted-foreground text-xs'>
                       {t('quota')}: {o.remaining_quota}
@@ -570,12 +623,12 @@ export function AitokenPurchasePage() {
           <div className='mt-3 rounded-lg border p-4 text-sm'>
             <div className='mb-1 font-medium'>{t('Price breakdown')}</div>
             <div className='grid grid-cols-2 gap-x-6 gap-y-1 md:grid-cols-3'>
-              <div>{t('Provider')}: {microsToDisplay(quote.ProviderMicros)}</div>
-              <div>{t('Author')}: {microsToDisplay(quote.AuthorMicros)}</div>
-              <div>{t('Platform fee')}: {microsToDisplay(quote.PlatformFeeMicros)}</div>
-              <div>{t('Risk reserve')}: {microsToDisplay(quote.RiskReserveMicros)}</div>
+              <div>{t('Provider')}: {microsToCurrency(quote.ProviderMicros)}</div>
+              <div>{t('Author')}: {microsToCurrency(quote.AuthorMicros)}</div>
+              <div>{t('Platform fee')}: {microsToCurrency(quote.PlatformFeeMicros)}</div>
+              <div>{t('Risk reserve')}: {microsToCurrency(quote.RiskReserveMicros)}</div>
               <div className='font-semibold'>
-                {t('Total')}: {microsToDisplay(quote.MaxCustomerMicros)} {quote.Currency}
+                {t('Total')}: {microsToCurrency(quote.MaxCustomerMicros)}
               </div>
             </div>
           </div>
@@ -592,7 +645,7 @@ export function AitokenPurchasePage() {
             <div className='font-mono text-xs'>{order.id}</div>
             <div className='mt-1'>
               {t('State')}: <b>{order.state}</b> · {t('Reserved')}:{' '}
-              {microsToDisplay(order.max_amount_micros)}
+              {microsToCurrency(order.max_amount_micros)}
             </div>
             {order.chosen_node_id && (
               <div className='mt-1 text-xs'>

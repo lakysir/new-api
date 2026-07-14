@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"fmt"
+	"math"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -104,16 +106,25 @@ func GetPlatformEarnings(c *gin.Context) {
 	common.ApiSuccess(c, result)
 }
 
-type simulatedDepositRequest struct {
-	AmountMicros int64  `json:"amount_micros"`
-	Reference    string `json:"reference"`
+type rechargeAvailableRequest struct {
+	AmountMicros int64 `json:"amount_micros"`
 }
 
-// SimulatedDeposit credits the caller's available balance with simulated funds.
-// This is the Stage F test-money path (USD_TEST) — real USDT deposits arrive
-// via the Payment Adapter in Stage G. Gated behind auth; amount must be > 0.
-func SimulatedDeposit(c *gin.Context) {
-	var req simulatedDepositRequest
+// microsToQuota converts a micro-USD amount into the equivalent wallet quota
+// (tokens). The marketplace available-balance ledger and the main wallet both
+// value 1 USD identically (a 1:1 recharge): 1 USD = 1,000,000 micros and
+// QuotaPerUnit tokens. So quota = amountMicros / 1,000,000 * QuotaPerUnit.
+func microsToQuota(amountMicros int64) int {
+	return int(math.Round(float64(amountMicros) / 1_000_000 * common.QuotaPerUnit))
+}
+
+// RechargeAvailable funds the caller's marketplace available balance by
+// deducting the equivalent amount from their main wallet quota (the same
+// balance shown on /wallet). This is a real transfer — not simulated: the
+// wallet quota is debited and the available-balance ledger is credited 1:1 in
+// USD. On any ledger failure the quota is refunded so the two never diverge.
+func RechargeAvailable(c *gin.Context) {
+	var req rechargeAvailableRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		common.ApiError(c, err)
 		return
@@ -122,14 +133,38 @@ func SimulatedDeposit(c *gin.Context) {
 		common.ApiErrorMsg(c, "amount_micros must be positive")
 		return
 	}
-	if req.Reference == "" {
-		common.ApiErrorMsg(c, "reference is required for idempotency")
+	quota := microsToQuota(req.AmountMicros)
+	if quota <= 0 {
+		common.ApiErrorMsg(c, "amount too small to recharge")
 		return
 	}
-	tx, err := settlement.Deposit(c.GetInt("id"), req.AmountMicros, req.Reference)
+
+	userId := c.GetInt("id")
+	balance, err := model.GetUserQuota(userId, true)
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	common.ApiSuccess(c, gin.H{"transaction_id": tx.Id, "type": tx.Type})
+	if balance < quota {
+		common.ApiErrorMsg(c, "insufficient wallet balance")
+		return
+	}
+
+	// Debit the wallet quota first, then credit the available balance. If the
+	// ledger post fails we return the quota so no funds are lost.
+	if err := model.DecreaseUserQuota(userId, quota, true); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	reference := fmt.Sprintf("wallet:%d:%d", userId, time.Now().UnixNano())
+	tx, err := settlement.Deposit(userId, req.AmountMicros, reference)
+	if err != nil {
+		if refundErr := model.IncreaseUserQuota(userId, quota, true); refundErr != nil {
+			common.SysError(fmt.Sprintf("recharge deposit failed and quota refund failed for user %d: deposit=%v refund=%v", userId, err, refundErr))
+		}
+		common.ApiError(c, err)
+		return
+	}
+	model.RecordLog(userId, model.LogTypeManage, fmt.Sprintf("充值可用余额 %d micros，扣除钱包额度 %d", req.AmountMicros, quota))
+	common.ApiSuccess(c, gin.H{"transaction_id": tx.Id, "type": tx.Type, "quota_deducted": quota})
 }
