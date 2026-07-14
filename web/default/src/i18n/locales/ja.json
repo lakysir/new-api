@@ -4670,6 +4670,7 @@
     "Updating...": "更新中...",
     "Upgrade Group": "グループをアップグレード",
     "Upgrade plaintext SMTP connection with STARTTLS before authentication": "認証前に STARTTLS で平文の SMTP 接続を暗号化する",
+    "Unlist": "掲載を停止",
     "Upload": "アップロード",
     "Upload a single service account JSON file": "単一のサービスアカウントJSONファイルをアップロードする",
     "Upload file": "ファイルをアップロード",

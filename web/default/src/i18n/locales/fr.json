@@ -4670,6 +4670,7 @@
     "Updating...": "Mise à jour...",
     "Upgrade Group": "Groupe de mise à niveau",
     "Upgrade plaintext SMTP connection with STARTTLS before authentication": "Mettre à niveau la connexion SMTP en clair avec STARTTLS avant l'authentification",
+    "Unlist": "Retirer de la liste",
     "Upload": "Téléverser",
     "Upload a single service account JSON file": "Télécharger un seul fichier JSON de compte de service",
     "Upload file": "Téléverser un fichier",

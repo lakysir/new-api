@@ -4670,6 +4670,7 @@
     "Updating...": "Обновление...",
     "Upgrade Group": "Повысить группу",
     "Upgrade plaintext SMTP connection with STARTTLS before authentication": "Перед аутентификацией повысить открытое SMTP-соединение до STARTTLS",
+    "Unlist": "Снять с публикации",
     "Upload": "Загрузка",
     "Upload a single service account JSON file": "Загрузите JSON-файл одного сервисного аккаунта",
     "Upload file": "Загрузить файл",

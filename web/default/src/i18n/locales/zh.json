@@ -4670,6 +4670,7 @@
     "Updating...": "正在更新...",
     "Upgrade Group": "升级分组",
     "Upgrade plaintext SMTP connection with STARTTLS before authentication": "在身份验证前使用 STARTTLS 升级明文 SMTP 连接",
+    "Unlist": "下架",
     "Upload": "上传",
     "Upload a single service account JSON file": "上传单个服务账号 JSON 文件",
     "Upload file": "上传文件",
