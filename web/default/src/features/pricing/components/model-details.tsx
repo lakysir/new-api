@@ -536,11 +536,16 @@ function ModelBackendDetailsSection(props: {
 // ----------------------------------------------------------------------------
 
 function ModelHeader(props: { model: PricingModel }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const model = props.model
   const modelIconKey = model.icon || model.vendor_icon
   const modelIcon = modelIconKey ? getLobeIcon(modelIconKey, 20) : null
-  const description = model.description || model.vendor_description || null
+  const localizedDescription = i18n.resolvedLanguage
+    ?.toLowerCase()
+    .startsWith('zh')
+    ? model.description
+    : model.description_en || model.description
+  const description = localizedDescription || model.vendor_description || null
   const isSpecialExpression =
     model.billing_mode === 'tiered_expr' &&
     Boolean(model.billing_expr) &&

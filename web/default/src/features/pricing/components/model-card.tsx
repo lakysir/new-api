@@ -48,7 +48,7 @@ export interface ModelCardProps {
 }
 
 export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { copyToClipboard } = useCopyToClipboard()
   const tokenUnit = props.tokenUnit ?? DEFAULT_TOKEN_UNIT
   const priceRate = props.priceRate ?? 1
@@ -82,6 +82,9 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
 
   const bottomTags = tags.slice(0, 2)
   const hiddenCount = Math.max(tags.length - 2, 0)
+  const description = i18n.resolvedLanguage?.toLowerCase().startsWith('zh')
+    ? props.model.description
+    : props.model.description_en || props.model.description
 
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -244,7 +247,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
 
       {/* Description */}
       <p className='text-muted-foreground mt-3 line-clamp-2 flex-1 text-[13px] leading-relaxed sm:min-h-[2.45rem]'>
-        {props.model.description || t('No description available.')}
+        {description || t('No description available.')}
       </p>
 
       {/* Footer: left metadata and right performance summary share row alignment */}

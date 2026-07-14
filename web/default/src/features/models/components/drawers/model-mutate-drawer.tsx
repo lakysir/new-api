@@ -91,6 +91,7 @@ const extendedModelFormSchema = z.object({
   id: z.number().optional(),
   model_name: z.string().min(1, 'Model name is required'),
   description: z.string(),
+  description_en: z.string(),
   icon: z.string(),
   tags: z.array(z.string()),
   vendor_id: z.number().optional(),
@@ -145,7 +146,10 @@ export function ModelMutateDrawer({
     enabled: open,
   })
 
-  const vendors = vendorsData?.data?.items || []
+  const vendors = useMemo(
+    () => vendorsData?.data?.items || [],
+    [vendorsData?.data?.items]
+  )
 
   // Fetch model detail if editing
   const { data: modelData } = useQuery({
@@ -233,6 +237,7 @@ export function ModelMutateDrawer({
     defaultValues: {
       model_name: '',
       description: '',
+      description_en: '',
       icon: '',
       tags: [],
       vendor_id: undefined,
@@ -302,6 +307,7 @@ export function ModelMutateDrawer({
         id: model.id,
         model_name: model.model_name,
         description: model.description || '',
+        description_en: model.description_en || '',
         icon: model.icon || '',
         tags: parseModelTags(model.tags),
         vendor_id: model.vendor_id,
@@ -402,34 +408,67 @@ export function ModelMutateDrawer({
     } else if (open && !isEditing) {
       // Pre-fill model name if passed from missing models
       setOldModelName('')
-      setPricingMode('per-token')
+      const isUpstreamRequestPricing = currentRow?.quota_type === 1
+      setPricingMode(isUpstreamRequestPricing ? 'per-request' : 'per-token')
       setPricingSubMode('ratio')
-      setPromptPrice('')
-      setCompletionPrice('')
-      setAdvancedOpen(false)
+      const upstreamPromptPrice = currentRow?.model_ratio
+        ? currentRow.model_ratio * 2
+        : 0
+      setPromptPrice(upstreamPromptPrice ? String(upstreamPromptPrice) : '')
+      setCompletionPrice(
+        upstreamPromptPrice && currentRow?.completion_ratio
+          ? String(upstreamPromptPrice * currentRow.completion_ratio)
+          : ''
+      )
+      setAdvancedOpen(
+        Boolean(
+          currentRow?.cache_ratio ||
+            currentRow?.image_ratio ||
+            currentRow?.audio_ratio ||
+            currentRow?.audio_completion_ratio
+        )
+      )
       form.reset({
         model_name: currentRow?.model_name || '',
-        description: '',
-        icon: '',
-        tags: [],
-        vendor_id: undefined,
-        endpoints: '',
+        description: currentRow?.description || '',
+        description_en: currentRow?.description_en || '',
+        icon: currentRow?.icon || '',
+        tags: parseModelTags(currentRow?.tags),
+        vendor_id: currentRow?.vendor_name
+          ? vendors.find((vendor) => vendor.name === currentRow.vendor_name)?.id
+          : currentRow?.vendor_id,
+        endpoints: currentRow?.endpoints || '',
         name_rule: 0,
         status: true,
         sync_official: true,
         recommended: false,
-        request_price_units: '1',
-        request_price_display_unit: 'request',
-        price: '',
-        ratio: '',
-        cacheRatio: '',
-        completionRatio: '',
-        imageRatio: '',
-        audioRatio: '',
-        audioCompletionRatio: '',
+        request_price_units: String(currentRow?.request_price_units || 1),
+        request_price_display_unit:
+          currentRow?.request_price_display_unit === 'second'
+            ? 'second'
+            : 'request',
+        price: isUpstreamRequestPricing
+          ? String(currentRow?.model_price || '')
+          : '',
+        ratio: currentRow?.model_ratio ? String(currentRow.model_ratio) : '',
+        cacheRatio: currentRow?.cache_ratio
+          ? String(currentRow.cache_ratio)
+          : '',
+        completionRatio: currentRow?.completion_ratio
+          ? String(currentRow.completion_ratio)
+          : '',
+        imageRatio: currentRow?.image_ratio
+          ? String(currentRow.image_ratio)
+          : '',
+        audioRatio: currentRow?.audio_ratio
+          ? String(currentRow.audio_ratio)
+          : '',
+        audioCompletionRatio: currentRow?.audio_completion_ratio
+          ? String(currentRow.audio_completion_ratio)
+          : '',
       })
     }
-  }, [open, isEditing, modelData, currentRow, form, modelSettings])
+  }, [open, isEditing, modelData, currentRow, form, modelSettings, vendors])
 
   const onSubmit = useCallback(
     async (values: ExtendedModelFormValues): Promise<void> => {
@@ -743,10 +782,28 @@ export function ModelMutateDrawer({
                 name='description'
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t('Description')}</FormLabel>
+                    <FormLabel>{t('Chinese description')}</FormLabel>
                     <FormControl>
                       <Textarea
                         placeholder={t('Describe this model...')}
+                        rows={3}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='description_en'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('English description')}</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder={t('Describe this model in English...')}
                         rows={3}
                         {...field}
                       />

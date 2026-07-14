@@ -37,15 +37,26 @@ export interface Model {
   id: number
   model_name: string
   description?: string
+  description_en?: string
   icon?: string
   tags?: string
   vendor_id?: number
+  vendor_name?: string
   endpoints?: string
   status: number
   sync_official: number
   recommended?: number
   request_price_units?: number
   request_price_display_unit?: 'request' | 'second'
+  quota_type?: number
+  model_ratio?: number
+  model_price?: number
+  completion_ratio?: number
+  cache_ratio?: number | null
+  create_cache_ratio?: number | null
+  image_ratio?: number | null
+  audio_ratio?: number | null
+  audio_completion_ratio?: number | null
   created_time: number
   updated_time: number
   name_rule: number
@@ -214,6 +225,34 @@ export interface MissingModelsResponse {
   data?: string[]
 }
 
+export interface UpstreamModelMetadataResponse {
+  success: boolean
+  message?: string
+  data?: {
+    model_name: string
+    description?: string
+    description_en?: string
+    icon?: string
+    tags?: string
+    vendor_name?: string
+    vendor_icon?: string
+    supported_endpoint_types?: string[]
+    request_price_units?: number
+    request_price_display_unit?: 'request' | 'second'
+    quota_type?: number
+    model_ratio?: number
+    model_price?: number
+    completion_ratio?: number
+    cache_ratio?: number | null
+    create_cache_ratio?: number | null
+    image_ratio?: number | null
+    audio_ratio?: number | null
+    audio_completion_ratio?: number | null
+    source_channel?: string
+    source: string
+  }
+}
+
 /**
  * Prefill groups response
  */
@@ -234,6 +273,7 @@ export const modelFormSchema = z.object({
   id: z.number().optional(),
   model_name: z.string().min(1, 'Model name is required'),
   description: z.string().default(''),
+  description_en: z.string().default(''),
   icon: z.string().default(''),
   tags: z.array(z.string()).default([]),
   vendor_id: z.number().optional(),

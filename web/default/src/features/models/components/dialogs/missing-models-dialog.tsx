@@ -20,6 +20,7 @@ import { useQuery } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight, Loader2, Plus, Search } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
 import { Dialog } from '@/components/dialog'
 import { StatusBadge } from '@/components/status-badge'
@@ -34,7 +35,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { useIsMobile } from '@/hooks/use-mobile'
 
-import { getMissingModels } from '../../api'
+import { getMissingModels, getUpstreamModelMetadata } from '../../api'
 import { DEFAULT_PAGE_SIZE } from '../../constants'
 import { modelsQueryKeys } from '../../lib'
 import type { Model } from '../../types'
@@ -54,6 +55,7 @@ export function MissingModelsDialog({
   const isMobile = useIsMobile()
   const [searchTerm, setSearchTerm] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
+  const [loadingModel, setLoadingModel] = useState<string | null>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: modelsQueryKeys.missing(),
@@ -64,9 +66,45 @@ export function MissingModelsDialog({
   const missingModels = useMemo(() => data?.data || [], [data?.data])
   const pageSize = DEFAULT_PAGE_SIZE
 
-  const handleConfigureModel = (modelName: string) => {
-    setCurrentRow({ model_name: modelName } as unknown as Model)
-    setOpen('create-model')
+  const handleConfigureModel = async (modelName: string) => {
+    setLoadingModel(modelName)
+    try {
+      const result = await getUpstreamModelMetadata(modelName)
+      if (!result.success || !result.data) {
+        toast.error(result.message || t('Unable to read upstream model metadata'))
+        return
+      }
+      const metadata = result.data
+      setCurrentRow({
+        model_name: metadata.model_name,
+        description: metadata.description,
+        description_en: metadata.description_en,
+        icon: metadata.icon || metadata.vendor_icon,
+        tags: metadata.tags,
+        vendor_name: metadata.vendor_name,
+        endpoints: metadata.supported_endpoint_types
+          ? JSON.stringify(metadata.supported_endpoint_types)
+          : '',
+        request_price_units: metadata.request_price_units,
+        request_price_display_unit: metadata.request_price_display_unit,
+        quota_type: metadata.quota_type,
+        model_ratio: metadata.model_ratio,
+        model_price: metadata.model_price,
+        completion_ratio: metadata.completion_ratio,
+        cache_ratio: metadata.cache_ratio,
+        create_cache_ratio: metadata.create_cache_ratio,
+        image_ratio: metadata.image_ratio,
+        audio_ratio: metadata.audio_ratio,
+        audio_completion_ratio: metadata.audio_completion_ratio,
+      } as Model)
+      onOpenChange(false)
+      setOpen('create-model')
+      toast.success(t('Upstream model metadata loaded'))
+    } catch (error) {
+      toast.error(String((error as Error).message))
+    } finally {
+      setLoadingModel(null)
+    }
   }
 
   useEffect(() => {
@@ -187,9 +225,14 @@ export function MissingModelsDialog({
                       size='sm'
                       className='flex-shrink-0 gap-1'
                       onClick={() => handleConfigureModel(modelName)}
+                      disabled={loadingModel !== null}
                     >
-                      <Plus className='h-4 w-4' />
-                      Configure
+                      {loadingModel === modelName ? (
+                        <Loader2 className='h-4 w-4 animate-spin' />
+                      ) : (
+                        <Plus className='h-4 w-4' />
+                      )}
+                      {t('Configure')}
                     </Button>
                   </div>
                 ))}

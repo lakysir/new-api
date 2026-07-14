@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"net/http"
+
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
@@ -8,6 +10,26 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+func GetPricingModel(c *gin.Context) {
+	modelName := c.Query("model")
+	for _, item := range model.GetPricing() {
+		if item.ModelName != modelName {
+			continue
+		}
+		var vendor *model.PricingVendor
+		for _, itemVendor := range model.GetVendors() {
+			if itemVendor.ID == item.VendorID {
+				matched := itemVendor
+				vendor = &matched
+				break
+			}
+		}
+		c.JSON(http.StatusOK, gin.H{"success": true, "data": item, "vendor": vendor})
+		return
+	}
+	c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "model metadata not found"})
+}
 
 func filterPricingByUsableGroups(pricing []model.Pricing, usableGroup map[string]string) []model.Pricing {
 	if len(pricing) == 0 {
