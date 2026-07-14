@@ -7,6 +7,7 @@ import (
 
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service/relayhub"
+	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 )
@@ -30,7 +31,7 @@ func (w *wsRelayConn) Close() error { return w.conn.Close() }
 
 // HandleDataPlaneRelay is the E2EE relay WSS endpoint. Each side (client /
 // provider) connects with ?task_id=&attempt=&role=, authenticated by a device
-// token (provider) or session/API key surfaced via the subprotocol. The relay
+// token (provider) or dashboard session/API key (client). The relay
 // forwards opaque binary frames to the peer and never inspects or holds keys.
 func HandleDataPlaneRelay(c *gin.Context) {
 	taskID := c.Query("task_id")
@@ -44,7 +45,7 @@ func HandleDataPlaneRelay(c *gin.Context) {
 	// Authenticate by role (token travels in Sec-WebSocket-Protocol since
 	// browsers can't set WS headers):
 	//   provider → device access token (issued at activation);
-	//   client   → an API key (the dashboard buyer's key).
+	//   client   → dashboard login session, or an API key for SDK clients.
 	token := deviceTokenFromWS(c)
 	if role == relayhub.RoleProvider {
 		if _, err := model.AuthenticateDeviceByToken(token); err != nil {
@@ -52,8 +53,19 @@ func HandleDataPlaneRelay(c *gin.Context) {
 			return
 		}
 	} else {
-		if _, err := model.ValidateUserToken(token); err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"success": false, "message": "invalid api key"})
+		order, err := model.GetOrder(taskID)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "order not found"})
+			return
+		}
+		clientID := 0
+		if id, ok := sessions.Default(c).Get("id").(int); ok {
+			clientID = id
+		} else if apiToken, tokenErr := model.ValidateUserToken(token); tokenErr == nil && apiToken != nil {
+			clientID = apiToken.UserId
+		}
+		if clientID == 0 || clientID != order.ClientId {
+			c.JSON(http.StatusUnauthorized, gin.H{"success": false, "message": "invalid client credentials"})
 			return
 		}
 	}

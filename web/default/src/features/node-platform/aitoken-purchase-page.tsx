@@ -22,7 +22,6 @@ import { toast } from 'sonner'
 
 import { SectionPageLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { api } from '@/lib/api'
 
@@ -41,6 +40,27 @@ import { microsToDisplay } from './lib/format'
 import type { LedgerBalances, Order, PriceBreakdown } from './types'
 
 type PublishedScript = { id: number; title: string; description?: string; latest_version?: number }
+type PurchaseDraft = { scriptId: number; version: number; configText: string }
+
+const DEFAULT_CONFIG_TEXT = '{\n  "prompt": "a dog"\n}'
+
+function getDraftStorageKey() {
+  const userId = window.localStorage.getItem('uid') ?? 'anonymous'
+  return `aitoken-purchase-draft:${userId}`
+}
+
+function loadPurchaseDraft(): PurchaseDraft {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(getDraftStorageKey()) ?? '{}') as Partial<PurchaseDraft>
+    return {
+      scriptId: Number.isInteger(saved.scriptId) && (saved.scriptId ?? 0) > 0 ? saved.scriptId! : 0,
+      version: Number.isInteger(saved.version) && (saved.version ?? 0) > 0 ? saved.version! : 1,
+      configText: typeof saved.configText === 'string' ? saved.configText : DEFAULT_CONFIG_TEXT,
+    }
+  } catch {
+    return { scriptId: 0, version: 1, configText: DEFAULT_CONFIG_TEXT }
+  }
+}
 
 // sha256Hex hashes the config text so only the input_hash crosses the control
 // plane (the plaintext config travels the E2EE data plane at execution time).
@@ -54,26 +74,28 @@ async function sha256Hex(text: string): Promise<string> {
 
 export function AitokenPurchasePage() {
   const { t } = useTranslation()
+  const [initialDraft] = useState(loadPurchaseDraft)
   const [bal, setBal] = useState<LedgerBalances | null>(null)
   const [scripts, setScripts] = useState<PublishedScript[]>([])
-  const [scriptId, setScriptId] = useState(0)
-  const [version, setVersion] = useState(1)
+  const [scriptId, setScriptId] = useState(initialDraft.scriptId)
+  const [version, setVersion] = useState(initialDraft.version)
   const [versions, setVersions] = useState<number[]>([])
   const [offers, setOffers] = useState<ScriptOffer[]>([])
   const [nodeId, setNodeId] = useState('') // chosen offer; empty = cheapest
-  const [configText, setConfigText] = useState('{\n  "prompt": "a dog"\n}')
+  const [configText, setConfigText] = useState(initialDraft.configText)
   const [quote, setQuote] = useState<PriceBreakdown | null>(null)
   const [order, setOrder] = useState<Order | null>(null)
   const [busy, setBusy] = useState(false)
   const [running, setRunning] = useState(false)
-  // Client relay needs an API key to authenticate to the data-plane relay and a
-  // stable client device id for the HKDF context.
-  const [apiKey, setApiKey] = useState('')
   const [relayResult, setRelayResult] = useState<string>('')
   const [relayStatus, setRelayStatus] = useState<string>('')
   const [offersLoading, setOffersLoading] = useState(false)
 
-  async function selectScript(value: number) {
+  async function selectScript(
+    value: number,
+    preferredVersion?: number,
+    fallbackVersion?: number
+  ) {
     setScriptId(value)
     setOffers([])
     setNodeId('')
@@ -87,7 +109,11 @@ export function AitokenPurchasePage() {
       const available = await listAvailableScriptVersions(value)
       const values = available.map((item) => item.version).sort((a, b) => b - a)
       setVersions(values)
-      const selectedVersion = values[0] ?? scripts.find((item) => item.id === value)?.latest_version ?? 1
+      const selectedVersion =
+        (preferredVersion && values.includes(preferredVersion) ? preferredVersion : undefined) ??
+        values[0] ??
+        fallbackVersion ??
+        1
       setVersion(selectedVersion)
       await loadOffersFor(value, selectedVersion)
     } catch (e) {
@@ -131,6 +157,12 @@ export function AitokenPurchasePage() {
       const res = await api.get('/api/scripts/square', { params: { limit: 100 } })
       const list = (res.data?.data?.items ?? res.data?.items ?? res.data?.data ?? []) as PublishedScript[]
       setScripts(list)
+      const savedScript = list.find((item) => item.id === initialDraft.scriptId)
+      if (savedScript) {
+        await selectScript(initialDraft.scriptId, initialDraft.version, savedScript.latest_version)
+      } else if (initialDraft.scriptId) {
+        setScriptId(0)
+      }
     } catch (e) {
       toast.error(String((e as Error).message))
     }
@@ -140,6 +172,17 @@ export function AitokenPurchasePage() {
     loadBalance()
     loadScripts()
   }, [])
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        getDraftStorageKey(),
+        JSON.stringify({ scriptId, version, configText } satisfies PurchaseDraft)
+      )
+    } catch {
+      // Storage may be unavailable or full; the page remains usable without persistence.
+    }
+  }, [scriptId, version, configText])
 
   async function loadOffers() {
     if (!scriptId) {
@@ -182,10 +225,6 @@ export function AitokenPurchasePage() {
       toast.error(t('Select a script first'))
       return
     }
-    if (!apiKey) {
-      toast.error(t('API key is required to connect the relay'))
-      return
-    }
     // Validate config is JSON before ordering.
     let inputHash = ''
     try {
@@ -203,9 +242,14 @@ export function AitokenPurchasePage() {
         key
       )
       setOrder(o)
+      if (o.state === 'REFUNDED') {
+        toast.error(t('Provider rejected the task; reserved funds were refunded'))
+        await loadBalance()
+        return
+      }
       toast.success(t('Order created and funds reserved'))
       await loadBalance()
-      if (['OFFERED', 'RESERVED', 'DATA_READY', 'RUNNING'].includes(o.state)) {
+      if (['RESERVED', 'DATA_READY', 'RUNNING'].includes(o.state)) {
         await runViaRelay(o)
       }
     } catch (e) {
@@ -242,10 +286,6 @@ export function AitokenPurchasePage() {
       toast.error(t('Create an order first'))
       return
     }
-    if (!apiKey) {
-      toast.error(t('API key is required to connect the relay'))
-      return
-    }
     let config: unknown
     try {
       config = JSON.parse(configText)
@@ -256,7 +296,6 @@ export function AitokenPurchasePage() {
     const relayUrl = `${location.origin.replace(/^http/, 'ws')}/api/relay`
     const session = new ClientRelaySession({
       relayUrl,
-      deviceToken: apiKey,
       taskId: targetOrder.id,
       attempt: 1,
       clientDeviceId: `client-${targetOrder.client_id}`,
@@ -291,6 +330,28 @@ export function AitokenPurchasePage() {
       await loadBalance()
     } catch (e) {
       setRelayStatus('')
+      try {
+        const latest = await getOrder(targetOrder.id)
+        if (['FUNDS_RESERVED', 'MATCHING', 'OFFERED'].includes(latest.state)) {
+          setOrder(await cancelOrder(targetOrder.id))
+          await loadBalance()
+          toast.error(t('Task was not accepted; reserved funds were refunded'))
+        } else {
+          for (let attempt = 0; attempt < 10; attempt += 1) {
+            await new Promise((resolve) => window.setTimeout(resolve, 1000))
+            const refreshed = await getOrder(targetOrder.id)
+            setOrder(refreshed)
+            if (refreshed.state === 'REFUNDED') {
+              await loadBalance()
+              toast.error(t('Task failed; reserved funds were refunded'))
+              break
+            }
+            if (['SETTLED', 'DISPUTED'].includes(refreshed.state)) break
+          }
+        }
+      } catch {
+        // Preserve the original relay error when cancellation is no longer legal.
+      }
       toast.error(String((e as Error).message))
     } finally {
       session.close()
@@ -460,17 +521,10 @@ export function AitokenPurchasePage() {
               </Button>
             )}
 
-            {/* Execute via the E2EE relay: send config to the provider, get result. */}
+            {/* Dashboard sessions authenticate the E2EE relay automatically. */}
             <div className='mt-3 border-t pt-3'>
               <div className='mb-2 text-sm font-medium'>{t('Run task (send config over encrypted relay)')}</div>
               <div className='flex flex-wrap items-center gap-2'>
-                <Input
-                  className='w-72'
-                  type='password'
-                  placeholder={t('API key (for relay auth)')}
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                />
                 <Button
                   onClick={() => void runViaRelay()}
                   disabled={running || !['OFFERED', 'RESERVED', 'DATA_READY', 'RUNNING'].includes(order.state)}

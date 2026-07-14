@@ -58,6 +58,26 @@ func PublishBatch(sender EventSender, limit int) (delivered int, skipped int, er
 	return delivered, skipped, nil
 }
 
+// PublishEvent immediately delivers the event created for a just-dispatched
+// order. This avoids head-of-line blocking behind old offline-node events.
+func PublishEvent(sender EventSender, eventID string) error {
+	event, err := model.GetOutboxEvent(eventID)
+	if err != nil {
+		return err
+	}
+	if event.PublishedAt > 0 {
+		return nil
+	}
+	nodeID := resolveTargetNode(*event)
+	if nodeID == "" {
+		return model.ErrNodeNotFound
+	}
+	if err := sender.Send(nodeID, buildWireEvent(*event)); err != nil {
+		return err
+	}
+	return model.MarkPublished(event.EventId)
+}
+
 // buildWireEvent shapes the outbox row into the control-event envelope the
 // plugin's ControlChannel expects (type + event_id + payload fields).
 func buildWireEvent(ev model.OutboxEvent) map[string]any {

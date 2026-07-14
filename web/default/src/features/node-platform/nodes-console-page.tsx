@@ -59,19 +59,73 @@ type PublishedScript = {
   category_id?: number
 }
 
+type EnableFormValue = { scriptId: string; version: string; price: string; quota: string }
+type NodesConsoleDraft = {
+  hideInactive: boolean
+  enableForm: Record<string, EnableFormValue>
+  openNodeIds: string[]
+}
+
+const DEFAULT_ENABLE_FORM: EnableFormValue = {
+  scriptId: '',
+  version: '1',
+  price: '',
+  quota: '10',
+}
+
+function getDraftStorageKey() {
+  const userId = window.localStorage.getItem('uid') ?? 'anonymous'
+  return `nodes-console-draft:${userId}`
+}
+
+function loadNodesConsoleDraft(): NodesConsoleDraft {
+  try {
+    const saved = JSON.parse(
+      window.localStorage.getItem(getDraftStorageKey()) ?? '{}'
+    ) as Partial<NodesConsoleDraft>
+    const enableForm = Object.fromEntries(
+      Object.entries(saved.enableForm ?? {}).flatMap(([nodeId, value]) => {
+        if (!value || typeof value !== 'object') return []
+        const form = value as Partial<EnableFormValue>
+        return [
+          [
+            nodeId,
+            {
+              scriptId: typeof form.scriptId === 'string' ? form.scriptId : '',
+              version: typeof form.version === 'string' ? form.version : '',
+              price: typeof form.price === 'string' ? form.price : '',
+              quota: typeof form.quota === 'string' ? form.quota : '10',
+            },
+          ] as const,
+        ]
+      })
+    ) as Record<string, EnableFormValue>
+    return {
+      hideInactive: typeof saved.hideInactive === 'boolean' ? saved.hideInactive : true,
+      enableForm,
+      openNodeIds: Array.isArray(saved.openNodeIds)
+        ? saved.openNodeIds.filter((id): id is string => typeof id === 'string')
+        : [],
+    }
+  } catch {
+    return { hideInactive: true, enableForm: {}, openNodeIds: [] }
+  }
+}
+
 function nodeOnline(n: NodeInfo): boolean {
   return n.state !== 'OFFLINE' && n.last_seen_at >= Math.floor(Date.now() / 1000) - 45
 }
 
 export function NodesConsolePage() {
   const { t } = useTranslation()
+  const [initialDraft] = useState(loadNodesConsoleDraft)
   const [devices, setDevices] = useState<Device[]>([])
   const [nodes, setNodes] = useState<NodeInfo[]>([])
   const [caps, setCaps] = useState<Record<string, NodeCapability[]>>({})
   const [loading, setLoading] = useState(false)
   // A user may register dozens/hundreds of devices; hide revoked/offline by
   // default to keep the list readable.
-  const [hideInactive, setHideInactive] = useState(true)
+  const [hideInactive, setHideInactive] = useState(initialDraft.hideInactive)
   // Published scripts to pick from when listing a capability.
   const [pubScripts, setPubScripts] = useState<PublishedScript[]>([])
   const [scriptVersions, setScriptVersions] = useState<Record<number, ScriptVersion[]>>({})
@@ -79,16 +133,17 @@ export function NodesConsolePage() {
   const [balanceChecks, setBalanceChecks] = useState<Record<string, NodeBalanceCheck[]>>({})
   const [checking, setChecking] = useState('')
   // Per-node enable form: script id + version + price + quota.
-  const [enableForm, setEnableForm] = useState<
-    Record<string, { scriptId: string; version: string; price: string; quota: string }>
-  >({})
+  const [enableForm, setEnableForm] = useState<Record<string, EnableFormValue>>(
+    initialDraft.enableForm
+  )
+  const [openNodeIds, setOpenNodeIds] = useState(initialDraft.openNodeIds)
 
   const visibleDevices = hideInactive
     ? devices.filter((d) => d.status === 'active')
     : devices
   const visibleNodes = hideInactive ? nodes.filter((n) => nodeOnline(n)) : nodes
 
-  async function loadAll() {
+  async function loadAll(restoreSavedDraft = false) {
     setLoading(true)
     try {
       const [d, n, sq, categoryList] = await Promise.all([
@@ -102,6 +157,54 @@ export function NodesConsolePage() {
       const items = (sq.data?.data?.items ?? sq.data?.items ?? sq.data?.data ?? []) as PublishedScript[]
       setPubScripts(items)
       setCategories(categoryList)
+
+      const validNodeIds = new Set(n.map((node) => node.id))
+      const validScriptIds = new Set(items.map((script) => script.id))
+      const formsToRestore = restoreSavedDraft ? initialDraft.enableForm : enableForm
+      const restoredForms = Object.fromEntries(
+        Object.entries(formsToRestore).filter(
+          ([nodeId, form]) =>
+            validNodeIds.has(nodeId) &&
+            (!form.scriptId || validScriptIds.has(Number(form.scriptId)))
+        )
+      )
+      const selectedScriptIds = [
+        ...new Set(
+          Object.values(restoredForms)
+            .map((form) => Number(form.scriptId))
+            .filter(Boolean)
+        ),
+      ]
+      const versionEntries = await Promise.all(
+        selectedScriptIds.map(async (scriptId) => {
+          try {
+            return [scriptId, await listAvailableScriptVersions(scriptId)] as const
+          } catch {
+            return [scriptId, []] as const
+          }
+        })
+      )
+      const restoredVersions = Object.fromEntries(versionEntries) as Record<number, ScriptVersion[]>
+      setScriptVersions(restoredVersions)
+      setEnableForm(
+        Object.fromEntries(
+          Object.entries(restoredForms).map(([nodeId, form]) => {
+            if (!form.scriptId) return [nodeId, form]
+            const versions = restoredVersions[Number(form.scriptId)] ?? []
+            const version = versions.some((item) => String(item.version) === form.version)
+              ? form.version
+              : versions[0]
+                ? String(versions[0].version)
+                : ''
+            return [nodeId, { ...form, version }]
+          })
+        )
+      )
+
+      const nodeIdsToRestore = restoreSavedDraft ? initialDraft.openNodeIds : openNodeIds
+      const restoredOpenNodeIds = nodeIdsToRestore.filter((id) => validNodeIds.has(id))
+      setOpenNodeIds(restoredOpenNodeIds)
+      await Promise.all(restoredOpenNodeIds.map((id) => loadCaps(id)))
     } catch (e) {
       toast.error(String((e as Error).message))
     } finally {
@@ -148,9 +251,9 @@ export function NodesConsolePage() {
     }
   }
 
-  function setForm(nodeId: string, patch: Partial<{ scriptId: string; version: string; price: string; quota: string }>) {
+  function setForm(nodeId: string, patch: Partial<EnableFormValue>) {
     setEnableForm((p) => {
-      const current = p[nodeId] ?? { scriptId: '', version: '1', price: '', quota: '10' }
+      const current = p[nodeId] ?? DEFAULT_ENABLE_FORM
       return { ...p, [nodeId]: { ...current, ...patch } }
     })
   }
@@ -174,8 +277,19 @@ export function NodesConsolePage() {
   }
 
   useEffect(() => {
-    loadAll()
+    loadAll(true)
   }, [])
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        getDraftStorageKey(),
+        JSON.stringify({ hideInactive, enableForm, openNodeIds } satisfies NodesConsoleDraft)
+      )
+    } catch {
+      // Storage may be unavailable or full; the console remains usable without persistence.
+    }
+  }, [hideInactive, enableForm, openNodeIds])
 
   async function onRevokeDevice(id: string) {
     // Revoking is irreversible: it kills the device's tokens, takes its node
@@ -229,6 +343,9 @@ export function NodesConsolePage() {
     try {
       const list = await listNodeCapabilities(nodeId)
       setCaps((p) => ({ ...p, [nodeId]: list }))
+      setOpenNodeIds((current) =>
+        current.includes(nodeId) ? current : [...current, nodeId]
+      )
       const checks = await listBalanceChecks(nodeId)
       setBalanceChecks((current) => ({ ...current, [nodeId]: checks }))
     } catch (e) {
@@ -299,7 +416,7 @@ export function NodesConsolePage() {
           />
           {t('Hide revoked/offline')}
         </label>
-        <Button variant='outline' onClick={loadAll} disabled={loading}>
+        <Button variant='outline' onClick={() => loadAll()} disabled={loading}>
           {t('Refresh')}
         </Button>
       </SectionPageLayout.Actions>

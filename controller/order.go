@@ -3,10 +3,12 @@ package controller
 import (
 	"errors"
 	"strconv"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service/dispatch"
+	"github.com/QuantumNous/new-api/service/nodehub"
 	"github.com/QuantumNous/new-api/service/order"
 	"github.com/QuantumNous/new-api/service/settlement"
 	"github.com/gin-gonic/gin"
@@ -108,9 +110,37 @@ func CreateOrder(c *gin.Context) {
 			common.ApiErrorMsg(c, err.Error())
 			return
 		}
-		if _, err = dispatch.Dispatch(o.Id, 1); err != nil && !errors.Is(err, dispatch.ErrNoCandidates) {
-			common.ApiErrorMsg(c, err.Error())
+		result, dispatchErr := dispatch.Dispatch(o.Id, 1)
+		if dispatchErr != nil && !errors.Is(dispatchErr, dispatch.ErrNoCandidates) {
+			common.ApiErrorMsg(c, dispatchErr.Error())
 			return
+		}
+		if result != nil {
+			// Fast path: deliver this order's offer immediately. The transactional
+			// Outbox remains the retry source if the socket disappears mid-send.
+			if publishErr := dispatch.PublishEvent(nodehub.Default, result.EventId); publishErr != nil {
+				if ta, _ := model.GetTaskAttempt(o.Id, 1); ta != nil {
+					_ = model.ReleaseLease(ta.LeaseId, "offer_delivery_failed")
+				}
+				if current, _ := model.GetOrder(o.Id); current != nil && current.State == model.OrderOffered {
+					_, _ = model.ApplyTransition(o.Id, model.OrderCancelled, nil)
+					_, _ = settlement.Refund(o.Id)
+				}
+				common.ApiErrorMsg(c, "provider control channel is unavailable; reserved funds were refunded")
+				return
+			}
+			// The control-channel response is asynchronous. Wait briefly for the
+			// Provider to accept or reject so the client never starts Relay from a
+			// transient OFFERED snapshot that has already been refunded.
+			deadline := time.Now().Add(3 * time.Second)
+			for time.Now().Before(deadline) {
+				current, getErr := model.GetOrder(o.Id)
+				if getErr == nil && current.State != model.OrderOffered {
+					o = current
+					break
+				}
+				time.Sleep(50 * time.Millisecond)
+			}
 		}
 		o, _ = model.GetOrder(o.Id)
 	}

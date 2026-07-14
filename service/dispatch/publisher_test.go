@@ -80,6 +80,37 @@ func TestPublishDeliversToOwningNode(t *testing.T) {
 	}
 }
 
+func TestPublishEventDeliversOnlyRequestedOffer(t *testing.T) {
+	enqueueOfferFor(t, "tsk_direct", "ord_direct", "node_direct", 1)
+	events, err := model.FetchUnpublished(100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var eventID string
+	for _, event := range events {
+		if event.AggregateId == "tsk_direct" {
+			eventID = event.EventId
+			break
+		}
+	}
+	if eventID == "" {
+		t.Fatal("direct offer event not found")
+	}
+	sender := newRecordingSender()
+	if err := PublishEvent(sender, eventID); err != nil {
+		t.Fatal(err)
+	}
+	if sender.sent["node_direct"] != 1 {
+		t.Fatalf("direct offer must be delivered once, got %v", sender.sent)
+	}
+	if err := PublishEvent(sender, eventID); err != nil {
+		t.Fatal(err)
+	}
+	if sender.sent["node_direct"] != 1 {
+		t.Fatalf("published direct offer must not be resent, got %v", sender.sent)
+	}
+}
+
 func TestPublishSkipsOfflineNodeAndRetriesLater(t *testing.T) {
 	enqueueOfferFor(t, "tsk_pub2", "ord_pub2", "node_pub2", 1)
 	// Node offline: sender fails, event stays unpublished.

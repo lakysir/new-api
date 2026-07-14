@@ -17,7 +17,7 @@ import (
 )
 
 // DefaultLeaseTTL is the initial lease lifetime granted on reservation.
-const DefaultLeaseTTL = 30 * time.Second
+const DefaultLeaseTTL = 4 * time.Minute
 
 var (
 	// ErrNoCandidates is returned when no eligible node exists for the order.
@@ -48,6 +48,7 @@ type taskOfferPayload struct {
 	OfferedMicros   int64  `json:"offered_amount_micros"`
 	LeaseExpiresAt  int64  `json:"lease_expires_at"`
 	MaxDurationSecs int    `json:"max_duration_seconds"`
+	TargetSite      string `json:"target_site,omitempty"`
 }
 
 // Dispatch matches order to the best candidate node and reserves it. attempt is
@@ -58,6 +59,12 @@ func Dispatch(orderId string, attempt int) (*Result, error) {
 	o, err := model.GetOrder(orderId)
 	if err != nil {
 		return nil, err
+	}
+	targetSite := ""
+	if version, versionErr := model.GetScriptVersion(o.ScriptId, o.Version); versionErr == nil && version.CategoryId > 0 {
+		if category, categoryErr := model.GetScriptCategory(version.CategoryId); categoryErr == nil {
+			targetSite = category.Site
+		}
 	}
 	// Must be matching to dispatch. FUNDS_RESERVED advances to MATCHING first.
 	if o.State == model.OrderFundsReserved {
@@ -107,6 +114,7 @@ func Dispatch(orderId string, attempt int) (*Result, error) {
 			TaskId: taskId, Attempt: attempt, OrderId: orderId,
 			ScriptId: o.ScriptId, ScriptVersion: o.Version, InputHash: o.InputHash,
 			OfferedMicros: best.PriceMicros, LeaseExpiresAt: leaseExpires, MaxDurationSecs: 180,
+			TargetSite: targetSite,
 		})
 		ev, eerr := model.EnqueueOutboxTx(tx, "task.offer", taskId, string(payload))
 		if eerr != nil {

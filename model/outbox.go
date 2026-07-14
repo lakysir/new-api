@@ -70,6 +70,15 @@ func MarkPublished(eventId string) error {
 		Update("published_at", time.Now().Unix()).Error
 }
 
+// GetOutboxEvent returns one event by its stable event id.
+func GetOutboxEvent(eventId string) (*OutboxEvent, error) {
+	var event OutboxEvent
+	if err := DB.Where("event_id = ?", eventId).First(&event).Error; err != nil {
+		return nil, err
+	}
+	return &event, nil
+}
+
 // ErrAlreadyProcessed is returned by MarkProcessed when the (event, consumer)
 // pair was already recorded — the caller should skip its side effects.
 var ErrAlreadyProcessed = errors.New("event already processed by consumer")

@@ -45,7 +45,7 @@ function tagFrame(tag: number, body: Uint8Array): Uint8Array {
 
 export interface ClientRelayOptions {
   relayUrl: string // wss://…/api/relay
-  deviceToken: string // client device access token (subprotocol auth)
+  deviceToken?: string // optional for dashboard sessions; API clients pass a key
   taskId: string
   attempt: number
   clientDeviceId: string
@@ -61,6 +61,7 @@ export class ClientRelaySession {
   #establishedPromise: Promise<void>
   #resultResolve: ((r: unknown) => void) | null = null
   #resultPromise: Promise<unknown>
+  #pendingDataFrames: Uint8Array[] = []
 
   constructor(opts: ClientRelayOptions) {
     this.#opts = opts
@@ -73,7 +74,10 @@ export class ClientRelaySession {
       `${this.#opts.relayUrl}?task_id=${encodeURIComponent(this.#opts.taskId)}` +
       `&attempt=${this.#opts.attempt}&role=client`
     this.#kp = await generateKeyPair()
-    const socket = new WebSocket(url, ['aitoken', this.#opts.deviceToken])
+    const protocols = this.#opts.deviceToken
+      ? ['aitoken', this.#opts.deviceToken]
+      : ['aitoken']
+    const socket = new WebSocket(url, protocols)
     socket.binaryType = 'arraybuffer'
     this.#socket = socket
     await new Promise<void>((resolve, reject) => {
@@ -100,7 +104,10 @@ export class ClientRelaySession {
     const tag = frame[0]
     const body = frame.slice(1)
     if (tag === TAG_HANDSHAKE) await this.#onHandshake(body)
-    else if (tag === TAG_DATA && this.#opener) await this.#onData(body)
+    else if (tag === TAG_DATA) {
+      if (this.#opener) await this.#onData(body)
+      else this.#pendingDataFrames.push(body)
+    }
   }
 
   async #onHandshake(body: Uint8Array) {
@@ -121,6 +128,8 @@ export class ClientRelaySession {
     // Client writes c2p, reads p2c.
     this.#sealer = new Sealer(await deriveAesKey(secret, ctx, DIR_CLIENT_TO_PROVIDER))
     this.#opener = new Opener(await deriveAesKey(secret, ctx, DIR_PROVIDER_TO_CLIENT))
+    const pending = this.#pendingDataFrames.splice(0)
+    for (const frame of pending) await this.#onData(frame)
     this.#established?.()
   }
 
@@ -158,6 +167,7 @@ export class ClientRelaySession {
   }
 
   close() {
+    this.#pendingDataFrames = []
     try {
       this.#socket?.close()
     } catch {

@@ -10,6 +10,7 @@ import (
 
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service/nodehub"
+	"github.com/QuantumNous/new-api/service/settlement"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 )
@@ -149,15 +150,30 @@ func HandleNodeControl(c *gin.Context) {
 		case "task.reject", "task.failed":
 			taskID, _ := msg["task_id"].(string)
 			attempt := int(numberValue(msg["attempt"]))
+			reason, _ := msg["reason"].(string)
+			if reason == "" {
+				reason, _ = msg["error_code"].(string)
+			}
+			shouldRefund := false
 			if o, _ := model.GetOrder(taskID); o != nil {
 				if o.State == model.OrderOffered {
-					_, _ = model.ApplyTransition(taskID, model.OrderMatching, nil)
+					if _, err := model.ApplyTransition(taskID, model.OrderCancelled, nil); err == nil {
+						shouldRefund = true
+					}
 				} else if o.State == model.OrderReserved || o.State == model.OrderDataReady || o.State == model.OrderRunning {
-					_, _ = model.ApplyTransition(taskID, model.OrderFailed, nil)
+					if _, err := model.ApplyTransition(taskID, model.OrderFailed, nil); err == nil {
+						shouldRefund = true
+					}
 				}
 			}
 			if ta, _ := model.GetTaskAttempt(taskID, attempt); ta != nil {
+				if reason != "" {
+					_ = model.DB.Model(&model.TaskAttempt{}).Where("id = ?", ta.Id).Update("error_code", reason).Error
+				}
 				_ = model.ReleaseLease(ta.LeaseId, "execution_failed")
+			}
+			if shouldRefund {
+				_, _ = settlement.Refund(taskID)
 			}
 			_ = wrapped.SendJSON(map[string]any{"type": "ack", "event_id": msg["event_id"]})
 		case "balance.check.result", "receipt.submit":
