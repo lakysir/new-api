@@ -92,7 +92,7 @@ export function useSidebarData(): SidebarData {
             icon: ScrollText,
           },
           {
-            title: t('Buy AI Token'),
+            title: t('AiToken P2P Marketplace'),
             url: '/buy-aitoken',
             icon: Wallet,
           },

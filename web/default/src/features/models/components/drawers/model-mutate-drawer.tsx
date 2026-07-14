@@ -98,6 +98,7 @@ const extendedModelFormSchema = z.object({
   name_rule: z.number(),
   status: z.boolean(),
   sync_official: z.boolean(),
+  recommended: z.boolean(),
   request_price_units: z.string().optional(),
   request_price_display_unit: z.enum(['request', 'second']).optional(),
   price: z.string().optional(),
@@ -239,6 +240,7 @@ export function ModelMutateDrawer({
       name_rule: 0,
       status: true,
       sync_official: true,
+      recommended: false,
       request_price_units: '1',
       request_price_display_unit: 'request',
       price: '',
@@ -307,6 +309,7 @@ export function ModelMutateDrawer({
         name_rule: model.name_rule || 0,
         status: model.status === 1,
         sync_official: model.sync_official === 1,
+        recommended: model.recommended === 1,
         request_price_units: String(model.request_price_units || 1),
         request_price_display_unit:
           model.request_price_display_unit === 'second' ? 'second' : 'request',
@@ -414,6 +417,7 @@ export function ModelMutateDrawer({
         name_rule: 0,
         status: true,
         sync_official: true,
+        recommended: false,
         request_price_units: '1',
         request_price_display_unit: 'request',
         price: '',
@@ -437,6 +441,7 @@ export function ModelMutateDrawer({
           tags: Array.isArray(values.tags) ? values.tags.join(',') : '',
           status: values.status ? 1 : 0,
           sync_official: values.sync_official ? 1 : 0,
+          recommended: values.recommended ? 1 : 0,
           request_price_units: Math.max(
             1,
             Number.parseInt(values.request_price_units || '1', 10) || 1
@@ -1372,6 +1377,31 @@ export function ModelMutateDrawer({
                       </FormLabel>
                       <FormDescription>
                         {t('Enable or disable this model')}
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='recommended'
+                render={({ field }) => (
+                  <FormItem className={sideDrawerSwitchItemClassName()}>
+                    <div className='flex flex-col gap-0.5'>
+                      <FormLabel className='text-base'>
+                        {t('Recommended')}
+                      </FormLabel>
+                      <FormDescription>
+                        {t(
+                          'Feature this model at the top of the model marketplace.'
+                        )}
                       </FormDescription>
                     </div>
                     <FormControl>

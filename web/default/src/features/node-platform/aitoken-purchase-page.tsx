@@ -239,7 +239,7 @@ export function AitokenPurchasePage() {
 
   return (
     <SectionPageLayout>
-      <SectionPageLayout.Title>{t('Buy AI Token')}</SectionPageLayout.Title>
+      <SectionPageLayout.Title>{t('AiToken P2P Marketplace')}</SectionPageLayout.Title>
       <SectionPageLayout.Actions>
         <Button variant='outline' onClick={loadBalance}>
           {t('Refresh')}

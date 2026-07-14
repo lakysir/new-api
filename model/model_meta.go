@@ -31,6 +31,7 @@ type Model struct {
 	Endpoints               string         `json:"endpoints,omitempty" gorm:"type:text"`
 	Status                  int            `json:"status" gorm:"default:1"`
 	SyncOfficial            int            `json:"sync_official" gorm:"default:1"`
+	Recommended             int            `json:"recommended" gorm:"default:0;index"`
 	RequestPriceUnits       int            `json:"request_price_units,omitempty" gorm:"default:1"`
 	RequestPriceDisplayUnit string         `json:"request_price_display_unit,omitempty" gorm:"type:varchar(16);default:'request'"`
 	CreatedTime             int64          `json:"created_time" gorm:"bigint"`
@@ -92,7 +93,7 @@ func (mi *Model) Update() error {
 	}
 	// 使用 Select 强制更新所有字段，包括零值
 	return DB.Model(&Model{}).Where("id = ?", mi.Id).
-		Select("model_name", "description", "icon", "tags", "vendor_id", "endpoints", "status", "sync_official", "request_price_units", "request_price_display_unit", "name_rule", "updated_time").
+		Select("model_name", "description", "icon", "tags", "vendor_id", "endpoints", "status", "sync_official", "recommended", "request_price_units", "request_price_display_unit", "name_rule", "updated_time").
 		Updates(mi).Error
 }
 

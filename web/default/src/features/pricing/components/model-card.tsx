@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { ChevronRight, Copy } from 'lucide-react'
+import { ChevronRight, Copy, Star } from 'lucide-react'
 import { memo } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -55,6 +55,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
   const usdExchangeRate = props.usdExchangeRate ?? 1
   const showRechargePrice = props.showRechargePrice ?? false
   const isTokenBased = isTokenBasedModel(props.model)
+  const isRecommended = props.model.recommended === 1
   const requestPriceUnitLabel =
     props.model.request_price_display_unit === 'second' ? 's' : t('request')
   const tokenUnitLabel = tokenUnit === 'K' ? '1K' : '1M'
@@ -62,7 +63,6 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
   const groups = props.usableGroup
     ? getAvailableGroups(props.model, props.usableGroup)
     : props.model.enable_groups || []
-  const endpoints = props.model.supported_endpoint_types || []
   const modelIconKey = props.model.icon || props.model.vendor_icon
   const modelIcon = modelIconKey ? getLobeIcon(modelIconKey, 28) : null
   const initial = props.model.model_name?.charAt(0).toUpperCase() || '?'
@@ -81,11 +81,9 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
     : null
 
   const primaryGroup = groups[0]
-  const bottomTags = [...endpoints.slice(0, 2), ...tags.slice(0, 2)]
+  const bottomTags = tags.slice(0, 2)
   const hiddenCount =
-    Math.max(groups.length - 1, 0) +
-    Math.max(endpoints.length - 2, 0) +
-    Math.max(tags.length - 2, 0)
+    Math.max(groups.length - 1, 0) + Math.max(tags.length - 2, 0)
 
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -97,7 +95,9 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
       className={cn(
         'group relative flex min-h-[188px] flex-col overflow-hidden rounded-lg border bg-background/90 p-3 shadow-sm transition-all duration-200 sm:p-4',
         'before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-foreground/20 before:to-transparent',
-        'hover:-translate-y-0.5 hover:border-foreground/20 hover:bg-background hover:shadow-md'
+        'hover:-translate-y-0.5 hover:border-foreground/20 hover:bg-background hover:shadow-md',
+        isRecommended &&
+          'border-amber-300/80 bg-amber-50/25 shadow-amber-950/5 before:via-amber-500/70 hover:border-amber-400/80 dark:border-amber-500/35 dark:bg-amber-950/10'
       )}
     >
       {/* Header: icon + name + price + actions */}
@@ -111,9 +111,17 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
             )}
           </div>
           <div className='min-w-0'>
-            <h3 className='text-foreground truncate font-mono text-[14px] leading-tight font-bold sm:text-[15px]'>
-              {props.model.model_name}
-            </h3>
+            <div className='flex min-w-0 items-center gap-2'>
+              <h3 className='text-foreground truncate font-mono text-[14px] leading-tight font-bold sm:text-[15px]'>
+                {props.model.model_name}
+              </h3>
+              {isRecommended && (
+                <span className='inline-flex shrink-0 items-center gap-1 rounded-md border border-amber-300/70 bg-amber-100/80 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300'>
+                  <Star className='size-3 fill-current' aria-hidden='true' />
+                  {t('Recommended')}
+                </span>
+              )}
+            </div>
             <div className='mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs sm:gap-x-2.5'>
               {dynamicSummary ? (
                 dynamicSummary.isSpecialExpression ? (
@@ -242,9 +250,6 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
               {primaryGroup} {t('Groups')}
             </span>
           )}
-          <span className='text-muted-foreground text-xs font-medium'>
-            {isTokenBased ? t('Token-based') : t('Per Request')}
-          </span>
           {isDynamicPricing && (
             <StatusBadge
               label={t('Dynamic Pricing')}

@@ -128,7 +128,7 @@ export function sortModels(
       break
   }
 
-  return sorted
+  return sorted.sort((a, b) => (b.recommended || 0) - (a.recommended || 0))
 }
 
 /**

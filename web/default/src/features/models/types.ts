@@ -43,6 +43,7 @@ export interface Model {
   endpoints?: string
   status: number
   sync_official: number
+  recommended?: number
   request_price_units?: number
   request_price_display_unit?: 'request' | 'second'
   created_time: number
@@ -240,6 +241,7 @@ export const modelFormSchema = z.object({
   name_rule: z.number().min(0).max(3).default(0),
   status: z.boolean().default(true),
   sync_official: z.boolean().default(true),
+  recommended: z.boolean().default(false),
 })
 
 export type ModelFormValues = z.infer<typeof modelFormSchema>
