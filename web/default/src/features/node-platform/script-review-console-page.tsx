@@ -35,12 +35,15 @@ import {
 
 import {
   createCategory,
+  generatePlatformSigningKey,
+  getPlatformSigningKey,
   listCategories,
   listPendingScripts,
   listPublishedScriptVersions,
   reviewScript,
   revokeScriptVersion,
   setCategoryBalanceScript,
+  type PlatformSigningKey,
   type ScriptCategory,
 } from './api'
 import { formatUnix } from './lib/format'
@@ -159,6 +162,9 @@ export function ScriptReviewConsolePage() {
   const [newCatName, setNewCatName] = useState('')
   const [newCatSite, setNewCatSite] = useState('')
   const [balScript, setBalScript] = useState<Record<number, string>>({}) // catId -> "scriptId:version"
+  // Platform signing key status. Signing is mandatory for publishing.
+  const [signingKey, setSigningKey] = useState<PlatformSigningKey | null>(null)
+  const [generatingKey, setGeneratingKey] = useState(false)
 
   const categoryNames = useMemo(
     () => new Map(categories.map((category) => [category.id, category.name])),
@@ -190,14 +196,16 @@ export function ScriptReviewConsolePage() {
   async function load() {
     setLoading(true)
     try {
-      const [pendingScripts, versions, cats] = await Promise.all([
+      const [pendingScripts, versions, cats, key] = await Promise.all([
         listPendingScripts(),
         listPublishedScriptVersions(),
         listCategories(),
+        getPlatformSigningKey(),
       ])
       setPending(pendingScripts)
       setPublishedVersions(versions)
       setCategories(cats)
+      setSigningKey(key)
     } catch (e) {
       toast.error(String((e as Error).message))
     } finally {
@@ -220,6 +228,30 @@ export function ScriptReviewConsolePage() {
       await load()
     } catch (e) {
       toast.error(String((e as Error).message))
+    }
+  }
+
+  async function onGenerateSigningKey() {
+    const rotating = signingKey?.signing_enabled
+    if (
+      rotating &&
+      !window.confirm(
+        t(
+          'A signing key already exists. Generating a new one invalidates all existing manifest signatures — every published version must be re-published to run again. Continue?'
+        )
+      )
+    ) {
+      return
+    }
+    setGeneratingKey(true)
+    try {
+      const key = await generatePlatformSigningKey()
+      setSigningKey(key)
+      toast.success(rotating ? t('Signing key rotated') : t('Signing key generated'))
+    } catch (e) {
+      toast.error(String((e as Error).message))
+    } finally {
+      setGeneratingKey(false)
     }
   }
 
@@ -285,6 +317,51 @@ export function ScriptReviewConsolePage() {
         </Button>
       </SectionPageLayout.Actions>
       <SectionPageLayout.Content>
+        {/* Platform signing key: publishing requires a configured key, and the
+            plugin execution gate rejects any manifest without a valid signature. */}
+        <div className='mb-6 rounded-lg border p-4'>
+          <div className='mb-2 text-sm font-medium'>{t('Script signing key')}</div>
+          {signingKey?.signing_enabled ? (
+            <div className='flex flex-wrap items-center gap-x-6 gap-y-2 text-sm'>
+              <div>
+                {t('Status')}:{' '}
+                <span className='font-medium text-green-600'>{t('Enabled')}</span>
+              </div>
+              <div>
+                {t('Key ID')}: <span className='font-mono text-xs'>{signingKey.key_id}</span>
+              </div>
+              <div className='flex min-w-0 items-center gap-2'>
+                <span className='shrink-0'>{t('Public key')}:</span>
+                <span className='truncate font-mono text-xs' title={signingKey.public_key}>
+                  {signingKey.public_key}
+                </span>
+              </div>
+              <Button
+                size='sm'
+                variant='outline'
+                disabled={generatingKey}
+                onClick={onGenerateSigningKey}
+              >
+                {generatingKey ? t('Working...') : t('Rotate key')}
+              </Button>
+            </div>
+          ) : (
+            <div className='flex flex-wrap items-center gap-3 text-sm'>
+              <span className='text-red-600'>
+                ⚠️ {t('Signing is not configured. Scripts cannot be published or executed until a key is generated.')}
+              </span>
+              <Button size='sm' disabled={generatingKey} onClick={onGenerateSigningKey}>
+                {generatingKey ? t('Working...') : t('Generate signing key')}
+              </Button>
+            </div>
+          )}
+          {signingKey?.signing_enabled && (
+            <p className='text-muted-foreground mt-2 text-xs'>
+              {t('Rotating the key invalidates existing signatures; already-published versions must be re-published to run again.')}
+            </p>
+          )}
+        </div>
+
         <div className='mb-2 text-sm font-medium'>{t('Pending review')}</div>
         <Table>
           <TableHeader>

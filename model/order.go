@@ -89,6 +89,9 @@ type Order struct {
 	LockVersion       int64  `json:"lock_version" gorm:"default:0"`
 	CreatedAt         int64  `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt         int64  `json:"updated_at" gorm:"autoUpdateTime"`
+	// LastError is not persisted; controllers populate it on read from the
+	// latest task attempt's error_code so failed orders can show a real reason.
+	LastError string `json:"last_error,omitempty" gorm:"-"`
 }
 
 func (Order) TableName() string { return "orders" }

@@ -175,6 +175,11 @@ func InitOptionMap() {
 	common.OptionMap["AutomaticDisableStatusCodes"] = operation_setting.AutomaticDisableStatusCodesToString()
 	common.OptionMap["AutomaticRetryStatusCodes"] = operation_setting.AutomaticRetryStatusCodesToString()
 	common.OptionMap["ExposeRatioEnabled"] = strconv.FormatBool(ratio_setting.IsExposeRatioEnabled())
+	// Platform script-signing key (Ed25519). The seed is a secret and is never
+	// returned by GetOptions; only the key id is surfaced. Managed from the admin
+	// script-review console (generate) and persisted here so it survives restarts.
+	common.OptionMap["ScriptSigningKeyId"] = common.ScriptSigningKeyId
+	common.OptionMap["ScriptSigningKeySeed"] = common.ScriptSigningKeySeed
 
 	// 自动添加所有注册的模型配置
 	modelConfigs := config.GlobalConfig.ExportAllConfigs()
@@ -480,6 +485,10 @@ func updateOptionMap(key string, value string) (err error) {
 		common.LinuxDOClientSecret = value
 	case "LinuxDOMinimumTrustLevel":
 		common.LinuxDOMinimumTrustLevel, _ = strconv.Atoi(value)
+	case "ScriptSigningKeyId":
+		common.ScriptSigningKeyId = value
+	case "ScriptSigningKeySeed":
+		common.ScriptSigningKeySeed = value
 	case "Footer":
 		common.Footer = value
 	case "SystemName":

@@ -147,7 +147,10 @@ func CreateOrder(c *gin.Context) {
 	common.ApiSuccess(c, gin.H{"order": o, "created": created})
 }
 
-// GetOrder returns an order's current state (owner-scoped).
+// GetOrder returns an order's current state (owner-scoped). When the order is
+// in a failure state, the latest attempt's error_code is surfaced as last_error
+// so the client can show the real reason (e.g. ORIGIN_NOT_ALLOWED) instead of a
+// generic relay timeout.
 func GetOrder(c *gin.Context) {
 	id := c.Param("id")
 	o, err := model.GetOrder(id)
@@ -158,6 +161,12 @@ func GetOrder(c *gin.Context) {
 	if o.ClientId != c.GetInt("id") {
 		common.ApiErrorMsg(c, "order not found")
 		return
+	}
+	switch o.State {
+	case model.OrderFailed, model.OrderRefunded, model.OrderTimedOut, model.OrderCancelled:
+		if ta, _ := model.GetTaskAttempt(id, 1); ta != nil {
+			o.LastError = ta.ErrorCode
+		}
 	}
 	common.ApiSuccess(c, o)
 }

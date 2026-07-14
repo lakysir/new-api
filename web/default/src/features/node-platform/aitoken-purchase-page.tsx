@@ -62,6 +62,34 @@ function loadPurchaseDraft(): PurchaseDraft {
   }
 }
 
+// Terminal order states that mean execution will never produce a result, so the
+// client should stop waiting on the relay and report the reason.
+const TERMINAL_FAILURE_STATES = ['FAILED', 'REFUNDED', 'TIMED_OUT', 'CANCELLED']
+
+// describeOrderError maps a provider/gate error_code to a readable reason. Falls
+// back to the raw code (or a generic message) for anything not enumerated.
+function describeOrderError(code: string | undefined): string {
+  switch (code) {
+    case 'ORIGIN_NOT_ALLOWED':
+      return 'Provider has no open tab on the target site (origin not allowed). The provider must open and log into the target site, then retry.'
+    case 'LEASE_EXPIRED':
+      return 'The execution lease expired before the provider ran the task.'
+    case 'SCRIPT_EXECUTION_FAILED':
+      return 'The script failed while running on the provider.'
+    case 'SCRIPT_NOT_FOUND':
+    case 'SCRIPT_REVOKED':
+      return 'The script version is no longer available for execution.'
+    case 'PARAMS_SCHEMA_INVALID':
+      return 'The task parameters did not match the script schema.'
+    case 'INLINE_CODE_REJECTED':
+      return 'The task was rejected by the provider safety gate.'
+    case 'TARGET_NOT_READY':
+      return 'The provider could not open the target tab.'
+    default:
+      return code || 'Task failed on the provider'
+  }
+}
+
 // sha256Hex hashes the config text so only the input_hash crosses the control
 // plane (the plaintext config travels the E2EE data plane at execution time).
 async function sha256Hex(text: string): Promise<string> {
@@ -303,13 +331,37 @@ export function AitokenPurchasePage() {
     setRelayStatus(t('Connecting to relay...'))
     setRelayResult('')
     setRunning(true)
+    // Poll the control plane while waiting for the encrypted result. If the
+    // provider fails the task (e.g. no target tab / origin not allowed), the
+    // order reaches a terminal failure state; we reject fast with the real
+    // reason instead of blocking on the 120s result timeout.
+    let cancelled = false
+    const failFast = new Promise<never>((_, reject) => {
+      const tick = async () => {
+        while (!cancelled) {
+          await new Promise((r) => window.setTimeout(r, 1500))
+          if (cancelled) return
+          try {
+            const latest = await getOrder(targetOrder.id)
+            setOrder(latest)
+            if (TERMINAL_FAILURE_STATES.includes(latest.state)) {
+              reject(new Error(describeOrderError(latest.last_error)))
+              return
+            }
+          } catch {
+            /* transient read error; keep polling */
+          }
+        }
+      }
+      void tick()
+    })
     try {
       await session.connect()
       setRelayStatus(t('Waiting for provider handshake...'))
-      await session.waitEstablished()
+      await Promise.race([session.waitEstablished(), failFast])
       setRelayStatus(t('Sending config, waiting for result...'))
       await session.sendConfig(config)
-      const result = await session.waitForResult()
+      const result = await Promise.race([session.waitForResult(), failFast])
       setRelayResult(JSON.stringify(result, null, 2))
       setRelayStatus(t('Result received'))
       // Submit the client receipt (result hash) so the control plane can compare
@@ -332,28 +384,21 @@ export function AitokenPurchasePage() {
       setRelayStatus('')
       try {
         const latest = await getOrder(targetOrder.id)
+        setOrder(latest)
+        // Still cancellable (never accepted by a provider): refund now.
         if (['FUNDS_RESERVED', 'MATCHING', 'OFFERED'].includes(latest.state)) {
           setOrder(await cancelOrder(targetOrder.id))
           await loadBalance()
           toast.error(t('Task was not accepted; reserved funds were refunded'))
-        } else {
-          for (let attempt = 0; attempt < 10; attempt += 1) {
-            await new Promise((resolve) => window.setTimeout(resolve, 1000))
-            const refreshed = await getOrder(targetOrder.id)
-            setOrder(refreshed)
-            if (refreshed.state === 'REFUNDED') {
-              await loadBalance()
-              toast.error(t('Task failed; reserved funds were refunded'))
-              break
-            }
-            if (['SETTLED', 'DISPUTED'].includes(refreshed.state)) break
-          }
+        } else if (TERMINAL_FAILURE_STATES.includes(latest.state)) {
+          await loadBalance()
         }
       } catch {
-        // Preserve the original relay error when cancellation is no longer legal.
+        // Preserve the original relay error when the order can no longer be read.
       }
       toast.error(String((e as Error).message))
     } finally {
+      cancelled = true
       session.close()
       setRunning(false)
     }

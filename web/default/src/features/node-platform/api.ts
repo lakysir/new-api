@@ -173,6 +173,28 @@ export function revokeScriptVersion(
   )
 }
 
+// --- Platform script signing key --------------------------------------------
+
+export type PlatformSigningKey = {
+  key_id: string
+  public_key: string
+  signing_enabled: boolean
+}
+
+// Public: current platform signing key status (no secret). Plugins use this to
+// verify manifest signatures; the console uses it to show whether signing is on.
+export function getPlatformSigningKey() {
+  return unwrap<PlatformSigningKey>(api.get('/api/scripts/platform-key'))
+}
+
+// Admin: generate (or rotate) the platform Ed25519 signing key. Rotating
+// invalidates existing signatures, so published versions must be re-published.
+export function generatePlatformSigningKey(keyId?: string) {
+  return unwrap<PlatformSigningKey>(
+    api.post('/api/scripts/signing-key/generate', { key_id: keyId ?? '' })
+  )
+}
+
 // --- Devices & nodes --------------------------------------------------------
 
 export function listMyDevices() {

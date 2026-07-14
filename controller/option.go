@@ -85,7 +85,8 @@ func GetOptions(c *gin.Context) {
 			strings.HasSuffix(k, "Secret") ||
 			strings.HasSuffix(k, "Key") ||
 			strings.HasSuffix(k, "secret") ||
-			strings.HasSuffix(k, "api_key")
+			strings.HasSuffix(k, "api_key") ||
+			k == "ScriptSigningKeySeed" // Ed25519 private seed; never expose
 		if isSensitiveKey {
 			continue
 		}

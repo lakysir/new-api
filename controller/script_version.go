@@ -158,6 +158,43 @@ func GetPlatformScriptKey(c *gin.Context) {
 	})
 }
 
+type generateSigningKeyRequest struct {
+	KeyId string `json:"key_id"`
+}
+
+// GenerateScriptSigningKey (admin) creates and persists a fresh Ed25519 platform
+// signing key. This ENABLES signing when it was previously unconfigured, and
+// ROTATES it otherwise — rotation invalidates every existing manifest
+// signature, so already-published versions must be re-published to run again.
+// The private seed is stored as a masked option and never returned.
+func GenerateScriptSigningKey(c *gin.Context) {
+	var req generateSigningKeyRequest
+	_ = c.ShouldBindJSON(&req)
+	keyId := strings.TrimSpace(req.KeyId)
+	if keyId == "" {
+		keyId = "script-key-" + strconv.FormatInt(common.GetTimestamp(), 10)
+	}
+	seedB64, publicKeyB64, err := scriptregistry.GenerateSeed()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	// Persist both atomically; updateOptionMap also refreshes the live package
+	// vars so signing works immediately without a restart.
+	if err := model.UpdateOptionsBulk(map[string]string{
+		"ScriptSigningKeyId":   keyId,
+		"ScriptSigningKeySeed": seedB64,
+	}); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{
+		"key_id":          keyId,
+		"public_key":      publicKeyB64,
+		"signing_enabled": true,
+	})
+}
+
 // ReviewScriptDecision is the operator endpoint to approve or reject a pending
 // draft. Approval only marks the draft publishable; it does not freeze a
 // version (publishing does that).
@@ -239,6 +276,16 @@ func PublishScriptVersion(c *gin.Context) {
 	}
 	if script.ReviewStatus != model.ScriptReviewApproved {
 		common.ApiErrorMsg(c, "script must be approved before publishing")
+		return
+	}
+	// Signing is mandatory (the plugin execution gate requires a valid
+	// signature). Fail fast before creating a pricing template / version row so a
+	// missing key never leaves orphaned unsigned state.
+	if signer, signerErr := platformSigner(); signerErr != nil {
+		common.ApiError(c, signerErr)
+		return
+	} else if signer == nil {
+		common.ApiErrorMsg(c, ErrSigningKeyNotConfigured.Error())
 		return
 	}
 	// Determine the pricing template. Prefer an explicit id; otherwise create an
@@ -360,15 +407,23 @@ func siteOrigin(site string) string {
 	return parsed.Scheme + "://" + parsed.Host
 }
 
+// ErrSigningKeyNotConfigured is returned when a publish is attempted while the
+// platform has no signing key. Execution requires a valid signature, so
+// publishing unsigned versions is refused rather than silently producing
+// versions that can never run.
+var ErrSigningKeyNotConfigured = errors.New("platform script signing key is not configured; an administrator must generate it in the script review console before publishing")
+
 // signPublishedVersion signs the manifest for a freshly created version and
-// persists the signature. Unsigned dev publishes are allowed but marked so.
+// persists the signature. Signing is mandatory: without a configured key the
+// version could never pass the plugin execution gate, so we return an error
+// instead of storing an unsigned, unusable version.
 func signPublishedVersion(version *model.ScriptVersion) error {
 	signer, err := platformSigner()
 	if err != nil {
 		return err
 	}
 	if signer == nil {
-		return nil // dev mode: unsigned, execution gate will still hash-check
+		return ErrSigningKeyNotConfigured
 	}
 	manifest := scriptregistry.Manifest{
 		ScriptID:       strconv.Itoa(version.ScriptId),

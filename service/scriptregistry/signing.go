@@ -2,11 +2,26 @@ package scriptregistry
 
 import (
 	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"sort"
 )
+
+// GenerateSeed creates a new random Ed25519 signing key and returns its 32-byte
+// seed as base64 (for storage) plus the base64 public key (for distribution to
+// plugins). Rotating the seed invalidates every existing manifest signature, so
+// callers must re-sign or re-publish affected versions.
+func GenerateSeed() (seedB64 string, publicKeyB64 string, err error) {
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return "", "", err
+	}
+	seed := priv.Seed()
+	return base64.StdEncoding.EncodeToString(seed),
+		base64.StdEncoding.EncodeToString(pub), nil
+}
 
 // Manifest is the signed metadata bound to an immutable script version. It
 // mirrors MarketScriptManifest in the architecture doc §5.1. Signature and

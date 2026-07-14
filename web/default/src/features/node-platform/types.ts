@@ -99,6 +99,9 @@ export type Order = {
   final_amount_micros: number
   chosen_node_id: string
   created_at: number
+  // Present only on read when the order is in a failure state: the latest
+  // attempt's error_code (e.g. ORIGIN_NOT_ALLOWED, SCRIPT_EXECUTION_FAILED).
+  last_error?: string
 }
 
 export type PriceBreakdown = {

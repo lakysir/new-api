@@ -118,6 +118,13 @@ export class ClientRelaySession {
       return
     }
     if (!msg.pub || !msg.device_id) return
+    // Already established: ignore duplicate/late handshakes so we never rebuild
+    // the Opener (which would reset its sequence and reject the live stream).
+    if (this.#sealer) return
+    // Re-send our handshake in reply. If the client connected before the
+    // provider, our initial handshake was dropped (no peer yet); the provider's
+    // handshake proves it has now joined, so replying delivers our pubkey to it.
+    this.#sendHandshake()
     const secret = await sharedSecret(this.#kp!.privateKey, msg.pub)
     const ctx = {
       taskId: this.#opts.taskId,

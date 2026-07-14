@@ -282,6 +282,8 @@ func SetApiRouter(router *gin.Engine) {
 				scriptAdminRoute.GET("/versions/published", controller.ListPublishedScriptVersions)
 				scriptAdminRoute.POST("/:id/review", controller.ReviewScriptDecision)
 				scriptAdminRoute.POST("/:id/versions/:version/revoke", controller.RevokeScriptVersion)
+				// Generate/rotate the platform Ed25519 script-signing key.
+				scriptAdminRoute.POST("/signing-key/generate", controller.GenerateScriptSigningKey)
 			}
 
 			scriptVersionRoute := scriptRoute.Group("/")
