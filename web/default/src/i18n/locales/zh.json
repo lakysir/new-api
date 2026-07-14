@@ -1387,6 +1387,7 @@
     "Do regex replacement in the target field": "在目标字段里做正则替换",
     "Do string replacement in the target field": "在目标字段里做字符串替换",
     "Docs": "文档",
+    "API Documentation": "接口文档",
     "Documentation Link": "文档链接",
     "Documentation or external knowledge base.": "文档或外部知识库。",
     "does not exist or might have been removed.": "不存在或可能已被移除。",

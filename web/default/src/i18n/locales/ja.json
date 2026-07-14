@@ -1387,6 +1387,7 @@
     "Do regex replacement in the target field": "ターゲットフィールドで正規表現置換",
     "Do string replacement in the target field": "ターゲットフィールドで文字列置換",
     "Docs": "ドキュメント",
+    "API Documentation": "APIドキュメント",
     "Documentation Link": "ドキュメントリンク",
     "Documentation or external knowledge base.": "ドキュメントまたは外部知識ベース。",
     "does not exist or might have been removed.": "存在しないか、削除された可能性があります。",

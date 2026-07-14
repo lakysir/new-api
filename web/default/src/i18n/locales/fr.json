@@ -1387,6 +1387,7 @@
     "Do regex replacement in the target field": "Effectuer un remplacement par expression régulière dans le champ cible",
     "Do string replacement in the target field": "Effectuer un remplacement de chaîne dans le champ cible",
     "Docs": "Documents",
+    "API Documentation": "Documentation API",
     "Documentation Link": "Lien de la documentation",
     "Documentation or external knowledge base.": "Documentation ou base de connaissances externe.",
     "does not exist or might have been removed.": "n'existe pas ou a peut-être été supprimé.",

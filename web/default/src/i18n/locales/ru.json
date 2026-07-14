@@ -1387,6 +1387,7 @@
     "Do regex replacement in the target field": "Выполнить замену по регулярному выражению в целевом поле",
     "Do string replacement in the target field": "Выполнить замену строки в целевом поле",
     "Docs": "Документы",
+    "API Documentation": "Документация API",
     "Documentation Link": "Ссылка на документацию",
     "Documentation or external knowledge base.": "Документация или внешняя база знаний.",
     "does not exist or might have been removed.": "не существует или, возможно, был удален.",
