@@ -500,6 +500,54 @@ func RevokeScriptVersion(c *gin.Context) {
 	common.ApiSuccess(c, gin.H{"suspended_capabilities": suspended})
 }
 
+func DeleteScriptVersion(c *gin.Context) {
+	scriptId, err := strconv.Atoi(c.Param("id"))
+	if err != nil || scriptId <= 0 {
+		common.ApiErrorMsg(c, "invalid script id")
+		return
+	}
+	version, err := strconv.Atoi(c.Param("version"))
+	if err != nil || version <= 0 {
+		common.ApiErrorMsg(c, "invalid version")
+		return
+	}
+	if err := model.DeleteHistoricalScriptVersion(scriptId, version); err != nil {
+		switch {
+		case errors.Is(err, model.ErrScriptVersionNotFound):
+			common.ApiErrorMsg(c, "script version not found")
+		case errors.Is(err, model.ErrLatestScriptVersion):
+			common.ApiErrorMsg(c, err.Error())
+		default:
+			common.ApiError(c, err)
+		}
+		return
+	}
+	common.ApiSuccess(c, gin.H{"deleted": true})
+}
+
+func UpdateScriptVersionPricing(c *gin.Context) {
+	scriptId, err := strconv.Atoi(c.Param("id"))
+	if err != nil || scriptId <= 0 { common.ApiErrorMsg(c, "invalid script id"); return }
+	version, err := strconv.Atoi(c.Param("version"))
+	if err != nil || version <= 0 { common.ApiErrorMsg(c, "invalid version"); return }
+	var req struct {
+		AuthorShareRatePPM int64 `json:"author_share_rate_ppm"`
+		PlatformFeeRatePPM int64 `json:"platform_fee_rate_ppm"`
+		ExecutionFeeMicros int64 `json:"execution_fee_micros"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil { common.ApiError(c, err); return }
+	if req.AuthorShareRatePPM < 0 || req.AuthorShareRatePPM > 1_000_000 || req.PlatformFeeRatePPM < 0 || req.PlatformFeeRatePPM > 1_000_000 || req.ExecutionFeeMicros < 0 {
+		common.ApiErrorMsg(c, "invalid pricing values")
+		return
+	}
+	updated, err := model.UpdateScriptVersionPricing(scriptId, version, req.AuthorShareRatePPM, req.PlatformFeeRatePPM, req.ExecutionFeeMicros)
+	if err != nil {
+		if errors.Is(err, model.ErrScriptVersionNotFound) { common.ApiErrorMsg(c, "script version not found") } else { common.ApiError(c, err) }
+		return
+	}
+	common.ApiSuccess(c, updated)
+}
+
 // ListScriptVersions returns a script's version history (no code bodies).
 func ListScriptVersions(c *gin.Context) {
 	scriptId, err := strconv.Atoi(c.Param("id"))

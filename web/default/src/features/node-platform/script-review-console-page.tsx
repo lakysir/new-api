@@ -35,6 +35,7 @@ import {
 
 import {
   createCategory,
+  deleteScriptVersion,
   generatePlatformSigningKey,
   getPlatformSigningKey,
   listCategories,
@@ -43,11 +44,12 @@ import {
   reviewScript,
   revokeScriptVersion,
   setCategoryBalanceScript,
+  updateScriptVersionPricing,
   type PlatformSigningKey,
   type ScriptCategory,
 } from './api'
 import { EarningsSummary } from './earnings-summary'
-import { formatUnix } from './lib/format'
+import { displayToMicros, formatUnix, microsToDisplay } from './lib/format'
 import type { ScriptVersion } from './types'
 
 // ppm helpers: 10000 ppm = 1%.
@@ -77,6 +79,7 @@ type PendingScript = {
 }
 
 type DiffLine = { kind: 'same' | 'remove' | 'add'; text: string; number?: number }
+type PricingEdit = { author: string; platform: string; execution: string }
 
 function buildLineDiff(previous = '', next = ''): DiffLine[] {
   if (!previous) {
@@ -158,6 +161,8 @@ export function ScriptReviewConsolePage() {
   const [publishedCategory, setPublishedCategory] = useState('all')
   const [historyScriptId, setHistoryScriptId] = useState(0)
   const [revokeReasons, setRevokeReasons] = useState<Record<number, string>>({})
+  const [pricingEdits, setPricingEdits] = useState<Record<number, PricingEdit>>({})
+  const [savingVersionId, setSavingVersionId] = useState(0)
   // Operator sets the platform fee (%) per pending script on approval.
   const [platformFees, setPlatformFees] = useState<Record<number, string>>({})
   // Category management state.
@@ -306,6 +311,48 @@ export function ScriptReviewConsolePage() {
       )
       toast.success(t('Version revoked'))
       setRevokeReasons((current) => ({ ...current, [version.id]: '' }))
+      await load()
+    } catch (e) {
+      toast.error(String((e as Error).message))
+    }
+  }
+
+  function pricingValue(version: ScriptVersion) {
+    return pricingEdits[version.id] || {
+      author: ppmToPercent(version.author_share_rate_ppm),
+      platform: ppmToPercent(version.platform_fee_rate_ppm),
+      execution: microsToDisplay(version.platform_fee_min_micros),
+    }
+  }
+
+  function setPricingValue(version: ScriptVersion, patch: Partial<PricingEdit>) {
+    setPricingEdits((current) => ({ ...current, [version.id]: { ...pricingValue(version), ...patch } }))
+  }
+
+  async function onSavePricing(version: ScriptVersion) {
+    const value = pricingValue(version)
+    setSavingVersionId(version.id)
+    try {
+      await updateScriptVersionPricing(version.script_id, version.version, {
+        author_share_rate_ppm: percentToPpm(value.author),
+        platform_fee_rate_ppm: percentToPpm(value.platform),
+        execution_fee_micros: displayToMicros(value.execution),
+      })
+      toast.success(t('Pricing updated'))
+      setPricingEdits((current) => { const next = { ...current }; delete next[version.id]; return next })
+      await load()
+    } catch (e) {
+      toast.error(String((e as Error).message))
+    } finally {
+      setSavingVersionId(0)
+    }
+  }
+
+  async function onDeleteVersion(version: ScriptVersion) {
+    if (!window.confirm(t('Delete script #{{scriptId}} v{{version}}?', { scriptId: version.script_id, version: version.version }))) return
+    try {
+      await deleteScriptVersion(version.script_id, version.version)
+      toast.success(t('Version deleted'))
       await load()
     } catch (e) {
       toast.error(String((e as Error).message))
@@ -724,11 +771,11 @@ export function ScriptReviewConsolePage() {
           title={t('Version history')}
           description={historyVersions[0]?.title || ''}
         >
-          <div className='max-h-[60vh] space-y-2 overflow-auto'>
+          <div className='max-h-[70vh] space-y-2 overflow-auto'>
             {historyVersions.map((version) => (
               <div
                 key={version.id}
-                className='grid gap-2 rounded-md border p-3 text-sm sm:grid-cols-[80px_1fr_auto] sm:items-center'
+                className='grid gap-3 rounded-md border p-3 text-sm lg:grid-cols-[70px_1fr_3fr_auto] lg:items-center'
               >
                 <div className='font-medium'>v{version.version}</div>
                 <div>
@@ -744,7 +791,15 @@ export function ScriptReviewConsolePage() {
                     </div>
                   ) : null}
                 </div>
-                <div>{version.revoked_at ? t('Revoked') : t('Published')}</div>
+                <div className='grid gap-2 sm:grid-cols-3'>
+                  <label className='space-y-1'><span className='text-muted-foreground text-xs'>{t('Author share')} (%)</span><Input className='h-8' value={pricingValue(version).author} onChange={(event) => setPricingValue(version, { author: event.target.value })} /></label>
+                  <label className='space-y-1'><span className='text-muted-foreground text-xs'>{t('Platform share')} (%)</span><Input className='h-8' value={pricingValue(version).platform} onChange={(event) => setPricingValue(version, { platform: event.target.value })} /></label>
+                  <label className='space-y-1'><span className='text-muted-foreground text-xs'>{t('Script execution fee')}</span><Input className='h-8' value={pricingValue(version).execution} onChange={(event) => setPricingValue(version, { execution: event.target.value })} /></label>
+                </div>
+                <div className='flex flex-wrap justify-end gap-2'>
+                  <Button size='sm' variant='outline' disabled={savingVersionId === version.id} onClick={() => onSavePricing(version)}>{savingVersionId === version.id ? t('Saving...') : t('Save pricing')}</Button>
+                  <Button size='sm' variant='destructive' disabled={version.version === historyVersions[0]?.version} title={version.version === historyVersions[0]?.version ? t('The latest version cannot be deleted') : undefined} onClick={() => onDeleteVersion(version)}>{t('Delete')}</Button>
+                </div>
               </div>
             ))}
           </div>

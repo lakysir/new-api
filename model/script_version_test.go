@@ -119,3 +119,32 @@ func TestGetScriptVersionNotFound(t *testing.T) {
 		t.Fatalf("expected ErrScriptVersionNotFound, got %v", err)
 	}
 }
+
+func TestDeleteHistoricalScriptVersionProtectsLatest(t *testing.T) {
+	scriptId := 1005
+	first := newTestScriptVersion(scriptId)
+	second := newTestScriptVersion(scriptId)
+	if err := CreateScriptVersion(first); err != nil { t.Fatal(err) }
+	if err := CreateScriptVersion(second); err != nil { t.Fatal(err) }
+	if err := DeleteHistoricalScriptVersion(scriptId, second.Version); err != ErrLatestScriptVersion {
+		t.Fatalf("expected latest-version protection, got %v", err)
+	}
+	if err := DeleteHistoricalScriptVersion(scriptId, first.Version); err != nil { t.Fatal(err) }
+	if _, err := GetScriptVersion(scriptId, first.Version); err != ErrScriptVersionNotFound {
+		t.Fatalf("historical version still exists: %v", err)
+	}
+}
+
+func TestUpdateScriptVersionPricingRebindsTemplate(t *testing.T) {
+	scriptId := 1006
+	v := newTestScriptVersion(scriptId)
+	if err := CreateScriptVersion(v); err != nil { t.Fatal(err) }
+	updated, err := UpdateScriptVersionPricing(scriptId, v.Version, 30_000, 80_000, 5_000)
+	if err != nil { t.Fatal(err) }
+	if updated.PricingTemplateId == 0 { t.Fatal("pricing template was not bound") }
+	tpl, err := GetPricingTemplate(updated.PricingTemplateId)
+	if err != nil { t.Fatal(err) }
+	if tpl.AuthorShareRatePPM != 30_000 || tpl.PlatformFeeRatePPM != 80_000 || tpl.PlatformFeeMinMicros != 5_000 {
+		t.Fatalf("unexpected pricing template: %+v", tpl)
+	}
+}

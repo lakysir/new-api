@@ -43,7 +43,10 @@ type ScriptVersion struct {
 	RevokedReason     string `json:"revoked_reason,omitempty" gorm:"type:varchar(512)"`
 	RevokeSeverity    string `json:"revoke_severity,omitempty" gorm:"type:varchar(16)"`
 	CreatedAt         int64  `json:"created_at" gorm:"autoCreateTime"`
-	AuthorUsername    string `json:"author_username,omitempty" gorm:"-"`
+	AuthorUsername      string `json:"author_username,omitempty" gorm:"-"`
+	AuthorShareRatePPM   int64  `json:"author_share_rate_ppm" gorm:"-"`
+	PlatformFeeRatePPM   int64  `json:"platform_fee_rate_ppm" gorm:"-"`
+	PlatformFeeMinMicros int64  `json:"platform_fee_min_micros" gorm:"-"`
 }
 
 func (ScriptVersion) TableName() string {
@@ -55,6 +58,7 @@ var (
 	ErrScriptVersionNotFound = errors.New("script version not found")
 	// ErrScriptVersionRevoked is returned when the version exists but is revoked.
 	ErrScriptVersionRevoked = errors.New("script version is revoked")
+	ErrLatestScriptVersion  = errors.New("latest script version cannot be deleted")
 )
 
 // IsRevoked reports whether the version has been revoked.
@@ -175,14 +179,95 @@ func ListExecutableScriptVersions(scriptId int) ([]ScriptVersion, error) {
 func ListPublishedScriptVersions() ([]ScriptVersion, error) {
 	var versions []ScriptVersion
 	err := DB.Table("script_versions").
-		Select("script_versions.id,script_versions.script_id,script_versions.version,script_versions.author_id,script_versions.title,script_versions.category_id,script_versions.code_sha256,script_versions.signature_key_id,script_versions.signature,script_versions.review_status,script_versions.published_at,script_versions.revoked_at,script_versions.revoked_reason,script_versions.revoke_severity").
+		Select("script_versions.id,script_versions.script_id,script_versions.version,script_versions.author_id,script_versions.title,script_versions.category_id,script_versions.code_sha256,script_versions.signature_key_id,script_versions.signature,script_versions.review_status,script_versions.published_at,script_versions.revoked_at,script_versions.revoked_reason,script_versions.revoke_severity,script_versions.pricing_template_id").
 		Order("script_versions.published_at desc,script_versions.id desc").
 		Limit(500).
 		Find(&versions).Error
 	if err == nil {
 		fillScriptVersionAuthorUsernames(versions)
+		fillScriptVersionPricing(versions)
 	}
 	return versions, err
+}
+
+func fillScriptVersionPricing(versions []ScriptVersion) {
+	ids := make([]int, 0, len(versions))
+	for i := range versions {
+		if versions[i].PricingTemplateId > 0 {
+			ids = append(ids, versions[i].PricingTemplateId)
+		}
+	}
+	if len(ids) == 0 {
+		return
+	}
+	var templates []PricingTemplate
+	if err := DB.Where("id IN ?", ids).Find(&templates).Error; err != nil {
+		return
+	}
+	byID := make(map[int]PricingTemplate, len(templates))
+	for _, template := range templates {
+		byID[template.Id] = template
+	}
+	for i := range versions {
+		if template, ok := byID[versions[i].PricingTemplateId]; ok {
+			versions[i].AuthorShareRatePPM = template.AuthorShareRatePPM
+			versions[i].PlatformFeeRatePPM = template.PlatformFeeRatePPM
+			versions[i].PlatformFeeMinMicros = template.PlatformFeeMinMicros
+		}
+	}
+}
+
+// DeleteHistoricalScriptVersion deletes a non-latest version. The latest check
+// and delete share a transaction so the rule cannot be bypassed by the UI.
+func DeleteHistoricalScriptVersion(scriptId, version int) error {
+	return DB.Transaction(func(tx *gorm.DB) error {
+		var current ScriptVersion
+		if err := tx.Where("script_id = ? AND version = ?", scriptId, version).First(&current).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrScriptVersionNotFound
+			}
+			return err
+		}
+		var latest int
+		if err := tx.Model(&ScriptVersion{}).Where("script_id = ?", scriptId).Select("COALESCE(MAX(version), 0)").Scan(&latest).Error; err != nil {
+			return err
+		}
+		if version == latest {
+			return ErrLatestScriptVersion
+		}
+		return tx.Delete(&current).Error
+	})
+}
+
+// UpdateScriptVersionPricing creates a fresh immutable pricing template and
+// rebinds the version. Existing order snapshots retain their original prices.
+func UpdateScriptVersionPricing(scriptId, version int, authorRate, platformRate, executionFee int64) (*ScriptVersion, error) {
+	var updated ScriptVersion
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		var current ScriptVersion
+		if err := tx.Where("script_id = ? AND version = ?", scriptId, version).First(&current).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrScriptVersionNotFound
+			}
+			return err
+		}
+		tpl := PricingTemplate{
+			Currency: "USD", ProviderPriceMode: "per_task", AuthorShareRatePPM: authorRate,
+			PlatformFeeRatePPM: platformRate, PlatformFeeMinMicros: executionFee,
+			FailurePolicy: "full_refund", RuleVersion: "admin-" + time.Now().Format("20060102150405"),
+		}
+		if err := tx.Create(&tpl).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&current).Update("pricing_template_id", tpl.Id).Error; err != nil {
+			return err
+		}
+		current.PricingTemplateId = tpl.Id
+		current.AuthorShareRatePPM, current.PlatformFeeRatePPM, current.PlatformFeeMinMicros = authorRate, platformRate, executionFee
+		updated = current
+		return nil
+	})
+	return &updated, err
 }
 
 func fillScriptVersionAuthorUsernames(versions []ScriptVersion) {

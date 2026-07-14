@@ -168,7 +168,11 @@ export function NodesConsolePage() {
       setDevices(d)
       setNodes(n)
       const items = (sq.data?.data?.items ?? sq.data?.items ?? sq.data?.data ?? []) as PublishedScript[]
-      setPubScripts(items)
+      const balanceScriptIds = new Set(
+        categoryList.map((category) => category.balance_script_id).filter(Boolean)
+      )
+      const listableItems = items.filter((script) => !balanceScriptIds.has(script.id))
+      setPubScripts(listableItems)
       setCategories(categoryList)
       setCapStats(
         Object.fromEntries(
@@ -178,7 +182,7 @@ export function NodesConsolePage() {
       setRefreshTick((tick) => tick + 1)
 
       const validNodeIds = new Set(n.map((node) => node.id))
-      const validScriptIds = new Set(items.map((script) => script.id))
+      const validScriptIds = new Set(listableItems.map((script) => script.id))
       const formsToRestore = restoreSavedDraft ? initialDraft.enableForm : enableForm
       const restoredForms = Object.fromEntries(
         Object.entries(formsToRestore).filter(
@@ -197,7 +201,8 @@ export function NodesConsolePage() {
       const versionEntries = await Promise.all(
         selectedScriptIds.map(async (scriptId) => {
           try {
-            return [scriptId, await listAvailableScriptVersions(scriptId)] as const
+            const versions = await listAvailableScriptVersions(scriptId)
+            return [scriptId, versions.filter((item) => !categoryList.some((category) => category.balance_script_id === item.script_id && category.balance_script_version === item.version))] as const
           } catch {
             return [scriptId, []] as const
           }
@@ -284,7 +289,9 @@ export function NodesConsolePage() {
     }
     const scriptId = Number(value)
     try {
-      const versions = scriptVersions[scriptId] || (await listAvailableScriptVersions(scriptId))
+      const versions = (scriptVersions[scriptId] || (await listAvailableScriptVersions(scriptId))).filter(
+        (item) => !categories.some((category) => category.balance_script_id === item.script_id && category.balance_script_version === item.version)
+      )
       setScriptVersions((current) => ({ ...current, [scriptId]: versions }))
       setForm(nodeId, {
         scriptId: value,
