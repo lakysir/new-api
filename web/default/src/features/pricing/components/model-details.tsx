@@ -77,6 +77,7 @@ import type {
   TokenUnit,
 } from '../types'
 import { DynamicPricingBreakdown } from './dynamic-pricing-breakdown'
+import { ModelDescription } from './model-description'
 import { ModelDetailsApi } from './model-details-api'
 import { ModelDetailsPerformance } from './model-details-performance'
 
@@ -590,7 +591,7 @@ function ModelHeader(props: { model: PricingModel }) {
       </div>
       {description && (
         <p className='text-muted-foreground mt-2 text-sm leading-relaxed'>
-          {description}
+          <ModelDescription text={description} />
         </p>
       )}
     </header>

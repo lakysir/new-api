@@ -790,6 +790,11 @@ export function ModelMutateDrawer({
                         {...field}
                       />
                     </FormControl>
+                    <FormDescription>
+                      {t(
+                        'Wrap important text in [[double brackets]] to display it in bold red.'
+                      )}
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -808,6 +813,11 @@ export function ModelMutateDrawer({
                         {...field}
                       />
                     </FormControl>
+                    <FormDescription>
+                      {t(
+                        'Wrap important text in [[double brackets]] to display it in bold red.'
+                      )}
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

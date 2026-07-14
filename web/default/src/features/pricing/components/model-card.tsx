@@ -34,6 +34,7 @@ import { parseTags } from '../lib/filters'
 import { getVisibleModelGroups, isTokenBasedModel } from '../lib/model-helpers'
 import { formatPrice, formatRequestPrice } from '../lib/price'
 import type { PricingModel, TokenUnit } from '../types'
+import { ModelDescription } from './model-description'
 import { ModelPerfBadge, type ModelPerfBadgeData } from './model-perf-badge'
 
 export interface ModelCardProps {
@@ -247,7 +248,11 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
 
       {/* Description */}
       <p className='text-muted-foreground mt-3 line-clamp-2 flex-1 text-[13px] leading-relaxed sm:min-h-[2.45rem]'>
-        {description || t('No description available.')}
+        {description ? (
+          <ModelDescription text={description} />
+        ) : (
+          t('No description available.')
+        )}
       </p>
 
       {/* Footer: left metadata and right performance summary share row alignment */}
