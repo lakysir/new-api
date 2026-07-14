@@ -165,23 +165,29 @@ export function NodesConsolePage() {
         listCategories(),
         listProviderCapabilityStats().catch(() => [] as CapabilityStat[]),
       ])
-      setDevices(d)
-      setNodes(n)
+      const deviceList = Array.isArray(d) ? d : []
+      const nodeList = Array.isArray(n) ? n : []
+      const safeCategoryList = Array.isArray(categoryList) ? categoryList : []
+      const statList = Array.isArray(stats) ? stats : []
+      setDevices(deviceList)
+      setNodes(nodeList)
       const items = (sq.data?.data?.items ?? sq.data?.items ?? sq.data?.data ?? []) as PublishedScript[]
       const balanceScriptIds = new Set(
-        categoryList.map((category) => category.balance_script_id).filter(Boolean)
+        safeCategoryList.map((category) => category.balance_script_id).filter(Boolean)
       )
-      const listableItems = items.filter((script) => !balanceScriptIds.has(script.id))
+      const listableItems = (Array.isArray(items) ? items : []).filter(
+        (script) => !balanceScriptIds.has(script.id)
+      )
       setPubScripts(listableItems)
-      setCategories(categoryList)
+      setCategories(safeCategoryList)
       setCapStats(
         Object.fromEntries(
-          stats.map((s) => [`${s.node_id}:${s.script_id}:${s.version}`, s])
+          statList.map((s) => [`${s.node_id}:${s.script_id}:${s.version}`, s])
         )
       )
       setRefreshTick((tick) => tick + 1)
 
-      const validNodeIds = new Set(n.map((node) => node.id))
+      const validNodeIds = new Set(nodeList.map((node) => node.id))
       const validScriptIds = new Set(listableItems.map((script) => script.id))
       const formsToRestore = restoreSavedDraft ? initialDraft.enableForm : enableForm
       const restoredForms = Object.fromEntries(
@@ -202,7 +208,17 @@ export function NodesConsolePage() {
         selectedScriptIds.map(async (scriptId) => {
           try {
             const versions = await listAvailableScriptVersions(scriptId)
-            return [scriptId, versions.filter((item) => !categoryList.some((category) => category.balance_script_id === item.script_id && category.balance_script_version === item.version))] as const
+            return [
+              scriptId,
+              (Array.isArray(versions) ? versions : []).filter(
+                (item) =>
+                  !safeCategoryList.some(
+                    (category) =>
+                      category.balance_script_id === item.script_id &&
+                      category.balance_script_version === item.version
+                  )
+              ),
+            ] as const
           } catch {
             return [scriptId, []] as const
           }
@@ -289,8 +305,15 @@ export function NodesConsolePage() {
     }
     const scriptId = Number(value)
     try {
-      const versions = (scriptVersions[scriptId] || (await listAvailableScriptVersions(scriptId))).filter(
-        (item) => !categories.some((category) => category.balance_script_id === item.script_id && category.balance_script_version === item.version)
+      const loadedVersions =
+        scriptVersions[scriptId] || (await listAvailableScriptVersions(scriptId))
+      const versions = (Array.isArray(loadedVersions) ? loadedVersions : []).filter(
+        (item) =>
+          !categories.some(
+            (category) =>
+              category.balance_script_id === item.script_id &&
+              category.balance_script_version === item.version
+          )
       )
       setScriptVersions((current) => ({ ...current, [scriptId]: versions }))
       setForm(nodeId, {
@@ -368,12 +391,15 @@ export function NodesConsolePage() {
   async function loadCaps(nodeId: string) {
     try {
       const list = await listNodeCapabilities(nodeId)
-      setCaps((p) => ({ ...p, [nodeId]: list }))
+      setCaps((p) => ({ ...p, [nodeId]: Array.isArray(list) ? list : [] }))
       setOpenNodeIds((current) =>
         current.includes(nodeId) ? current : [...current, nodeId]
       )
       const checks = await listBalanceChecks(nodeId)
-      setBalanceChecks((current) => ({ ...current, [nodeId]: checks }))
+      setBalanceChecks((current) => ({
+        ...current,
+        [nodeId]: Array.isArray(checks) ? checks : [],
+      }))
     } catch (e) {
       toast.error(String((e as Error).message))
     }
@@ -391,8 +417,9 @@ export function NodesConsolePage() {
       for (let attempt = 0; attempt < 20; attempt += 1) {
         await new Promise((resolve) => window.setTimeout(resolve, 1500))
         const checks = await listBalanceChecks(nodeId)
-        setBalanceChecks((current) => ({ ...current, [nodeId]: checks }))
-        const result = checks.find((item) => item.category_id === categoryId)
+        const checkList = Array.isArray(checks) ? checks : []
+        setBalanceChecks((current) => ({ ...current, [nodeId]: checkList }))
+        const result = checkList.find((item) => item.category_id === categoryId)
         if (result && result.checked_at > previousCheckedAt) {
           if (result.balance_ok) {
             toast.success(t('Balance check passed'))
