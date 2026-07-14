@@ -45,12 +45,20 @@ import {
   listMyDevices,
   listMyNodes,
   listNodeCapabilities,
+  listProviderCapabilityStats,
   removeCapability,
   requestBalanceCheck,
   revokeDevice,
 } from './api'
+import { EarningsSummary } from './earnings-summary'
 import { displayToMicros, formatUnix, microsToDisplay } from './lib/format'
-import type { Device, NodeCapability, NodeInfo, ScriptVersion } from './types'
+import type {
+  CapabilityStat,
+  Device,
+  NodeCapability,
+  NodeInfo,
+  ScriptVersion,
+} from './types'
 import type { NodeBalanceCheck, ScriptCategory } from './api'
 
 type PublishedScript = {
@@ -132,6 +140,10 @@ export function NodesConsolePage() {
   const [categories, setCategories] = useState<ScriptCategory[]>([])
   const [balanceChecks, setBalanceChecks] = useState<Record<string, NodeBalanceCheck[]>>({})
   const [checking, setChecking] = useState('')
+  // Per-(node, script, version) execution stats, keyed "nodeId:scriptId:version".
+  const [capStats, setCapStats] = useState<Record<string, CapabilityStat>>({})
+  // Bumped on each loadAll() so the provider earnings cards refetch.
+  const [refreshTick, setRefreshTick] = useState(0)
   // Per-node enable form: script id + version + price + quota.
   const [enableForm, setEnableForm] = useState<Record<string, EnableFormValue>>(
     initialDraft.enableForm
@@ -146,17 +158,24 @@ export function NodesConsolePage() {
   async function loadAll(restoreSavedDraft = false) {
     setLoading(true)
     try {
-      const [d, n, sq, categoryList] = await Promise.all([
+      const [d, n, sq, categoryList, stats] = await Promise.all([
         listMyDevices(),
         listMyNodes(),
         api.get('/api/scripts/square', { params: { limit: 200 } }),
         listCategories(),
+        listProviderCapabilityStats().catch(() => [] as CapabilityStat[]),
       ])
       setDevices(d)
       setNodes(n)
       const items = (sq.data?.data?.items ?? sq.data?.items ?? sq.data?.data ?? []) as PublishedScript[]
       setPubScripts(items)
       setCategories(categoryList)
+      setCapStats(
+        Object.fromEntries(
+          stats.map((s) => [`${s.node_id}:${s.script_id}:${s.version}`, s])
+        )
+      )
+      setRefreshTick((tick) => tick + 1)
 
       const validNodeIds = new Set(n.map((node) => node.id))
       const validScriptIds = new Set(items.map((script) => script.id))
@@ -421,6 +440,12 @@ export function NodesConsolePage() {
         </Button>
       </SectionPageLayout.Actions>
       <SectionPageLayout.Content>
+        {/* Money earned running nodes (provider payable), day/week/month/total. */}
+        <div className='mb-6'>
+          <div className='mb-2 text-sm font-medium'>{t('Provider earnings')}</div>
+          <EarningsSummary role='provider' refreshKey={refreshTick} />
+        </div>
+
         <div className='mb-2 text-sm font-medium'>
           {t('Devices')} ({visibleDevices.length}/{devices.length})
         </div>
@@ -613,12 +638,20 @@ export function NodesConsolePage() {
                   <TableHead>{t('Version')}</TableHead>
                   <TableHead>{t('Price')}</TableHead>
                   <TableHead>{t('Quota')}</TableHead>
+                  <TableHead>{t('Success rate')}</TableHead>
+                  <TableHead>{t('Revenue')}</TableHead>
                   <TableHead>{t('Status')}</TableHead>
                   <TableHead>{t('Actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {list.map((c) => (
+                {list.map((c) => {
+                  const stat = capStats[`${nodeId}:${c.script_id}:${c.version}`]
+                  const rate =
+                    stat && stat.executions > 0
+                      ? `${Math.round((stat.successes / stat.executions) * 100)}% (${stat.successes}/${stat.executions})`
+                      : '-'
+                  return (
                   <TableRow key={c.id}>
                     <TableCell>#{c.script_id}</TableCell>
                     <TableCell>v{c.version}</TableCell>
@@ -626,6 +659,8 @@ export function NodesConsolePage() {
                     <TableCell>
                       {c.remaining_quota}/{c.daily_quota}
                     </TableCell>
+                    <TableCell>{rate}</TableCell>
+                    <TableCell>{microsToDisplay(stat?.revenue_micros)}</TableCell>
                     <TableCell>{c.status}</TableCell>
                     <TableCell>
                       <Button
@@ -637,10 +672,11 @@ export function NodesConsolePage() {
                       </Button>
                     </TableCell>
                   </TableRow>
-                ))}
+                  )
+                })}
                 {list.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={6} className='text-muted-foreground text-center'>
+                    <TableCell colSpan={8} className='text-muted-foreground text-center'>
                       {t('No capabilities')}
                     </TableCell>
                   </TableRow>

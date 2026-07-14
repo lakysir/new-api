@@ -55,6 +55,7 @@ func ReconcileAndSettle(orderId, taskId string, attempt int) (*ReconcileResult, 
 		// against the executing node, lowering its scheduling success rate.
 		if execNodeId != "" {
 			_ = model.RecordTaskOutcome(execNodeId, false)
+			_ = model.FinalizeTaskAttempt(taskId, attempt, model.AttemptFailed)
 		}
 		updated, terr := model.ApplyTransition(orderId, model.OrderDisputed, nil)
 		if terr != nil && terr != model.ErrIllegalTransition {
@@ -75,6 +76,7 @@ func ReconcileAndSettle(orderId, taskId string, attempt int) (*ReconcileResult, 
 	if err == nil && execNodeId != "" && o.State != model.OrderSettled {
 		// Success raises the node's scheduling success rate.
 		_ = model.RecordTaskOutcome(execNodeId, true)
+		_ = model.FinalizeTaskAttempt(taskId, attempt, model.AttemptSucceeded)
 		_ = model.ConsumeCapabilityQuota(execNodeId, o.ScriptId, o.Version)
 	}
 	if err != nil {

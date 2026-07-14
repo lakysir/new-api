@@ -46,6 +46,7 @@ import {
   type PlatformSigningKey,
   type ScriptCategory,
 } from './api'
+import { EarningsSummary } from './earnings-summary'
 import { formatUnix } from './lib/format'
 import type { ScriptVersion } from './types'
 
@@ -148,6 +149,8 @@ export function ScriptReviewConsolePage() {
   const { t } = useTranslation()
   const [pending, setPending] = useState<PendingScript[]>([])
   const [loading, setLoading] = useState(false)
+  // Bumped on every load() so the earnings cards refetch alongside the console.
+  const [refreshTick, setRefreshTick] = useState(0)
   const [notes, setNotes] = useState<Record<number, string>>({})
   const [preview, setPreview] = useState<PendingScript | null>(null)
   const [previewMode, setPreviewMode] = useState<'changes' | 'code'>('changes')
@@ -206,6 +209,7 @@ export function ScriptReviewConsolePage() {
       setPublishedVersions(versions)
       setCategories(cats)
       setSigningKey(key)
+      setRefreshTick((n) => n + 1)
     } catch (e) {
       toast.error(String((e as Error).message))
     } finally {
@@ -317,6 +321,13 @@ export function ScriptReviewConsolePage() {
         </Button>
       </SectionPageLayout.Actions>
       <SectionPageLayout.Content>
+        {/* Platform service-fee revenue (day/week/month/total). Reloads on the
+            same refresh action as the rest of the console. */}
+        <div className='mb-6'>
+          <div className='mb-2 text-sm font-medium'>{t('Platform earnings')}</div>
+          <EarningsSummary role='platform' refreshKey={refreshTick} />
+        </div>
+
         {/* Platform signing key: publishing requires a configured key, and the
             plugin execution gate rejects any manifest without a valid signature. */}
         <div className='mb-6 rounded-lg border p-4'>

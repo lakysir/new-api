@@ -21,6 +21,7 @@ import {
   publishScriptVersion,
   submitScriptForReview,
 } from '@/features/node-platform/api'
+import { EarningsSummary } from '@/features/node-platform/earnings-summary'
 import { formatUnix } from '@/features/node-platform/lib/format'
 import type { ScriptVersion } from '@/features/node-platform/types'
 import { api } from '@/lib/api'
@@ -454,6 +455,12 @@ export function MyScriptsPage() {
         </Button>
       </SectionPageLayout.Actions>
       <SectionPageLayout.Content>
+        {/* Money earned as a script provider (author payable), with day/week/
+            month breakdown. Refreshes when the script list reloads. */}
+        <div className='mb-4'>
+          <div className='mb-2 text-sm font-medium'>{t('Script earnings')}</div>
+          <EarningsSummary role='author' refreshKey={myScripts.length} />
+        </div>
         <div className='min-h-0 overflow-auto'>
           <Table>
             <TableHeader>

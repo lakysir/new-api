@@ -284,6 +284,8 @@ func SetApiRouter(router *gin.Engine) {
 				scriptAdminRoute.POST("/:id/versions/:version/revoke", controller.RevokeScriptVersion)
 				// Generate/rotate the platform Ed25519 script-signing key.
 				scriptAdminRoute.POST("/signing-key/generate", controller.GenerateScriptSigningKey)
+				// Platform revenue summary (day/week/month/lifetime service fees).
+				scriptAdminRoute.GET("/platform-earnings", controller.GetPlatformEarnings)
 			}
 
 			scriptVersionRoute := scriptRoute.Group("/")
@@ -338,6 +340,7 @@ func SetApiRouter(router *gin.Engine) {
 		{
 			nodeRoute.POST("", controller.RegisterNode)
 			nodeRoute.GET("/mine", controller.ListMyNodes)
+			nodeRoute.GET("/capability-stats", controller.ListMyCapabilityStats)
 			nodeRoute.DELETE("/:id", controller.DeleteMyNode)
 			nodeRoute.POST("/:id/heartbeat", controller.NodeHeartbeat)
 			nodeRoute.POST("/:id/balance-check", controller.ReportBalanceCheck)
@@ -366,6 +369,7 @@ func SetApiRouter(router *gin.Engine) {
 		ledgerRoute.Use(middleware.CORS(), middleware.DeviceOrUserAuth())
 		{
 			ledgerRoute.GET("/balances", controller.GetMyLedgerBalances)
+			ledgerRoute.GET("/earnings", controller.GetMyEarnings)
 			ledgerRoute.POST("/deposit/simulate", middleware.CriticalRateLimit(), controller.SimulatedDeposit)
 		}
 

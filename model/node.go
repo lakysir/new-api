@@ -329,6 +329,44 @@ func ListNodeCapabilities(nodeId string) ([]NodeCapability, error) {
 	return caps, err
 }
 
+// ProviderCapabilityStat is the per-(node, script version) execution summary for
+// a provider: how many task attempts ran on that capability, how many settled
+// successfully, and the gross provider revenue those successes earned.
+type ProviderCapabilityStat struct {
+	NodeId        string `json:"node_id"`
+	ScriptId      int    `json:"script_id"`
+	Version       int    `json:"version"`
+	Executions    int64  `json:"executions"`
+	Successes     int64  `json:"successes"`
+	RevenueMicros int64  `json:"revenue_micros"`
+}
+
+// GetProviderCapabilityStats returns per-(node, script, version) execution stats
+// for every node owned by userId, derived from task attempts joined to their
+// orders and price snapshots. Only finalized attempts contribute a success or
+// revenue; a RESERVED/RUNNING attempt still counts as an execution. Revenue is
+// the sum of the frozen provider amount over succeeded attempts.
+func GetProviderCapabilityStats(userId int) ([]ProviderCapabilityStat, error) {
+	var stats []ProviderCapabilityStat
+	err := DB.Table("task_attempts AS ta").
+		Select(`ta.node_id AS node_id,
+			o.script_id AS script_id,
+			o.version AS version,
+			COUNT(*) AS executions,
+			SUM(CASE WHEN ta.state = ? THEN 1 ELSE 0 END) AS successes,
+			COALESCE(SUM(CASE WHEN ta.state = ? THEN ps.provider_amount_micros ELSE 0 END), 0) AS revenue_micros`,
+			AttemptSucceeded, AttemptSucceeded).
+		Joins("JOIN orders o ON o.id = ta.order_id").
+		Joins("LEFT JOIN order_price_snapshots ps ON ps.order_id = o.id").
+		Where("ta.node_id IN (?)", DB.Table("nodes").Select("id").Where("user_id = ?", userId)).
+		Group("ta.node_id, o.script_id, o.version").
+		Scan(&stats).Error
+	if err != nil {
+		return nil, err
+	}
+	return stats, nil
+}
+
 // ListNodesByUser returns all nodes owned by a user, newest heartbeat first.
 func ListNodesByUser(userId int) ([]Node, error) {
 	var nodes []Node

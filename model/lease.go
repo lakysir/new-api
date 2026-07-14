@@ -234,6 +234,17 @@ func GetTaskAttempt(taskId string, attempt int) (*TaskAttempt, error) {
 	return &ta, nil
 }
 
+// FinalizeTaskAttempt records the terminal state of a task attempt (SUCCEEDED or
+// FAILED) after reconciliation. It is idempotent: re-finalizing to the same
+// state is a no-op and it never overwrites an already-terminal attempt. This is
+// what lets per-node/per-script stats compute a real success rate.
+func FinalizeTaskAttempt(taskId string, attempt int, state string) error {
+	return DB.Model(&TaskAttempt{}).
+		Where("task_id = ? AND attempt = ? AND state NOT IN ?",
+			taskId, attempt, []string{AttemptSucceeded, AttemptFailed}).
+		Updates(map[string]any{"state": state, "updated_at": time.Now().Unix()}).Error
+}
+
 // GetNode returns a node by id.
 func GetNode(nodeId string) (*Node, error) {
 	var n Node

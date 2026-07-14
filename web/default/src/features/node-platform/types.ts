@@ -131,3 +131,25 @@ export type FeeQuote = {
   fee_micros: number
   estimated_confirmation_seconds: number
 }
+
+// EarningsSummary is a role's current balance plus gross credits over calendar
+// windows (today / this week / this month) and lifetime. All amounts are micros.
+export type EarningsSummary = {
+  currency: string
+  balance_micros: number
+  day_micros: number
+  week_micros: number
+  month_micros: number
+  total_micros: number
+}
+
+// CapabilityStat is one node's per-script-version execution summary: how many
+// attempts ran, how many settled, and the gross provider revenue earned.
+export type CapabilityStat = {
+  node_id: string
+  script_id: number
+  version: number
+  executions: number
+  successes: number
+  revenue_micros: number
+}

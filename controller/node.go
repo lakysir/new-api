@@ -187,6 +187,17 @@ func ListMyNodes(c *gin.Context) {
 	common.ApiSuccess(c, nodes)
 }
 
+// ListMyCapabilityStats returns per-(node, script, version) execution stats
+// (executions, successes, revenue) across the caller's nodes.
+func ListMyCapabilityStats(c *gin.Context) {
+	stats, err := model.GetProviderCapabilityStats(c.GetInt("id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, stats)
+}
+
 // DeleteMyNode permanently removes an OFFLINE node and its capabilities.
 func DeleteMyNode(c *gin.Context) {
 	nodeId := c.Param("id")

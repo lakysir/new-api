@@ -20,7 +20,9 @@ import { api } from '@/lib/api'
 
 import type {
   ApiEnvelope,
+  CapabilityStat,
   Device,
+  EarningsSummary,
   FeeQuote,
   LedgerBalances,
   NodeCapability,
@@ -303,6 +305,24 @@ export function cancelOrder(id: string) {
 
 export function getLedgerBalances() {
   return unwrap<LedgerBalances>(api.get('/api/ledger/balances'))
+}
+
+// Earnings for a payable role (provider = money earned running nodes, author =
+// money earned from published scripts): balance + day/week/month/lifetime.
+export function getEarnings(role: 'provider' | 'author') {
+  return unwrap<EarningsSummary>(
+    api.get('/api/ledger/earnings', { params: { role } })
+  )
+}
+
+// Platform service-fee revenue summary (admin only).
+export function getPlatformEarnings() {
+  return unwrap<EarningsSummary>(api.get('/api/scripts/platform-earnings'))
+}
+
+// Per-(node, script version) execution stats across the caller's nodes.
+export function listProviderCapabilityStats() {
+  return unwrap<CapabilityStat[]>(api.get('/api/nodes/capability-stats'))
 }
 
 export function simulateDeposit(amountMicros: number, reference: string) {

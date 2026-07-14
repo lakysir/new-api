@@ -145,6 +145,33 @@ func GetBalance(ownerType string, ownerId int, kind, currency string) (int64, er
 	return acc.BalanceMicros, nil
 }
 
+// SumCreditsSince returns the total credited (incoming) micros to an account
+// since the given unix time (inclusive). It reflects gross earnings over a
+// window — unlike the account balance, it is unaffected by later debits such as
+// withdrawals. Returns 0 if the account does not exist. A zero `since` sums the
+// account's whole history (lifetime earnings).
+func SumCreditsSince(ownerType string, ownerId int, kind, currency string, since int64) (int64, error) {
+	var acc LedgerAccount
+	err := DB.Where("owner_type = ? AND owner_id = ? AND kind = ? AND currency = ?",
+		ownerType, ownerId, kind, currency).First(&acc).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	var total int64
+	q := DB.Model(&LedgerEntry{}).
+		Where("account_id = ? AND direction = ?", acc.Id, DirCredit)
+	if since > 0 {
+		q = q.Where("created_at >= ?", since)
+	}
+	if err := q.Select("COALESCE(SUM(amount_micros),0)").Scan(&total).Error; err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
 // ReplayBalance recomputes an account's balance from its entries, used by tests
 // and reconciliation to assert the cached balance is correct.
 func ReplayBalance(accountId int) (int64, error) {
