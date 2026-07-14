@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { ChevronRight, Copy, Star } from 'lucide-react'
+import { ChevronRight, Copy, Crown } from 'lucide-react'
 import { memo } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -31,7 +31,7 @@ import {
   getDynamicPricingSummary,
 } from '../lib/dynamic-price'
 import { parseTags } from '../lib/filters'
-import { getAvailableGroups, isTokenBasedModel } from '../lib/model-helpers'
+import { getVisibleModelGroups, isTokenBasedModel } from '../lib/model-helpers'
 import { formatPrice, formatRequestPrice } from '../lib/price'
 import type { PricingModel, TokenUnit } from '../types'
 import { ModelPerfBadge, type ModelPerfBadgeData } from './model-perf-badge'
@@ -61,7 +61,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
   const tokenUnitLabel = tokenUnit === 'K' ? '1K' : '1M'
   const tags = parseTags(props.model.tags)
   const groups = props.usableGroup
-    ? getAvailableGroups(props.model, props.usableGroup)
+    ? getVisibleModelGroups(props.model, props.usableGroup)
     : props.model.enable_groups || []
   const modelIconKey = props.model.icon || props.model.vendor_icon
   const modelIcon = modelIconKey ? getLobeIcon(modelIconKey, 28) : null
@@ -80,10 +80,8 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
       })
     : null
 
-  const primaryGroup = groups[0]
   const bottomTags = tags.slice(0, 2)
-  const hiddenCount =
-    Math.max(groups.length - 1, 0) + Math.max(tags.length - 2, 0)
+  const hiddenCount = Math.max(tags.length - 2, 0)
 
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -100,8 +98,23 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
           'border-amber-300/80 bg-amber-50/25 shadow-amber-950/5 before:via-amber-500/70 hover:border-amber-400/80 dark:border-amber-500/35 dark:bg-amber-950/10'
       )}
     >
+      {isRecommended && (
+        <div
+          className='absolute top-0 right-0 z-10 flex h-8 w-9 items-center justify-center rounded-bl-lg border-b border-l border-amber-300/80 bg-amber-400 text-amber-950 shadow-sm dark:border-amber-400/30 dark:bg-amber-400 dark:text-amber-950'
+          title={t('Recommended')}
+          aria-label={t('Recommended')}
+        >
+          <Crown className='size-4 fill-current' aria-hidden='true' />
+        </div>
+      )}
+
       {/* Header: icon + name + price + actions */}
-      <div className='flex items-start justify-between gap-2.5'>
+      <div
+        className={cn(
+          'flex items-start justify-between gap-2.5',
+          isRecommended && 'pr-7'
+        )}
+      >
         <div className='flex min-w-0 items-start gap-2.5'>
           <div className='bg-muted/40 ring-border/60 flex size-9 shrink-0 items-center justify-center rounded-lg ring-1 sm:size-10'>
             {modelIcon || (
@@ -111,17 +124,9 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
             )}
           </div>
           <div className='min-w-0'>
-            <div className='flex min-w-0 items-center gap-2'>
-              <h3 className='text-foreground truncate font-mono text-[14px] leading-tight font-bold sm:text-[15px]'>
-                {props.model.model_name}
-              </h3>
-              {isRecommended && (
-                <span className='inline-flex shrink-0 items-center gap-1 rounded-md border border-amber-300/70 bg-amber-100/80 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300'>
-                  <Star className='size-3 fill-current' aria-hidden='true' />
-                  {t('Recommended')}
-                </span>
-              )}
-            </div>
+            <h3 className='text-foreground truncate font-mono text-[14px] leading-tight font-bold sm:text-[15px]'>
+              {props.model.model_name}
+            </h3>
             <div className='mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs sm:gap-x-2.5'>
               {dynamicSummary ? (
                 dynamicSummary.isSpecialExpression ? (
@@ -245,11 +250,14 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
       {/* Footer: left metadata and right performance summary share row alignment */}
       <div className='border-border/60 mt-3 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-2 gap-y-1 border-t pt-3'>
         <div className='flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1'>
-          {primaryGroup && (
-            <span className='text-muted-foreground text-xs font-medium'>
-              {primaryGroup} {t('Groups')}
+          {groups.map((group) => (
+            <span
+              key={group}
+              className='border-border/70 bg-muted/45 text-muted-foreground rounded-md border px-1.5 py-0.5 text-[11px] font-medium'
+            >
+              {group}
             </span>
-          )}
+          ))}
           {isDynamicPricing && (
             <StatusBadge
               label={t('Dynamic Pricing')}
