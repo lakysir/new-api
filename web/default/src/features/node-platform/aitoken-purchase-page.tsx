@@ -32,6 +32,7 @@ import {
   getLedgerBalances,
   getOrder,
   listScriptOffers,
+  listAvailableScriptVersions,
   quoteOrder,
   type ScriptOffer,
 } from './api'
@@ -39,7 +40,7 @@ import { ClientRelaySession } from './lib/client-relay-session'
 import { microsToDisplay } from './lib/format'
 import type { LedgerBalances, Order, PriceBreakdown } from './types'
 
-type PublishedScript = { id: number; title: string; description?: string }
+type PublishedScript = { id: number; title: string; description?: string; latest_version?: number }
 
 // sha256Hex hashes the config text so only the input_hash crosses the control
 // plane (the plaintext config travels the E2EE data plane at execution time).
@@ -57,6 +58,7 @@ export function AitokenPurchasePage() {
   const [scripts, setScripts] = useState<PublishedScript[]>([])
   const [scriptId, setScriptId] = useState(0)
   const [version, setVersion] = useState(1)
+  const [versions, setVersions] = useState<number[]>([])
   const [offers, setOffers] = useState<ScriptOffer[]>([])
   const [nodeId, setNodeId] = useState('') // chosen offer; empty = cheapest
   const [configText, setConfigText] = useState('{\n  "prompt": "a dog"\n}')
@@ -69,6 +71,52 @@ export function AitokenPurchasePage() {
   const [apiKey, setApiKey] = useState('')
   const [relayResult, setRelayResult] = useState<string>('')
   const [relayStatus, setRelayStatus] = useState<string>('')
+  const [offersLoading, setOffersLoading] = useState(false)
+
+  async function selectScript(value: number) {
+    setScriptId(value)
+    setOffers([])
+    setNodeId('')
+    setQuote(null)
+    setOrder(null)
+    if (!value) {
+      setVersions([])
+      return
+    }
+    try {
+      const available = await listAvailableScriptVersions(value)
+      const values = available.map((item) => item.version).sort((a, b) => b - a)
+      setVersions(values)
+      const selectedVersion = values[0] ?? scripts.find((item) => item.id === value)?.latest_version ?? 1
+      setVersion(selectedVersion)
+      await loadOffersFor(value, selectedVersion)
+    } catch (e) {
+      toast.error(String((e as Error).message))
+    }
+  }
+
+  async function loadOffersFor(selectedScriptId: number, selectedVersion: number) {
+    setOffersLoading(true)
+    try {
+      const loaded = await listScriptOffers(selectedScriptId, selectedVersion)
+      setOffers(loaded)
+      const selectedNodeId = loaded.find((item) => item.available)?.node_id ?? ''
+      setNodeId(selectedNodeId)
+      if (selectedNodeId) {
+        const priced = await quoteOrder({
+          script_id: selectedScriptId,
+          version: selectedVersion,
+          node_id: selectedNodeId,
+        })
+        setQuote(priced.breakdown)
+      } else {
+        setQuote(null)
+      }
+      if (loaded.length === 0) toast.info(t('No provider offers yet for this version'))
+    } finally {
+      setOffersLoading(false)
+    }
+  }
 
   async function loadBalance() {
     try {
@@ -99,11 +147,7 @@ export function AitokenPurchasePage() {
       return
     }
     try {
-      const o = await listScriptOffers(scriptId, version)
-      setOffers(o)
-      setNodeId('')
-      setQuote(null)
-      if (o.length === 0) toast.info(t('No provider offers yet for this version'))
+      await loadOffersFor(scriptId, version)
     } catch (e) {
       toast.error(String((e as Error).message))
     }
@@ -123,9 +167,23 @@ export function AitokenPurchasePage() {
     }
   }
 
+  async function onQuoteForNode(selectedNodeId: string) {
+    try {
+      const priced = await quoteOrder({ script_id: scriptId, version, node_id: selectedNodeId })
+      setQuote(priced.breakdown)
+    } catch (e) {
+      setQuote(null)
+      toast.error(String((e as Error).message))
+    }
+  }
+
   async function onPurchase() {
     if (!scriptId) {
       toast.error(t('Select a script first'))
+      return
+    }
+    if (!apiKey) {
+      toast.error(t('API key is required to connect the relay'))
       return
     }
     // Validate config is JSON before ordering.
@@ -147,6 +205,9 @@ export function AitokenPurchasePage() {
       setOrder(o)
       toast.success(t('Order created and funds reserved'))
       await loadBalance()
+      if (['OFFERED', 'RESERVED', 'DATA_READY', 'RUNNING'].includes(o.state)) {
+        await runViaRelay(o)
+      }
     } catch (e) {
       toast.error(String((e as Error).message))
     } finally {
@@ -176,8 +237,8 @@ export function AitokenPurchasePage() {
 
   // Send the config to the executing provider over the E2EE relay and wait for
   // the encrypted result. task_id == order id in the MVP; attempt 1.
-  async function runViaRelay() {
-    if (!order) {
+  async function runViaRelay(targetOrder: Order | null = order) {
+    if (!targetOrder) {
       toast.error(t('Create an order first'))
       return
     }
@@ -196,9 +257,9 @@ export function AitokenPurchasePage() {
     const session = new ClientRelaySession({
       relayUrl,
       deviceToken: apiKey,
-      taskId: order.id,
+      taskId: targetOrder.id,
       attempt: 1,
-      clientDeviceId: `client-${order.client_id}`,
+      clientDeviceId: `client-${targetOrder.client_id}`,
     })
     setRelayStatus(t('Connecting to relay...'))
     setRelayResult('')
@@ -216,17 +277,17 @@ export function AitokenPurchasePage() {
       // both parties' receipts and settle on a match.
       try {
         const resultHash = await sha256Hex(JSON.stringify(result ?? null))
-        await api.post(`/api/orders/${order.id}/receipts`, {
-          task_id: order.id,
+        await api.post(`/api/orders/${targetOrder.id}/receipts`, {
+          task_id: targetOrder.id,
           attempt: 1,
           party: 'client',
-          order_id: order.id,
+          order_id: targetOrder.id,
           result_hash: resultHash,
         })
       } catch {
         /* receipt submit best-effort; reconciliation retries on next receipt */
       }
-      await refreshOrder()
+      setOrder(await getOrder(targetOrder.id))
       await loadBalance()
     } catch (e) {
       setRelayStatus('')
@@ -268,13 +329,7 @@ export function AitokenPurchasePage() {
             <select
               className='h-9 min-w-[220px] rounded-md border px-2 text-sm'
               value={scriptId}
-              onChange={(e) => {
-                setScriptId(Number(e.target.value))
-                setOffers([])
-                setNodeId('')
-                setQuote(null)
-                setOrder(null)
-              }}
+              onChange={(e) => void selectScript(Number(e.target.value))}
             >
               <option value={0}>{t('Select a script')}</option>
               {scripts.map((s) => (
@@ -283,20 +338,22 @@ export function AitokenPurchasePage() {
                 </option>
               ))}
             </select>
-            <Input
-              className='w-24'
-              type='number'
+            <select
+              className='h-9 w-28 rounded-md border px-2 text-sm'
               value={version}
               onChange={(e) => {
-                setVersion(Number(e.target.value))
+                const selectedVersion = Number(e.target.value)
+                setVersion(selectedVersion)
                 setOffers([])
                 setNodeId('')
                 setQuote(null)
+                if (scriptId) void loadOffersFor(scriptId, selectedVersion)
               }}
-              placeholder={t('Version')}
-            />
-            <Button variant='outline' onClick={loadOffers}>
-              {t('View offers')}
+            >
+              {versions.map((item) => <option key={item} value={item}>v{item}</option>)}
+            </select>
+            <Button variant='outline' onClick={loadOffers} disabled={offersLoading}>
+              {offersLoading ? t('Loading...') : t('View offers')}
             </Button>
           </div>
 
@@ -312,18 +369,26 @@ export function AitokenPurchasePage() {
                       type='radio'
                       name='offer'
                       checked={nodeId === o.node_id}
-                      disabled={!o.online || o.remaining_quota <= 0}
+                      disabled={!o.available}
                       onChange={() => {
                         setNodeId(o.node_id)
-                        setQuote(null)
+                        void onQuoteForNode(o.node_id)
                       }}
                     />
                     <span className='font-mono text-xs'>{o.node_id}</span>
                     <span className='font-semibold'>{microsToDisplay(o.price_micros)}</span>
-                    <span>{o.online ? '🟢' : '⚪'}</span>
+                    <span>{o.online ? t('Online') : t('Offline')}</span>
                     <span className='text-muted-foreground text-xs'>
                       {t('quota')}: {o.remaining_quota}
                     </span>
+                    {!o.available && (
+                      <span className='text-xs text-red-600'>
+                        {o.unavailable_reason === 'QUOTA_EXHAUSTED' && t('Quota exhausted')}
+                        {o.unavailable_reason === 'NODE_OFFLINE' && t('Node offline')}
+                        {o.unavailable_reason === 'CAPABILITY_TEST_EXPIRED' && t('Capability test expired')}
+                        {o.unavailable_reason === 'BALANCE_CHECK_EXPIRED' && t('Balance check expired')}
+                      </span>
+                    )}
                   </label>
                 ))}
               </div>
@@ -351,8 +416,8 @@ export function AitokenPurchasePage() {
           <Button variant='outline' onClick={onQuote}>
             {t('Get quote')}
           </Button>
-          <Button onClick={onPurchase} disabled={busy || !quote || quote.MaxCustomerMicros > (bal?.client_available ?? 0)}>
-            {t('Purchase (reserve funds)')}
+          <Button onClick={onPurchase} disabled={busy || running || !quote || quote.MaxCustomerMicros > (bal?.client_available ?? 0)}>
+            {busy || running ? t('Running...') : t('Purchase and run')}
           </Button>
         </div>
 
@@ -407,7 +472,7 @@ export function AitokenPurchasePage() {
                   onChange={(e) => setApiKey(e.target.value)}
                 />
                 <Button
-                  onClick={runViaRelay}
+                  onClick={() => void runViaRelay()}
                   disabled={running || !['OFFERED', 'RESERVED', 'DATA_READY', 'RUNNING'].includes(order.state)}
                 >
                   {running ? t('Running...') : t('Send & run')}

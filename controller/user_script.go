@@ -28,6 +28,7 @@ type publishedScriptListItem struct {
 	PublishedAt  int64  `json:"published_at"`
 	CreatedAt    int64  `json:"created_at"`
 	UpdatedAt    int64  `json:"updated_at"`
+	LatestVersion int   `json:"latest_version"`
 }
 
 func parseScriptId(c *gin.Context) (int, bool) {
@@ -183,6 +184,7 @@ func ApiListPublishedScripts(c *gin.Context) {
 			PublishedAt:  script.PublishedAt,
 			CreatedAt:    script.CreatedAt,
 			UpdatedAt:    script.UpdatedAt,
+			LatestVersion: script.LatestVersion,
 		})
 	}
 	common.ApiSuccess(c, gin.H{

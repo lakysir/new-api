@@ -16,10 +16,13 @@ type CandidateNode struct {
 // ScriptOffer is a Provider's public offer for a script version: its execution
 // price and online/quality signal. Clients browse offers before ordering.
 type ScriptOffer struct {
-	NodeId         string `json:"node_id"`
-	PriceMicros    int64  `json:"price_micros"`
-	Online         bool   `json:"online"`
-	RemainingQuota int    `json:"remaining_quota"`
+	NodeId           string `json:"node_id"`
+	PriceMicros      int64  `json:"price_micros"`
+	Online           bool   `json:"online"`
+	RemainingQuota   int    `json:"remaining_quota"`
+	State            string `json:"state"`
+	Available        bool   `json:"available"`
+	UnavailableReason string `json:"unavailable_reason,omitempty"`
 }
 
 // ListOffersForScript returns all active, tested offers for a script version
@@ -27,26 +30,27 @@ type ScriptOffer struct {
 // execution cost" catalog (architecture §13.2).
 func ListOffersForScript(scriptId, version int) ([]ScriptOffer, error) {
 	cutoff := time.Now().Add(-NodePresenceTimeout).Unix()
+	now := time.Now().Unix()
 	type row struct {
-		NodeId         string
-		PriceMicros    int64
-		RemainingQuota int
-		LastSeenAt     int64
-		State          string
+		NodeId           string
+		PriceMicros      int64
+		RemainingQuota   int
+		LastSeenAt       int64
+		State            string
+		TestExpiresAt    int64
+		CategoryId       int
+		BalanceOk        bool
+		BalanceExpiresAt int64
 	}
 	var rows []row
-	// A capability only counts if the node also holds a valid balance check for
-	// the capability's category (or the script has no category). LEFT JOIN so
-	// category-less scripts still appear.
-	now := time.Now().Unix()
+	// Return all listed capabilities so clients can distinguish "no offer" from
+	// an offer that is temporarily offline, out of quota or needs re-validation.
 	err := DB.Table("node_capabilities AS cap").
-		Select("cap.node_id, cap.price_micros, cap.remaining_quota, n.last_seen_at, n.state").
+		Select("cap.node_id, cap.price_micros, cap.remaining_quota, cap.test_expires_at, cap.category_id, n.last_seen_at, n.state, s.balance_ok, s.expires_at AS balance_expires_at").
 		Joins("JOIN nodes n ON n.id = cap.node_id").
 		Joins("LEFT JOIN node_site_status s ON s.node_id = cap.node_id AND s.category_id = cap.category_id").
 		Where("cap.script_id = ? AND cap.version = ?", scriptId, version).
 		Where("cap.status = ?", CapabilityStatusActive).
-		Where("cap.test_expires_at > ?", now).
-		Where("cap.category_id = 0 OR (s.balance_ok = ? AND s.expires_at > ?)", true, now).
 		Order("cap.price_micros asc").
 		Scan(&rows).Error
 	if err != nil {
@@ -54,11 +58,28 @@ func ListOffersForScript(scriptId, version int) ([]ScriptOffer, error) {
 	}
 	offers := make([]ScriptOffer, 0, len(rows))
 	for _, r := range rows {
+		online := r.State != NodeStateOffline && r.LastSeenAt >= cutoff
+		testValid := r.TestExpiresAt > now
+		balanceValid := r.CategoryId == 0 || (r.BalanceOk && r.BalanceExpiresAt > now)
+		available := online && r.RemainingQuota > 0 && testValid && balanceValid
+		reason := ""
+		if !online {
+			reason = "NODE_OFFLINE"
+		} else if r.RemainingQuota <= 0 {
+			reason = "QUOTA_EXHAUSTED"
+		} else if !testValid {
+			reason = "CAPABILITY_TEST_EXPIRED"
+		} else if !balanceValid {
+			reason = "BALANCE_CHECK_EXPIRED"
+		}
 		offers = append(offers, ScriptOffer{
-			NodeId:         r.NodeId,
-			PriceMicros:    r.PriceMicros,
-			Online:         r.State != NodeStateOffline && r.LastSeenAt >= cutoff,
-			RemainingQuota: r.RemainingQuota,
+			NodeId:           r.NodeId,
+			PriceMicros:      r.PriceMicros,
+			Online:           online,
+			RemainingQuota:   r.RemainingQuota,
+			State:            r.State,
+			Available:        available,
+			UnavailableReason: reason,
 		})
 	}
 	return offers, nil

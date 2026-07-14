@@ -72,9 +72,10 @@ func ReconcileAndSettle(orderId, taskId string, attempt int) (*ReconcileResult, 
 		return nil, err
 	}
 	settled, err := Settle(orderId, participants)
-	if err == nil && execNodeId != "" {
+	if err == nil && execNodeId != "" && o.State != model.OrderSettled {
 		// Success raises the node's scheduling success rate.
 		_ = model.RecordTaskOutcome(execNodeId, true)
+		_ = model.ConsumeCapabilityQuota(execNodeId, o.ScriptId, o.Version)
 	}
 	if err != nil {
 		return nil, err

@@ -230,6 +230,9 @@ export type ScriptOffer = {
   price_micros: number
   online: boolean
   remaining_quota: number
+  state: string
+  available: boolean
+  unavailable_reason?: string
 }
 
 export function listScriptOffers(scriptId: number, version: number) {

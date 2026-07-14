@@ -314,6 +314,14 @@ func RemoveCapability(userId int, nodeId string, scriptId, version int) error {
 	return nil
 }
 
+// ConsumeCapabilityQuota decrements one successful execution from the exact
+// capability used by a settled task. The guarded update prevents underflow.
+func ConsumeCapabilityQuota(nodeId string, scriptId, version int) error {
+	return DB.Model(&NodeCapability{}).
+		Where("node_id = ? AND script_id = ? AND version = ? AND remaining_quota > 0", nodeId, scriptId, version).
+		UpdateColumn("remaining_quota", gorm.Expr("remaining_quota - 1")).Error
+}
+
 // ListNodeCapabilities returns capabilities for a node.
 func ListNodeCapabilities(nodeId string) ([]NodeCapability, error) {
 	var caps []NodeCapability
