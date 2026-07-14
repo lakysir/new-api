@@ -43,7 +43,7 @@ type ScriptVersion struct {
 	RevokedReason     string `json:"revoked_reason,omitempty" gorm:"type:varchar(512)"`
 	RevokeSeverity    string `json:"revoke_severity,omitempty" gorm:"type:varchar(16)"`
 	CreatedAt         int64  `json:"created_at" gorm:"autoCreateTime"`
-	AuthorUsername    string `json:"author_username,omitempty" gorm:"->;-:migration"`
+	AuthorUsername    string `json:"author_username,omitempty" gorm:"-"`
 }
 
 func (ScriptVersion) TableName() string {
@@ -161,15 +161,49 @@ func ListScriptVersions(scriptId int) ([]ScriptVersion, error) {
 	return versions, err
 }
 
+// ListExecutableScriptVersions returns versions that providers may currently
+// list as node capabilities, newest first.
+func ListExecutableScriptVersions(scriptId int) ([]ScriptVersion, error) {
+	var versions []ScriptVersion
+	err := DB.Where("script_id = ? AND review_status = ? AND revoked_at = 0", scriptId, ScriptVersionApproved).
+		Order("version desc").
+		Omit("code").
+		Find(&versions).Error
+	return versions, err
+}
+
 func ListPublishedScriptVersions() ([]ScriptVersion, error) {
 	var versions []ScriptVersion
 	err := DB.Table("script_versions").
-		Select("script_versions.id,script_versions.script_id,script_versions.version,script_versions.author_id,script_versions.title,script_versions.category_id,script_versions.code_sha256,script_versions.signature_key_id,script_versions.signature,script_versions.review_status,script_versions.published_at,script_versions.revoked_at,script_versions.revoked_reason,script_versions.revoke_severity,users.username AS author_username").
-		Joins("LEFT JOIN users ON users.id = script_versions.author_id").
+		Select("script_versions.id,script_versions.script_id,script_versions.version,script_versions.author_id,script_versions.title,script_versions.category_id,script_versions.code_sha256,script_versions.signature_key_id,script_versions.signature,script_versions.review_status,script_versions.published_at,script_versions.revoked_at,script_versions.revoked_reason,script_versions.revoke_severity").
 		Order("script_versions.published_at desc,script_versions.id desc").
 		Limit(500).
 		Find(&versions).Error
+	if err == nil {
+		fillScriptVersionAuthorUsernames(versions)
+	}
 	return versions, err
+}
+
+func fillScriptVersionAuthorUsernames(versions []ScriptVersion) {
+	ids := make([]int, 0, len(versions))
+	for i := range versions {
+		ids = append(ids, versions[i].AuthorId)
+	}
+	var users []struct {
+		Id       int
+		Username string
+	}
+	if len(ids) == 0 || DB.Table("users").Select("id,username").Where("id IN ?", ids).Find(&users).Error != nil {
+		return
+	}
+	names := make(map[int]string, len(users))
+	for _, user := range users {
+		names[user.Id] = user.Username
+	}
+	for i := range versions {
+		versions[i].AuthorUsername = names[versions[i].AuthorId]
+	}
 }
 
 // RevokeScriptVersion marks a version revoked. It is idempotent-safe: revoking

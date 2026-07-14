@@ -289,11 +289,12 @@ func EnableCapability(cap *NodeCapability) error {
 	})
 }
 
-// DisableCapability takes a capability off the market (Provider-initiated).
-func DisableCapability(userId int, nodeId string, scriptId, version int) error {
-	res := DB.Model(&NodeCapability{}).
+// RemoveCapability takes a provider capability off the market. Removing the
+// row lets the same script version be listed again later as a fresh capability.
+func RemoveCapability(userId int, nodeId string, scriptId, version int) error {
+	res := DB.
 		Where("node_id = ? AND script_id = ? AND version = ? AND user_id = ?", nodeId, scriptId, version, userId).
-		Updates(map[string]any{"status": CapabilityStatusSuspended, "suspend_reason": "provider_disabled"})
+		Delete(&NodeCapability{})
 	if res.Error != nil {
 		return res.Error
 	}

@@ -47,7 +47,7 @@ type UserScript struct {
 	DeletedAt             gorm.DeletedAt `json:"-" gorm:"index"`
 	CodePreview           string         `json:"code_preview,omitempty" gorm:"-"`
 	PreviewTruncated      bool           `json:"preview_truncated,omitempty" gorm:"-"`
-	AuthorUsername        string         `json:"author_username,omitempty" gorm:"->;-:migration"`
+	AuthorUsername        string         `json:"author_username,omitempty" gorm:"-"`
 	HasUnpublishedChanges bool           `json:"has_unpublished_changes" gorm:"-"`
 	PreviousTitle         string         `json:"previous_title,omitempty" gorm:"-"`
 	PreviousDescription   string         `json:"previous_description,omitempty" gorm:"-"`
@@ -190,14 +190,16 @@ func ListUserScripts(userId int) ([]UserScript, error) {
 func ListScriptsByReviewStatus(status string) ([]UserScript, error) {
 	var scripts []UserScript
 	err := DB.Table("user_scripts").
-		Select("user_scripts.id,user_scripts.user_id,user_scripts.title,user_scripts.description,user_scripts.script_params,user_scripts.draft_code,user_scripts.review_status,user_scripts.review_note,user_scripts.latest_version,user_scripts.author_share_rate_ppm,user_scripts.platform_fee_rate_ppm,user_scripts.category_id,user_scripts.published,user_scripts.published_at,user_scripts.created_at,user_scripts.updated_at,users.username AS author_username,previous_version.title AS previous_title,previous_version.description AS previous_description,previous_version.script_params AS previous_script_params,previous_version.code AS previous_code").
-		Joins("LEFT JOIN users ON users.id = user_scripts.user_id").
+		Select("user_scripts.id,user_scripts.user_id,user_scripts.title,user_scripts.description,user_scripts.script_params,user_scripts.draft_code,user_scripts.review_status,user_scripts.review_note,user_scripts.latest_version,user_scripts.author_share_rate_ppm,user_scripts.platform_fee_rate_ppm,user_scripts.category_id,user_scripts.published,user_scripts.published_at,user_scripts.created_at,user_scripts.updated_at,previous_version.title AS previous_title,previous_version.description AS previous_description,previous_version.script_params AS previous_script_params,previous_version.code AS previous_code").
 		Joins("LEFT JOIN script_versions previous_version ON previous_version.script_id = user_scripts.id AND previous_version.version = user_scripts.latest_version").
 		Where("user_scripts.review_status = ?", status).
 		Order("user_scripts.updated_at desc,user_scripts.id desc").
 		Find(&scripts).Error
 	if err != nil {
 		return nil, err
+	}
+	for i := range scripts {
+		scripts[i].AuthorUsername, _ = GetUsernameById(scripts[i].UserId, true)
 	}
 	return scripts, nil
 }

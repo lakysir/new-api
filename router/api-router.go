@@ -267,6 +267,7 @@ func SetApiRouter(router *gin.Engine) {
 				scriptUserRoute.POST("/mine/:id/submit-review", controller.SubmitScriptForReview)
 				scriptUserRoute.POST("/mine/:id/publish-version", controller.PublishScriptVersion)
 				scriptUserRoute.GET("/mine/:id/versions", controller.ListScriptVersions)
+				scriptUserRoute.GET("/:id/versions/available", controller.ListExecutableScriptVersions)
 			}
 
 			// Operator review + revoke, and fixed-version fetch used by order

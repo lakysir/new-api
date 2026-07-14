@@ -432,6 +432,22 @@ func ListScriptVersions(c *gin.Context) {
 	common.ApiSuccess(c, versions)
 }
 
+// ListExecutableScriptVersions returns published versions available for node
+// capability listing.
+func ListExecutableScriptVersions(c *gin.Context) {
+	scriptId, err := strconv.Atoi(c.Param("id"))
+	if err != nil || scriptId <= 0 {
+		common.ApiErrorMsg(c, "invalid script id")
+		return
+	}
+	versions, err := model.ListExecutableScriptVersions(scriptId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, versions)
+}
+
 // GetFixedScriptVersion returns the manifest + code for a fixed, non-revoked,
 // approved version. This is the interface order execution must use (S-005):
 // plugins verify code_sha256 and signature before running.

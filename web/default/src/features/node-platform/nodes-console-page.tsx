@@ -38,15 +38,16 @@ import {
   createCapabilityTest,
   deleteDevice,
   deleteNode,
-  disableCapability,
   enableCapability,
+  listAvailableScriptVersions,
   listMyDevices,
   listMyNodes,
   listNodeCapabilities,
+  removeCapability,
   revokeDevice,
 } from './api'
 import { displayToMicros, formatUnix, microsToDisplay } from './lib/format'
-import type { Device, NodeCapability, NodeInfo } from './types'
+import type { Device, NodeCapability, NodeInfo, ScriptVersion } from './types'
 
 type PublishedScript = {
   id: number
@@ -69,6 +70,7 @@ export function NodesConsolePage() {
   const [hideInactive, setHideInactive] = useState(true)
   // Published scripts to pick from when listing a capability.
   const [pubScripts, setPubScripts] = useState<PublishedScript[]>([])
+  const [scriptVersions, setScriptVersions] = useState<Record<number, ScriptVersion[]>>({})
   // Per-node enable form: script id + version + price + quota.
   const [enableForm, setEnableForm] = useState<
     Record<string, { scriptId: string; version: string; price: string; quota: string }>
@@ -128,6 +130,24 @@ export function NodesConsolePage() {
       const current = p[nodeId] ?? { scriptId: '', version: '1', price: '', quota: '10' }
       return { ...p, [nodeId]: { ...current, ...patch } }
     })
+  }
+
+  async function selectScript(nodeId: string, value: string) {
+    if (!value) {
+      setForm(nodeId, { scriptId: '', version: '' })
+      return
+    }
+    const scriptId = Number(value)
+    try {
+      const versions = scriptVersions[scriptId] || (await listAvailableScriptVersions(scriptId))
+      setScriptVersions((current) => ({ ...current, [scriptId]: versions }))
+      setForm(nodeId, {
+        scriptId: value,
+        version: versions[0] ? String(versions[0].version) : '',
+      })
+    } catch (e) {
+      toast.error(String((e as Error).message))
+    }
   }
 
   useEffect(() => {
@@ -191,10 +211,20 @@ export function NodesConsolePage() {
     }
   }
 
-  async function onDisable(nodeId: string, scriptId: number, version: number) {
+  async function onRemove(nodeId: string, scriptId: number, version: number) {
+    if (
+      !window.confirm(
+        t('Unlist script #{{scriptId}} v{{version}} from this node?', {
+          scriptId,
+          version,
+        })
+      )
+    ) {
+      return
+    }
     try {
-      await disableCapability(nodeId, scriptId, version)
-      toast.success(t('Capability disabled'))
+      await removeCapability(nodeId, scriptId, version)
+      toast.success(t('Capability unlisted'))
       await loadCaps(nodeId)
     } catch (e) {
       toast.error(String((e as Error).message))
@@ -336,7 +366,7 @@ export function NodesConsolePage() {
               <select
                 className='h-9 min-w-[200px] rounded-md border px-2 text-sm'
                 value={enableForm[nodeId]?.scriptId || ''}
-                onChange={(e) => setForm(nodeId, { scriptId: e.target.value })}
+                onChange={(e) => selectScript(nodeId, e.target.value)}
               >
                 <option value=''>{t('Select a script')}</option>
                 {pubScripts.map((s) => (
@@ -345,12 +375,21 @@ export function NodesConsolePage() {
                   </option>
                 ))}
               </select>
-              <Input
-                className='w-20'
-                placeholder={t('Version')}
-                value={enableForm[nodeId]?.version ?? '1'}
+              <select
+                className='h-9 w-24 rounded-md border px-2 text-sm'
+                disabled={!enableForm[nodeId]?.scriptId}
+                value={enableForm[nodeId]?.version || ''}
                 onChange={(e) => setForm(nodeId, { version: e.target.value })}
-              />
+              >
+                <option value=''>{t('Version')}</option>
+                {(scriptVersions[Number(enableForm[nodeId]?.scriptId)] || []).map(
+                  (version) => (
+                    <option key={version.id} value={version.version}>
+                      v{version.version}
+                    </option>
+                  )
+                )}
+              </select>
               <Input
                 className='w-28'
                 placeholder={t('Price')}
@@ -393,10 +432,9 @@ export function NodesConsolePage() {
                       <Button
                         size='sm'
                         variant='destructive'
-                        disabled={c.status !== 'active'}
-                        onClick={() => onDisable(nodeId, c.script_id, c.version)}
+                        onClick={() => onRemove(nodeId, c.script_id, c.version)}
                       >
-                        {t('Disable')}
+                        {t('Unlist')}
                       </Button>
                     </TableCell>
                   </TableRow>

@@ -122,6 +122,10 @@ export function listPublishedScriptVersions() {
   return unwrap<ScriptVersion[]>(api.get('/api/scripts/versions/published'))
 }
 
+export function listAvailableScriptVersions(scriptId: number) {
+  return unwrap<ScriptVersion[]>(api.get(`/api/scripts/${scriptId}/versions/available`))
+}
+
 // Operator approves/rejects; on approve sets the platform service fee (ppm).
 export function reviewScript(
   scriptId: number,
@@ -175,7 +179,7 @@ export function listNodeCapabilities(nodeId: string) {
   return unwrap<NodeCapability[]>(api.get(`/api/nodes/${nodeId}/capabilities`))
 }
 
-export function disableCapability(nodeId: string, scriptId: number, version: number) {
+export function removeCapability(nodeId: string, scriptId: number, version: number) {
   return unwrap(
     api.delete(`/api/nodes/${nodeId}/capabilities/${scriptId}?version=${version}`)
   )

@@ -148,7 +148,8 @@ func EnableCapability(c *gin.Context) {
 	common.ApiSuccess(c, cap)
 }
 
-// DisableCapability removes a capability from the market.
+// DisableCapability removes a provider capability from the market. The route
+// name is retained for API compatibility; the record itself is deleted.
 func DisableCapability(c *gin.Context) {
 	nodeId, scriptId, version, ok := parseCapabilityParams(c)
 	if !ok {
@@ -158,7 +159,7 @@ func DisableCapability(c *gin.Context) {
 		common.ApiErrorMsg(c, "version query param is required")
 		return
 	}
-	if err := model.DisableCapability(c.GetInt("id"), nodeId, scriptId, version); err != nil {
+	if err := model.RemoveCapability(c.GetInt("id"), nodeId, scriptId, version); err != nil {
 		common.ApiErrorMsg(c, err.Error())
 		return
 	}
