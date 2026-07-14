@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service/relayhub"
@@ -16,7 +17,23 @@ var relayUpgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
-// wsRelayConn adapts *websocket.Conn to relayhub.Conn with a write mutex.
+const (
+	// relayPingInterval is how often the server pings each side to keep the
+	// connection warm. It must stay comfortably below the shortest idle timeout
+	// of any intermediary proxy (nginx proxy_read_timeout defaults to 60s), so
+	// that a provider executing a long task never lets the relay go idle long
+	// enough to be dropped before the result frame is delivered.
+	relayPingInterval = 25 * time.Second
+	// relayWriteWait bounds how long a single control-frame write may block.
+	relayWriteWait = 10 * time.Second
+	// relayPongWait is the read deadline; a missed pong past this window marks
+	// the peer dead so the read loop exits instead of hanging forever. Browsers
+	// (dashboard client and provider extension) auto-reply to pings with pongs.
+	relayPongWait = 3 * relayPingInterval
+)
+
+// wsRelayConn adapts *websocket.Conn to relayhub.Conn with a write mutex. The
+// mutex also serializes control (ping) writes against data-frame forwards.
 type wsRelayConn struct {
 	conn *websocket.Conn
 	mu   sync.Mutex
@@ -28,6 +45,14 @@ func (w *wsRelayConn) SendFrame(data []byte) error {
 	return w.conn.WriteMessage(websocket.BinaryMessage, data)
 }
 func (w *wsRelayConn) Close() error { return w.conn.Close() }
+
+// Ping sends a WebSocket ping control frame. Forwarding this through the proxy
+// counts as upstream activity and resets its idle read timeout.
+func (w *wsRelayConn) Ping() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(relayWriteWait))
+}
 
 // HandleDataPlaneRelay is the E2EE relay WSS endpoint. Each side (client /
 // provider) connects with ?task_id=&attempt=&role=, authenticated by a device
@@ -86,11 +111,40 @@ func HandleDataPlaneRelay(c *gin.Context) {
 	}()
 
 	conn.SetReadLimit(8 * 1024 * 1024) // allow large result/file frames
+
+	// Keepalive: an idle relay (provider busy executing, no frames flowing) must
+	// not be dropped by a proxy idle timeout before the result is delivered. Ping
+	// periodically and extend the read deadline on every pong / message.
+	_ = conn.SetReadDeadline(time.Now().Add(relayPongWait))
+	conn.SetPongHandler(func(string) error {
+		return conn.SetReadDeadline(time.Now().Add(relayPongWait))
+	})
+	pingStop := make(chan struct{})
+	defer close(pingStop)
+	go func() {
+		ticker := time.NewTicker(relayPingInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-pingStop:
+				return
+			case <-ticker.C:
+				if err := wrapped.Ping(); err != nil {
+					// Peer gone; unblock the read loop by closing the connection.
+					_ = conn.Close()
+					return
+				}
+			}
+		}
+	}()
+
 	for {
 		_, data, err := conn.ReadMessage()
 		if err != nil {
 			return
 		}
+		// Any inbound traffic proves the peer is alive; extend the deadline.
+		_ = conn.SetReadDeadline(time.Now().Add(relayPongWait))
 		// Forward opaque frame to the peer; if absent, drop (client retries).
 		_ = relayhub.Default.Forward(taskID, attempt, role, data)
 	}
