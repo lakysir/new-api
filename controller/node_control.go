@@ -125,12 +125,50 @@ func HandleNodeControl(c *gin.Context) {
 				}
 			}
 			_ = wrapped.SendJSON(map[string]any{"type": "pong", "ts": time.Now().Unix()})
-		case "task.accept", "task.reject", "task.result_ready", "task.failed", "receipt.submit":
-			// Execution-result events are handled by the REST receipt endpoint in
-			// the MVP; acknowledge to keep the channel flowing.
+		case "task.accept":
+			taskID, _ := msg["task_id"].(string)
+			if taskID != "" {
+				if o, _ := model.GetOrder(taskID); o != nil && o.State == model.OrderOffered {
+					_, _ = model.ApplyTransition(taskID, model.OrderReserved, nil)
+					_, _ = model.ApplyTransition(taskID, model.OrderDataReady, nil)
+					_, _ = model.ApplyTransition(taskID, model.OrderRunning, nil)
+				}
+			}
+			_ = wrapped.SendJSON(map[string]any{"type": "ack", "event_id": msg["event_id"]})
+		case "task.result_ready":
+			taskID, _ := msg["task_id"].(string)
+			attempt := int(numberValue(msg["attempt"]))
+			if o, _ := model.GetOrder(taskID); o != nil && o.State == model.OrderRunning {
+				_, _ = model.ApplyTransition(taskID, model.OrderResultReady, nil)
+				_, _ = model.ApplyTransition(taskID, model.OrderVerifying, nil)
+			}
+			if ta, _ := model.GetTaskAttempt(taskID, attempt); ta != nil {
+				_ = model.ReleaseLease(ta.LeaseId, "result_ready")
+			}
+			_ = wrapped.SendJSON(map[string]any{"type": "ack", "event_id": msg["event_id"]})
+		case "task.reject", "task.failed":
+			taskID, _ := msg["task_id"].(string)
+			attempt := int(numberValue(msg["attempt"]))
+			if o, _ := model.GetOrder(taskID); o != nil {
+				if o.State == model.OrderOffered {
+					_, _ = model.ApplyTransition(taskID, model.OrderMatching, nil)
+				} else if o.State == model.OrderReserved || o.State == model.OrderDataReady || o.State == model.OrderRunning {
+					_, _ = model.ApplyTransition(taskID, model.OrderFailed, nil)
+				}
+			}
+			if ta, _ := model.GetTaskAttempt(taskID, attempt); ta != nil {
+				_ = model.ReleaseLease(ta.LeaseId, "execution_failed")
+			}
+			_ = wrapped.SendJSON(map[string]any{"type": "ack", "event_id": msg["event_id"]})
+		case "balance.check.result", "receipt.submit":
 			_ = wrapped.SendJSON(map[string]any{"type": "ack", "event_id": msg["event_id"]})
 		default:
 			// ignore unknown control frames
 		}
 	}
+}
+
+func numberValue(v any) float64 {
+	n, _ := v.(float64)
+	return n
 }

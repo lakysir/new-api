@@ -28,6 +28,7 @@ import { api } from '@/lib/api'
 
 import {
   createOrder,
+  cancelOrder,
   getLedgerBalances,
   getOrder,
   listScriptOffers,
@@ -62,6 +63,7 @@ export function AitokenPurchasePage() {
   const [quote, setQuote] = useState<PriceBreakdown | null>(null)
   const [order, setOrder] = useState<Order | null>(null)
   const [busy, setBusy] = useState(false)
+  const [running, setRunning] = useState(false)
   // Client relay needs an API key to authenticate to the data-plane relay and a
   // stable client device id for the HKDF context.
   const [apiKey, setApiKey] = useState('')
@@ -100,6 +102,7 @@ export function AitokenPurchasePage() {
       const o = await listScriptOffers(scriptId, version)
       setOffers(o)
       setNodeId('')
+      setQuote(null)
       if (o.length === 0) toast.info(t('No provider offers yet for this version'))
     } catch (e) {
       toast.error(String((e as Error).message))
@@ -128,8 +131,8 @@ export function AitokenPurchasePage() {
     // Validate config is JSON before ordering.
     let inputHash = ''
     try {
-      JSON.parse(configText)
-      inputHash = await sha256Hex(configText)
+      const config = JSON.parse(configText)
+      inputHash = await sha256Hex(JSON.stringify(config))
     } catch {
       toast.error(t('Config must be valid JSON'))
       return
@@ -155,6 +158,17 @@ export function AitokenPurchasePage() {
     if (!order) return
     try {
       setOrder(await getOrder(order.id))
+    } catch (e) {
+      toast.error(String((e as Error).message))
+    }
+  }
+
+  async function onCancel() {
+    if (!order) return
+    try {
+      setOrder(await cancelOrder(order.id))
+      await loadBalance()
+      toast.success(t('Order cancelled'))
     } catch (e) {
       toast.error(String((e as Error).message))
     }
@@ -188,6 +202,7 @@ export function AitokenPurchasePage() {
     })
     setRelayStatus(t('Connecting to relay...'))
     setRelayResult('')
+    setRunning(true)
     try {
       await session.connect()
       setRelayStatus(t('Waiting for provider handshake...'))
@@ -212,11 +227,13 @@ export function AitokenPurchasePage() {
         /* receipt submit best-effort; reconciliation retries on next receipt */
       }
       await refreshOrder()
+      await loadBalance()
     } catch (e) {
       setRelayStatus('')
       toast.error(String((e as Error).message))
     } finally {
       session.close()
+      setRunning(false)
     }
   }
 
@@ -251,7 +268,13 @@ export function AitokenPurchasePage() {
             <select
               className='h-9 min-w-[220px] rounded-md border px-2 text-sm'
               value={scriptId}
-              onChange={(e) => setScriptId(Number(e.target.value))}
+              onChange={(e) => {
+                setScriptId(Number(e.target.value))
+                setOffers([])
+                setNodeId('')
+                setQuote(null)
+                setOrder(null)
+              }}
             >
               <option value={0}>{t('Select a script')}</option>
               {scripts.map((s) => (
@@ -264,7 +287,12 @@ export function AitokenPurchasePage() {
               className='w-24'
               type='number'
               value={version}
-              onChange={(e) => setVersion(Number(e.target.value))}
+              onChange={(e) => {
+                setVersion(Number(e.target.value))
+                setOffers([])
+                setNodeId('')
+                setQuote(null)
+              }}
               placeholder={t('Version')}
             />
             <Button variant='outline' onClick={loadOffers}>
@@ -284,7 +312,11 @@ export function AitokenPurchasePage() {
                       type='radio'
                       name='offer'
                       checked={nodeId === o.node_id}
-                      onChange={() => setNodeId(o.node_id)}
+                      disabled={!o.online || o.remaining_quota <= 0}
+                      onChange={() => {
+                        setNodeId(o.node_id)
+                        setQuote(null)
+                      }}
                     />
                     <span className='font-mono text-xs'>{o.node_id}</span>
                     <span className='font-semibold'>{microsToDisplay(o.price_micros)}</span>
@@ -319,7 +351,7 @@ export function AitokenPurchasePage() {
           <Button variant='outline' onClick={onQuote}>
             {t('Get quote')}
           </Button>
-          <Button onClick={onPurchase} disabled={busy}>
+          <Button onClick={onPurchase} disabled={busy || !quote || quote.MaxCustomerMicros > (bal?.client_available ?? 0)}>
             {t('Purchase (reserve funds)')}
           </Button>
         </div>
@@ -352,6 +384,16 @@ export function AitokenPurchasePage() {
               {t('State')}: <b>{order.state}</b> · {t('Reserved')}:{' '}
               {microsToDisplay(order.max_amount_micros)}
             </div>
+            {order.chosen_node_id && (
+              <div className='mt-1 text-xs'>
+                {t('Provider node')}: <span className='font-mono'>{order.chosen_node_id}</span>
+              </div>
+            )}
+            {['FUNDS_RESERVED', 'MATCHING', 'OFFERED'].includes(order.state) && (
+              <Button className='mt-2' size='sm' variant='outline' onClick={onCancel}>
+                {t('Cancel order')}
+              </Button>
+            )}
 
             {/* Execute via the E2EE relay: send config to the provider, get result. */}
             <div className='mt-3 border-t pt-3'>
@@ -364,7 +406,12 @@ export function AitokenPurchasePage() {
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
                 />
-                <Button onClick={runViaRelay}>{t('Send & run')}</Button>
+                <Button
+                  onClick={runViaRelay}
+                  disabled={running || !['OFFERED', 'RESERVED', 'DATA_READY', 'RUNNING'].includes(order.state)}
+                >
+                  {running ? t('Running...') : t('Send & run')}
+                </Button>
                 {relayStatus && <span className='text-muted-foreground text-xs'>{relayStatus}</span>}
               </div>
               {relayResult && (

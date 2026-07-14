@@ -6,7 +6,9 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service/dispatch"
 	"github.com/QuantumNous/new-api/service/order"
+	"github.com/QuantumNous/new-api/service/settlement"
 	"github.com/gin-gonic/gin"
 )
 
@@ -100,6 +102,18 @@ func CreateOrder(c *gin.Context) {
 		common.ApiErrorMsg(c, err.Error())
 		return
 	}
+	if o.State == model.OrderCreated {
+		o, err = settlement.ReserveFunds(o.Id)
+		if err != nil {
+			common.ApiErrorMsg(c, err.Error())
+			return
+		}
+		if _, err = dispatch.Dispatch(o.Id, 1); err != nil && !errors.Is(err, dispatch.ErrNoCandidates) {
+			common.ApiErrorMsg(c, err.Error())
+			return
+		}
+		o, _ = model.GetOrder(o.Id)
+	}
 	common.ApiSuccess(c, gin.H{"order": o, "created": created})
 }
 
@@ -133,6 +147,14 @@ func CancelOrder(c *gin.Context) {
 			common.ApiErrorMsg(c, "order cannot be cancelled in its current state")
 			return
 		}
+		common.ApiError(c, err)
+		return
+	}
+	if ta, _ := model.GetTaskAttempt(id, 1); ta != nil {
+		_ = model.ReleaseLease(ta.LeaseId, "cancelled")
+	}
+	updated, err = settlement.Refund(updated.Id)
+	if err != nil {
 		common.ApiError(c, err)
 		return
 	}

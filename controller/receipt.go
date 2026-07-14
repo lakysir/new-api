@@ -44,6 +44,13 @@ func SubmitReceipt(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	// Receipts can beat the control-channel result_ready frame by a few
+	// milliseconds. Bring a running order to its reconciliation state so a
+	// matching pair can settle deterministically regardless of arrival order.
+	if o, _ := model.GetOrder(req.OrderId); o != nil && o.State == model.OrderRunning {
+		_, _ = model.ApplyTransition(req.OrderId, model.OrderResultReady, nil)
+		_, _ = model.ApplyTransition(req.OrderId, model.OrderVerifying, nil)
+	}
 
 	// Try to reconcile; incomplete is a normal "waiting for the other party".
 	result, err := settlement.ReconcileAndSettle(req.OrderId, req.TaskId, req.Attempt)

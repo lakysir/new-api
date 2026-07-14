@@ -40,14 +40,18 @@ import {
   deleteNode,
   enableCapability,
   listAvailableScriptVersions,
+  listBalanceChecks,
+  listCategories,
   listMyDevices,
   listMyNodes,
   listNodeCapabilities,
   removeCapability,
+  requestBalanceCheck,
   revokeDevice,
 } from './api'
 import { displayToMicros, formatUnix, microsToDisplay } from './lib/format'
 import type { Device, NodeCapability, NodeInfo, ScriptVersion } from './types'
+import type { NodeBalanceCheck, ScriptCategory } from './api'
 
 type PublishedScript = {
   id: number
@@ -71,6 +75,9 @@ export function NodesConsolePage() {
   // Published scripts to pick from when listing a capability.
   const [pubScripts, setPubScripts] = useState<PublishedScript[]>([])
   const [scriptVersions, setScriptVersions] = useState<Record<number, ScriptVersion[]>>({})
+  const [categories, setCategories] = useState<ScriptCategory[]>([])
+  const [balanceChecks, setBalanceChecks] = useState<Record<string, NodeBalanceCheck[]>>({})
+  const [checking, setChecking] = useState('')
   // Per-node enable form: script id + version + price + quota.
   const [enableForm, setEnableForm] = useState<
     Record<string, { scriptId: string; version: string; price: string; quota: string }>
@@ -84,15 +91,17 @@ export function NodesConsolePage() {
   async function loadAll() {
     setLoading(true)
     try {
-      const [d, n, sq] = await Promise.all([
+      const [d, n, sq, categoryList] = await Promise.all([
         listMyDevices(),
         listMyNodes(),
         api.get('/api/scripts/square', { params: { limit: 200 } }),
+        listCategories(),
       ])
       setDevices(d)
       setNodes(n)
       const items = (sq.data?.data?.items ?? sq.data?.items ?? sq.data?.data ?? []) as PublishedScript[]
       setPubScripts(items)
+      setCategories(categoryList)
     } catch (e) {
       toast.error(String((e as Error).message))
     } finally {
@@ -110,6 +119,20 @@ export function NodesConsolePage() {
     }
     const scriptId = Number(f.scriptId)
     const version = Number(f.version)
+    const script = pubScripts.find((item) => item.id === scriptId)
+    if (script?.category_id) {
+      const status = (balanceChecks[nodeId] || []).find(
+        (item) => item.category_id === script.category_id
+      )
+      if (!status?.balance_ok || status.expires_at <= Date.now() / 1000) {
+        toast.error(t('Check the site balance before listing this capability'))
+        document.getElementById(`balance-checks-${nodeId}`)?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+        })
+        return
+      }
+    }
     try {
       const test = await createCapabilityTest(nodeId, scriptId, version)
       await enableCapability(nodeId, scriptId, {
@@ -206,8 +229,41 @@ export function NodesConsolePage() {
     try {
       const list = await listNodeCapabilities(nodeId)
       setCaps((p) => ({ ...p, [nodeId]: list }))
+      const checks = await listBalanceChecks(nodeId)
+      setBalanceChecks((current) => ({ ...current, [nodeId]: checks }))
     } catch (e) {
       toast.error(String((e as Error).message))
+    }
+  }
+
+  async function onBalanceCheck(nodeId: string, categoryId: number) {
+    const key = `${nodeId}:${categoryId}`
+    const previousCheckedAt = (balanceChecks[nodeId] || []).find(
+      (item) => item.category_id === categoryId
+    )?.checked_at ?? 0
+    setChecking(key)
+    try {
+      await requestBalanceCheck(nodeId, categoryId)
+      toast.success(t('Balance check sent to the provider plugin'))
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        await new Promise((resolve) => window.setTimeout(resolve, 1500))
+        const checks = await listBalanceChecks(nodeId)
+        setBalanceChecks((current) => ({ ...current, [nodeId]: checks }))
+        const result = checks.find((item) => item.category_id === categoryId)
+        if (result && result.checked_at > previousCheckedAt) {
+          if (result.balance_ok) {
+            toast.success(t('Balance check passed'))
+          } else {
+            toast.error(result.error_message || t('Balance check failed'))
+          }
+          return
+        }
+      }
+      toast.error(t('Balance check timed out'))
+    } catch (e) {
+      toast.error(String((e as Error).message))
+    } finally {
+      setChecking('')
     }
   }
 
@@ -351,12 +407,38 @@ export function NodesConsolePage() {
               {t('Capabilities of node {{id}}', { id: nodeId })}
             </div>
 
-            {/* Balance checks must run in the browser plugin (it holds the
-                target-site session). Do them there before listing a category. */}
-            <div className='mb-3 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-xs'>
-              {t(
-                'Run the site balance check in the browser plugin (popup → 本节点能力 → 读余额检查) before listing a category. Listing requires a passing balance check.'
-              )}
+            <div id={`balance-checks-${nodeId}`} className='mb-3 border-y py-3'>
+              <div className='mb-2 text-sm font-medium'>{t('Site balance checks')}</div>
+              <div className='flex flex-wrap gap-2'>
+                {categories.map((category) => {
+                  const status = (balanceChecks[nodeId] || []).find(
+                    (item) => item.category_id === category.id
+                  )
+                  const valid = Boolean(status?.balance_ok && status.expires_at > Date.now() / 1000)
+                  const key = `${nodeId}:${category.id}`
+                  return (
+                    <div key={category.id} className='flex items-center gap-2 border px-3 py-2 text-sm'>
+                      <span>{category.name}</span>
+                      <span className={valid ? 'text-emerald-600' : 'text-muted-foreground'}>
+                        {valid ? t('Passed') : t('Not checked')}
+                      </span>
+                      <Button
+                        size='sm'
+                        variant='outline'
+                        disabled={!category.balance_script_id || checking === key}
+                        onClick={() => onBalanceCheck(nodeId, category.id)}
+                      >
+                        {checking === key ? t('Checking...') : t('Check balance')}
+                      </Button>
+                      {!valid && status?.error_message && (
+                        <span className='max-w-80 text-xs text-red-600'>
+                          {status.error_message}
+                        </span>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
             </div>
 
             {/* List a capability: pick a published script + version, set price and

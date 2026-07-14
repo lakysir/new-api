@@ -97,6 +97,7 @@ export type Order = {
   input_hash: string
   max_amount_micros: number
   final_amount_micros: number
+  chosen_node_id: string
   created_at: number
 }
 

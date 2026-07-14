@@ -7,6 +7,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service/nodehub"
 	"github.com/gin-gonic/gin"
 )
 
@@ -83,6 +84,64 @@ type balanceCheckRequest struct {
 	BalanceOk     bool   `json:"balance_ok"`
 	BalanceMicros int64  `json:"balance_micros"`
 	Tier          string `json:"tier"`
+	ErrorMessage  string `json:"error_message"`
+}
+
+func ownedNode(c *gin.Context, nodeId string) (*model.Node, bool) {
+	node, err := model.GetNode(nodeId)
+	if err != nil || node.UserId != c.GetInt("id") {
+		common.ApiErrorMsg(c, "node not found")
+		return nil, false
+	}
+	return node, true
+}
+
+// RequestBalanceCheck sends a free control-plane probe command to the owner's
+// live plugin. It creates no paid order, lease, price snapshot or ledger entry.
+func RequestBalanceCheck(c *gin.Context) {
+	nodeId := c.Param("id")
+	if _, ok := ownedNode(c, nodeId); !ok {
+		return
+	}
+	var req struct {
+		CategoryId int `json:"category_id"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.CategoryId <= 0 {
+		common.ApiErrorMsg(c, "category_id is required")
+		return
+	}
+	cat, err := model.GetScriptCategory(req.CategoryId)
+	if err != nil || cat.BalanceScriptId <= 0 || cat.BalanceScriptVersion <= 0 {
+		common.ApiErrorMsg(c, "category has no balance-probe script")
+		return
+	}
+	if _, err := model.GetExecutableScriptVersion(cat.BalanceScriptId, cat.BalanceScriptVersion); err != nil {
+		common.ApiErrorMsg(c, "balance-probe script is not executable")
+		return
+	}
+	eventId := model.NewEventId()
+	if err := nodehub.Default.Send(nodeId, gin.H{
+		"type": "balance.check", "event_id": eventId, "node_id": nodeId,
+		"category_id": req.CategoryId, "script_id": cat.BalanceScriptId,
+		"script_version": cat.BalanceScriptVersion, "target_site": cat.Site,
+	}); err != nil {
+		common.ApiErrorMsg(c, "node is not connected")
+		return
+	}
+	common.ApiSuccess(c, gin.H{"event_id": eventId, "dispatched": true})
+}
+
+func ListBalanceChecks(c *gin.Context) {
+	nodeId := c.Param("id")
+	if _, ok := ownedNode(c, nodeId); !ok {
+		return
+	}
+	statuses, err := model.ListNodeSiteStatuses(nodeId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, statuses)
 }
 
 // ReportBalanceCheck records a node's balance-probe result for a category. The
@@ -91,6 +150,9 @@ type balanceCheckRequest struct {
 // which the node may list capabilities in that category.
 func ReportBalanceCheck(c *gin.Context) {
 	nodeId := c.Param("id")
+	if _, ok := ownedNode(c, nodeId); !ok {
+		return
+	}
 	var req balanceCheckRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		common.ApiError(c, err)
@@ -100,7 +162,7 @@ func ReportBalanceCheck(c *gin.Context) {
 		common.ApiErrorMsg(c, "category_id is required")
 		return
 	}
-	now := time.Now().Unix()
+	now := time.Now().UnixMilli()
 	expiresAt := int64(0)
 	if req.BalanceOk {
 		expiresAt = time.Now().Add(balanceCheckTTL).Unix()
@@ -112,6 +174,7 @@ func ReportBalanceCheck(c *gin.Context) {
 		BalanceOk:     req.BalanceOk,
 		BalanceMicros: req.BalanceMicros,
 		Tier:          req.Tier,
+		ErrorMessage:  req.ErrorMessage,
 		CheckedAt:     now,
 		ExpiresAt:     expiresAt,
 	}

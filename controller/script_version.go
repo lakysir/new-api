@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -270,13 +271,23 @@ func PublishScriptVersion(c *gin.Context) {
 		return
 	}
 
+	allowedOrigins := "[]"
+	if script.CategoryId > 0 {
+		if category, categoryErr := model.GetScriptCategory(script.CategoryId); categoryErr == nil {
+			if origin := siteOrigin(category.Site); origin != "" {
+				if encoded, marshalErr := common.Marshal([]string{origin}); marshalErr == nil {
+					allowedOrigins = string(encoded)
+				}
+			}
+		}
+	}
 	version := &model.ScriptVersion{
 		ScriptId:          script.Id,
 		AuthorId:          script.UserId,
 		Title:             script.Title,
 		Description:       script.Description,
 		ScriptParams:      script.ScriptParams,
-		AllowedOrigins:    "[]",
+		AllowedOrigins:    allowedOrigins,
 		TimeoutSeconds:    180,
 		CategoryId:        script.CategoryId,
 		PricingTemplateId: templateId,
@@ -330,6 +341,23 @@ func PublishScriptVersion(c *gin.Context) {
 		"code_sha256": version.CodeSha256,
 		"signed":      version.Signature != "",
 	})
+}
+
+// siteOrigin converts a category site (full URL or bare hostname) to the
+// browser origin stored in the signed script manifest.
+func siteOrigin(site string) string {
+	raw := strings.TrimSpace(site)
+	if raw == "" {
+		return ""
+	}
+	if !strings.Contains(raw, "://") {
+		raw = "https://" + raw
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return ""
+	}
+	return parsed.Scheme + "://" + parsed.Host
 }
 
 // signPublishedVersion signs the manifest for a freshly created version and

@@ -85,6 +85,26 @@ export function reportBalanceCheck(
   return unwrap(api.post(`/api/nodes/${nodeId}/balance-check`, body))
 }
 
+export type NodeBalanceCheck = {
+  category_id: number
+  balance_ok: boolean
+  balance_micros: number
+  tier: string
+  error_message?: string
+  checked_at: number
+  expires_at: number
+}
+
+export function requestBalanceCheck(nodeId: string, categoryId: number) {
+  return unwrap<{ event_id: string; dispatched: boolean }>(
+    api.post(`/api/nodes/${nodeId}/balance-check/request`, { category_id: categoryId })
+  )
+}
+
+export function listBalanceChecks(nodeId: string) {
+  return unwrap<NodeBalanceCheck[]>(api.get(`/api/nodes/${nodeId}/balance-checks`))
+}
+
 export function publishScriptVersion(scriptId: number, pricingTemplateId?: number) {
   return unwrap(
     api.post(`/api/scripts/mine/${scriptId}/publish-version`, {

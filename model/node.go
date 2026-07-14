@@ -96,6 +96,7 @@ type NodeSiteStatus struct {
 	BalanceOk     bool   `json:"balance_ok" gorm:"index"`
 	BalanceMicros int64  `json:"balance_micros" gorm:"default:0"` // reported balance (informational)
 	Tier          string `json:"tier" gorm:"type:varchar(32)"`    // reported account tier
+	ErrorMessage  string `json:"error_message,omitempty" gorm:"type:varchar(512)"`
 	CheckedAt     int64  `json:"checked_at" gorm:"default:0"`
 	ExpiresAt     int64  `json:"expires_at" gorm:"index;default:0"`
 }
@@ -222,6 +223,7 @@ func RecordBalanceCheck(s *NodeSiteStatus) error {
 	return DB.Model(&NodeSiteStatus{}).Where("id = ?", existing.Id).Updates(map[string]any{
 		"balance_ok": s.BalanceOk, "balance_micros": s.BalanceMicros,
 		"tier": s.Tier, "checked_at": s.CheckedAt, "expires_at": s.ExpiresAt,
+		"error_message": s.ErrorMessage,
 	}).Error
 }
 
@@ -237,6 +239,14 @@ func HasValidBalanceCheck(nodeId string, categoryId int) (bool, error) {
 		return false, err
 	}
 	return s.IsValid(), nil
+}
+
+// ListNodeSiteStatuses returns the latest balance probe for every category on
+// a node. Probe execution is free and therefore has no order or ledger rows.
+func ListNodeSiteStatuses(nodeId string) ([]NodeSiteStatus, error) {
+	var statuses []NodeSiteStatus
+	err := DB.Where("node_id = ?", nodeId).Order("category_id ASC").Find(&statuses).Error
+	return statuses, err
 }
 
 // EnableCapability lists (or updates) a script version on a node. It requires:
