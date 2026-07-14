@@ -39,6 +39,10 @@ export type ScriptVersion = {
   author_username?: string
   title: string
   category_id: number
+  // Author-configured default task params (JSON object) for this version. The
+  // purchase page loads these into the config editor when the script/version
+  // is selected so the client sends real params, not a generic placeholder.
+  script_params?: string
   code_sha256: string
   signature_key_id?: string
   signature?: string

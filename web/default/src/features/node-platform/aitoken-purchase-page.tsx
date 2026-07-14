@@ -38,12 +38,26 @@ import {
 } from './api'
 import { ClientRelaySession } from './lib/client-relay-session'
 import { microsToDisplay } from './lib/format'
-import type { LedgerBalances, Order, PriceBreakdown } from './types'
+import type { LedgerBalances, Order, PriceBreakdown, ScriptVersion } from './types'
 
 type PublishedScript = { id: number; title: string; description?: string; latest_version?: number }
 type PurchaseDraft = { scriptId: number; version: number; configText: string }
 
 const DEFAULT_CONFIG_TEXT = '{\n  "prompt": "a dog"\n}'
+
+// configTextFromParams turns a version's author-configured script_params into
+// pretty-printed editor text. Falls back to the raw string (or the generic
+// default) when params are absent or not valid JSON, so the editor is never
+// left with placeholder content that would be sent to the provider verbatim.
+function configTextFromParams(scriptParams: string | undefined): string {
+  const raw = (scriptParams ?? '').trim()
+  if (!raw) return DEFAULT_CONFIG_TEXT
+  try {
+    return JSON.stringify(JSON.parse(raw), null, 2)
+  } catch {
+    return raw
+  }
+}
 
 function getDraftStorageKey() {
   const userId = window.localStorage.getItem('uid') ?? 'anonymous'
@@ -108,7 +122,8 @@ export function AitokenPurchasePage() {
   const [scripts, setScripts] = useState<PublishedScript[]>([])
   const [scriptId, setScriptId] = useState(initialDraft.scriptId)
   const [version, setVersion] = useState(initialDraft.version)
-  const [versions, setVersions] = useState<number[]>([])
+  const [availableVersions, setAvailableVersions] = useState<ScriptVersion[]>([])
+  const versions = availableVersions.map((item) => item.version).sort((a, b) => b - a)
   const [offers, setOffers] = useState<ScriptOffer[]>([])
   const [nodeId, setNodeId] = useState('') // chosen offer; empty = cheapest
   const [configText, setConfigText] = useState(initialDraft.configText)
@@ -120,10 +135,15 @@ export function AitokenPurchasePage() {
   const [relayStatus, setRelayStatus] = useState<string>('')
   const [offersLoading, setOffersLoading] = useState(false)
 
+  // selectScript switches the active script and picks a version. When
+  // loadParams is true (an explicit user switch) the config editor is reset to
+  // that version's author-configured params; on the initial restore we keep the
+  // user's saved draft instead of clobbering it.
   async function selectScript(
     value: number,
     preferredVersion?: number,
-    fallbackVersion?: number
+    fallbackVersion?: number,
+    loadParams = true
   ) {
     setScriptId(value)
     setOffers([])
@@ -131,19 +151,23 @@ export function AitokenPurchasePage() {
     setQuote(null)
     setOrder(null)
     if (!value) {
-      setVersions([])
+      setAvailableVersions([])
       return
     }
     try {
       const available = await listAvailableScriptVersions(value)
       const values = available.map((item) => item.version).sort((a, b) => b - a)
-      setVersions(values)
+      setAvailableVersions(available)
       const selectedVersion =
         (preferredVersion && values.includes(preferredVersion) ? preferredVersion : undefined) ??
         values[0] ??
         fallbackVersion ??
         1
       setVersion(selectedVersion)
+      if (loadParams) {
+        const selected = available.find((item) => item.version === selectedVersion)
+        setConfigText(configTextFromParams(selected?.script_params))
+      }
       await loadOffersFor(value, selectedVersion)
     } catch (e) {
       toast.error(String((e as Error).message))
@@ -198,7 +222,9 @@ export function AitokenPurchasePage() {
       setScripts(list)
       const savedScript = list.find((item) => item.id === initialDraft.scriptId)
       if (savedScript) {
-        await selectScript(initialDraft.scriptId, initialDraft.version, savedScript.latest_version)
+        // Restore the saved draft config as-is; don't overwrite it with the
+        // version's default params on page load.
+        await selectScript(initialDraft.scriptId, initialDraft.version, savedScript.latest_version, false)
       } else if (initialDraft.scriptId) {
         setScriptId(0)
       }
@@ -464,6 +490,8 @@ export function AitokenPurchasePage() {
                 setOffers([])
                 setNodeId('')
                 setQuote(null)
+                const selected = availableVersions.find((item) => item.version === selectedVersion)
+                setConfigText(configTextFromParams(selected?.script_params))
                 if (scriptId) void loadOffersFor(scriptId, selectedVersion)
               }}
             >
