@@ -46,7 +46,6 @@ type ScriptVersion struct {
 	AuthorUsername      string `json:"author_username,omitempty" gorm:"-"`
 	AuthorShareRatePPM   int64  `json:"author_share_rate_ppm" gorm:"-"`
 	PlatformFeeRatePPM   int64  `json:"platform_fee_rate_ppm" gorm:"-"`
-	PlatformFeeMinMicros int64  `json:"platform_fee_min_micros" gorm:"-"`
 }
 
 func (ScriptVersion) TableName() string {
@@ -212,7 +211,6 @@ func fillScriptVersionPricing(versions []ScriptVersion) {
 		if template, ok := byID[versions[i].PricingTemplateId]; ok {
 			versions[i].AuthorShareRatePPM = template.AuthorShareRatePPM
 			versions[i].PlatformFeeRatePPM = template.PlatformFeeRatePPM
-			versions[i].PlatformFeeMinMicros = template.PlatformFeeMinMicros
 		}
 	}
 }
@@ -241,7 +239,7 @@ func DeleteHistoricalScriptVersion(scriptId, version int) error {
 
 // UpdateScriptVersionPricing creates a fresh immutable pricing template and
 // rebinds the version. Existing order snapshots retain their original prices.
-func UpdateScriptVersionPricing(scriptId, version int, authorRate, platformRate, executionFee int64) (*ScriptVersion, error) {
+func UpdateScriptVersionPricing(scriptId, version int, authorRate, platformRate int64) (*ScriptVersion, error) {
 	var updated ScriptVersion
 	err := DB.Transaction(func(tx *gorm.DB) error {
 		var current ScriptVersion
@@ -253,7 +251,7 @@ func UpdateScriptVersionPricing(scriptId, version int, authorRate, platformRate,
 		}
 		tpl := PricingTemplate{
 			Currency: "USD", ProviderPriceMode: "per_task", AuthorShareRatePPM: authorRate,
-			PlatformFeeRatePPM: platformRate, PlatformFeeMinMicros: executionFee,
+			PlatformFeeRatePPM: platformRate, PlatformFeeMinMicros: 0,
 			FailurePolicy: "full_refund", RuleVersion: "admin-" + time.Now().Format("20060102150405"),
 		}
 		if err := tx.Create(&tpl).Error; err != nil {
@@ -263,7 +261,7 @@ func UpdateScriptVersionPricing(scriptId, version int, authorRate, platformRate,
 			return err
 		}
 		current.PricingTemplateId = tpl.Id
-		current.AuthorShareRatePPM, current.PlatformFeeRatePPM, current.PlatformFeeMinMicros = authorRate, platformRate, executionFee
+		current.AuthorShareRatePPM, current.PlatformFeeRatePPM = authorRate, platformRate
 		updated = current
 		return nil
 	})

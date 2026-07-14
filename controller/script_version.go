@@ -527,22 +527,34 @@ func DeleteScriptVersion(c *gin.Context) {
 
 func UpdateScriptVersionPricing(c *gin.Context) {
 	scriptId, err := strconv.Atoi(c.Param("id"))
-	if err != nil || scriptId <= 0 { common.ApiErrorMsg(c, "invalid script id"); return }
+	if err != nil || scriptId <= 0 {
+		common.ApiErrorMsg(c, "invalid script id")
+		return
+	}
 	version, err := strconv.Atoi(c.Param("version"))
-	if err != nil || version <= 0 { common.ApiErrorMsg(c, "invalid version"); return }
+	if err != nil || version <= 0 {
+		common.ApiErrorMsg(c, "invalid version")
+		return
+	}
 	var req struct {
 		AuthorShareRatePPM int64 `json:"author_share_rate_ppm"`
 		PlatformFeeRatePPM int64 `json:"platform_fee_rate_ppm"`
-		ExecutionFeeMicros int64 `json:"execution_fee_micros"`
 	}
-	if err := c.ShouldBindJSON(&req); err != nil { common.ApiError(c, err); return }
-	if req.AuthorShareRatePPM < 0 || req.AuthorShareRatePPM > 1_000_000 || req.PlatformFeeRatePPM < 0 || req.PlatformFeeRatePPM > 1_000_000 || req.ExecutionFeeMicros < 0 {
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if req.AuthorShareRatePPM < 0 || req.AuthorShareRatePPM > 1_000_000 || req.PlatformFeeRatePPM < 0 || req.PlatformFeeRatePPM > 1_000_000 {
 		common.ApiErrorMsg(c, "invalid pricing values")
 		return
 	}
-	updated, err := model.UpdateScriptVersionPricing(scriptId, version, req.AuthorShareRatePPM, req.PlatformFeeRatePPM, req.ExecutionFeeMicros)
+	updated, err := model.UpdateScriptVersionPricing(scriptId, version, req.AuthorShareRatePPM, req.PlatformFeeRatePPM)
 	if err != nil {
-		if errors.Is(err, model.ErrScriptVersionNotFound) { common.ApiErrorMsg(c, "script version not found") } else { common.ApiError(c, err) }
+		if errors.Is(err, model.ErrScriptVersionNotFound) {
+			common.ApiErrorMsg(c, "script version not found")
+		} else {
+			common.ApiError(c, err)
+		}
 		return
 	}
 	common.ApiSuccess(c, updated)

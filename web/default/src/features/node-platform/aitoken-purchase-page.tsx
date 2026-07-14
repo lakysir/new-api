@@ -30,6 +30,7 @@ import {
   cancelOrder,
   getLedgerBalances,
   getOrder,
+  listCategories,
   listScriptOffers,
   listAvailableScriptVersions,
   quoteOrder,
@@ -182,8 +183,18 @@ export function AitokenPurchasePage() {
 
   async function loadScripts() {
     try {
-      const res = await api.get('/api/scripts/square', { params: { limit: 100 } })
-      const list = (res.data?.data?.items ?? res.data?.items ?? res.data?.data ?? []) as PublishedScript[]
+      const [res, categories] = await Promise.all([
+        api.get('/api/scripts/square', { params: { limit: 100 } }),
+        listCategories(),
+      ])
+      const items = (res.data?.data?.items ??
+        res.data?.items ??
+        res.data?.data ??
+        []) as PublishedScript[]
+      const balanceScriptIds = new Set(
+        categories.map((category) => category.balance_script_id).filter(Boolean)
+      )
+      const list = items.filter((script) => !balanceScriptIds.has(script.id))
       setScripts(list)
       const savedScript = list.find((item) => item.id === initialDraft.scriptId)
       if (savedScript) {

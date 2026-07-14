@@ -1,5 +1,15 @@
 {
   "translation": {
+    "Version history": "Lịch sử phiên bản",
+    "Uncategorized": "Chưa phân loại",
+    "Author": "Tác giả",
+    "Platform fee": "Phí nền tảng",
+    "Save pricing": "Lưu thiết lập giá",
+    "The latest version cannot be deleted": "Không thể xóa phiên bản mới nhất",
+    "Delete script #{{scriptId}} v{{version}}?": "Xóa tập lệnh #{{scriptId}} v{{version}}?",
+    "Pricing updated": "Đã cập nhật thiết lập giá",
+    "Version deleted": "Đã xóa phiên bản",
+    "Author and platform fee must be between 0% and 100%": "Tỷ lệ tác giả và phí nền tảng phải nằm trong khoảng từ 0% đến 100%",
     "360": "360",
     "1000": "1000",
     "10000": "10000",

@@ -1,5 +1,15 @@
 {
   "translation": {
+    "Version history": "История версий",
+    "Uncategorized": "Без категории",
+    "Author": "Автор",
+    "Platform fee": "Комиссия платформы",
+    "Save pricing": "Сохранить тарифы",
+    "The latest version cannot be deleted": "Последнюю версию нельзя удалить",
+    "Delete script #{{scriptId}} v{{version}}?": "Удалить скрипт #{{scriptId}} v{{version}}?",
+    "Pricing updated": "Тарифы обновлены",
+    "Version deleted": "Версия удалена",
+    "Author and platform fee must be between 0% and 100%": "Доля автора и комиссия платформы должны быть от 0% до 100%",
     "360": "360",
     "1000": "1000",
     "10000": "10000",

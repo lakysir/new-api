@@ -139,12 +139,12 @@ func TestUpdateScriptVersionPricingRebindsTemplate(t *testing.T) {
 	scriptId := 1006
 	v := newTestScriptVersion(scriptId)
 	if err := CreateScriptVersion(v); err != nil { t.Fatal(err) }
-	updated, err := UpdateScriptVersionPricing(scriptId, v.Version, 30_000, 80_000, 5_000)
+	updated, err := UpdateScriptVersionPricing(scriptId, v.Version, 30_000, 80_000)
 	if err != nil { t.Fatal(err) }
 	if updated.PricingTemplateId == 0 { t.Fatal("pricing template was not bound") }
 	tpl, err := GetPricingTemplate(updated.PricingTemplateId)
 	if err != nil { t.Fatal(err) }
-	if tpl.AuthorShareRatePPM != 30_000 || tpl.PlatformFeeRatePPM != 80_000 || tpl.PlatformFeeMinMicros != 5_000 {
+	if tpl.AuthorShareRatePPM != 30_000 || tpl.PlatformFeeRatePPM != 80_000 || tpl.PlatformFeeMinMicros != 0 {
 		t.Fatalf("unexpected pricing template: %+v", tpl)
 	}
 }

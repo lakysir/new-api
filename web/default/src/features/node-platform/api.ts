@@ -179,7 +179,7 @@ export function deleteScriptVersion(scriptId: number, version: number) {
   return unwrap(api.delete(`/api/scripts/${scriptId}/versions/${version}`))
 }
 
-export function updateScriptVersionPricing(scriptId: number, version: number, body: { author_share_rate_ppm: number; platform_fee_rate_ppm: number; execution_fee_micros: number }) {
+export function updateScriptVersionPricing(scriptId: number, version: number, body: { author_share_rate_ppm: number; platform_fee_rate_ppm: number }) {
   return unwrap<ScriptVersion>(api.put(`/api/scripts/${scriptId}/versions/${version}/pricing`, body))
 }
 

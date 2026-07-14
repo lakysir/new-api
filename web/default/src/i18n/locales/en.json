@@ -1,5 +1,15 @@
 {
   "translation": {
+    "Version history": "Version history",
+    "Uncategorized": "Uncategorized",
+    "Author": "Author",
+    "Platform fee": "Platform fee",
+    "Save pricing": "Save pricing",
+    "The latest version cannot be deleted": "The latest version cannot be deleted",
+    "Delete script #{{scriptId}} v{{version}}?": "Delete script #{{scriptId}} v{{version}}?",
+    "Pricing updated": "Pricing updated",
+    "Version deleted": "Version deleted",
+    "Author and platform fee must be between 0% and 100%": "Author and platform fee must be between 0% and 100%",
     "360": "360",
     "1000": "1000",
     "10000": "10000",

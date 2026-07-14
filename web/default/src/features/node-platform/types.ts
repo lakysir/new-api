@@ -50,7 +50,6 @@ export type ScriptVersion = {
   pricing_template_id?: number
   author_share_rate_ppm?: number
   platform_fee_rate_ppm?: number
-  platform_fee_min_micros?: number
 }
 
 // --- Devices & nodes (Stage C) ---------------------------------------------

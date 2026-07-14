@@ -1,5 +1,13 @@
 {
   "translation": {
+    "Version history": "版本历史",
+    "Uncategorized": "未分类",
+    "Save pricing": "保存费用设置",
+    "The latest version cannot be deleted": "最新版本不能删除",
+    "Delete script #{{scriptId}} v{{version}}?": "确定删除脚本 #{{scriptId}} 的 v{{version}} 版本吗？",
+    "Pricing updated": "费用设置已更新",
+    "Version deleted": "版本已删除",
+    "Author and platform fee must be between 0% and 100%": "作者分成和平台费比例必须在 0% 到 100% 之间",
     "360": "360",
     "1000": "1000",
     "10000": "10000",

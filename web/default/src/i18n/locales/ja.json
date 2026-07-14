@@ -1,5 +1,15 @@
 {
   "translation": {
+    "Version history": "バージョン履歴",
+    "Uncategorized": "未分類",
+    "Author": "作者",
+    "Platform fee": "プラットフォーム手数料",
+    "Save pricing": "料金設定を保存",
+    "The latest version cannot be deleted": "最新バージョンは削除できません",
+    "Delete script #{{scriptId}} v{{version}}?": "スクリプト #{{scriptId}} v{{version}} を削除しますか？",
+    "Pricing updated": "料金設定を更新しました",
+    "Version deleted": "バージョンを削除しました",
+    "Author and platform fee must be between 0% and 100%": "作者の取り分とプラットフォーム手数料は 0% から 100% の範囲で指定してください",
     "360": "360",
     "1000": "1000",
     "10000": "10000",

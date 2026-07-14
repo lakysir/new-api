@@ -49,7 +49,7 @@ import {
   type ScriptCategory,
 } from './api'
 import { EarningsSummary } from './earnings-summary'
-import { displayToMicros, formatUnix, microsToDisplay } from './lib/format'
+import { formatUnix } from './lib/format'
 import type { ScriptVersion } from './types'
 
 // ppm helpers: 10000 ppm = 1%.
@@ -79,7 +79,7 @@ type PendingScript = {
 }
 
 type DiffLine = { kind: 'same' | 'remove' | 'add'; text: string; number?: number }
-type PricingEdit = { author: string; platform: string; execution: string }
+type PricingEdit = { author: string; platform: string }
 
 function buildLineDiff(previous = '', next = ''): DiffLine[] {
   if (!previous) {
@@ -321,7 +321,6 @@ export function ScriptReviewConsolePage() {
     return pricingEdits[version.id] || {
       author: ppmToPercent(version.author_share_rate_ppm),
       platform: ppmToPercent(version.platform_fee_rate_ppm),
-      execution: microsToDisplay(version.platform_fee_min_micros),
     }
   }
 
@@ -331,12 +330,24 @@ export function ScriptReviewConsolePage() {
 
   async function onSavePricing(version: ScriptVersion) {
     const value = pricingValue(version)
+    const authorPercent = Number(value.author)
+    const platformPercent = Number(value.platform)
+    if (
+      !Number.isFinite(authorPercent) ||
+      authorPercent < 0 ||
+      authorPercent > 100 ||
+      !Number.isFinite(platformPercent) ||
+      platformPercent < 0 ||
+      platformPercent > 100
+    ) {
+      toast.error(t('Author and platform fee must be between 0% and 100%'))
+      return
+    }
     setSavingVersionId(version.id)
     try {
       await updateScriptVersionPricing(version.script_id, version.version, {
         author_share_rate_ppm: percentToPpm(value.author),
         platform_fee_rate_ppm: percentToPpm(value.platform),
-        execution_fee_micros: displayToMicros(value.execution),
       })
       toast.success(t('Pricing updated'))
       setPricingEdits((current) => { const next = { ...current }; delete next[version.id]; return next })
@@ -791,10 +802,15 @@ export function ScriptReviewConsolePage() {
                     </div>
                   ) : null}
                 </div>
-                <div className='grid gap-2 sm:grid-cols-3'>
-                  <label className='space-y-1'><span className='text-muted-foreground text-xs'>{t('Author share')} (%)</span><Input className='h-8' value={pricingValue(version).author} onChange={(event) => setPricingValue(version, { author: event.target.value })} /></label>
-                  <label className='space-y-1'><span className='text-muted-foreground text-xs'>{t('Platform share')} (%)</span><Input className='h-8' value={pricingValue(version).platform} onChange={(event) => setPricingValue(version, { platform: event.target.value })} /></label>
-                  <label className='space-y-1'><span className='text-muted-foreground text-xs'>{t('Script execution fee')}</span><Input className='h-8' value={pricingValue(version).execution} onChange={(event) => setPricingValue(version, { execution: event.target.value })} /></label>
+                <div className='grid gap-2 sm:grid-cols-2'>
+                  <label className='space-y-1'>
+                    <span className='text-muted-foreground text-xs'>{t('Author')} (%)</span>
+                    <Input className='h-8' value={pricingValue(version).author} onChange={(event) => setPricingValue(version, { author: event.target.value })} />
+                  </label>
+                  <label className='space-y-1'>
+                    <span className='text-muted-foreground text-xs'>{t('Platform fee')} (%)</span>
+                    <Input className='h-8' value={pricingValue(version).platform} onChange={(event) => setPricingValue(version, { platform: event.target.value })} />
+                  </label>
                 </div>
                 <div className='flex flex-wrap justify-end gap-2'>
                   <Button size='sm' variant='outline' disabled={savingVersionId === version.id} onClick={() => onSavePricing(version)}>{savingVersionId === version.id ? t('Saving...') : t('Save pricing')}</Button>
