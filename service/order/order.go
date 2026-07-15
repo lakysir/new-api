@@ -17,11 +17,12 @@ var ErrScriptNotExecutable = errors.New("script version is not executable")
 // optionally picks a specific provider offer via NodeId; the provider's price
 // comes from its capability, never from the client.
 type QuoteRequest struct {
-	ScriptId       int
-	Version        int
-	NodeId         string // optional: chosen provider offer
-	RelayGB        float64
-	StorageGBHours float64
+	ScriptId        int
+	Version         int
+	NodeId          string // optional: chosen provider offer
+	ProviderGroupId string // optional: restrict auto-pick to a provider group
+	RelayGB         float64
+	StorageGBHours  float64
 }
 
 // Quote is the itemized price returned to the client before ordering.
@@ -59,7 +60,7 @@ func resolveTemplate(scriptId, version int) (*model.PricingTemplate, error) {
 // - if NodeId is set, use that node's capability price (client picked an offer);
 // - else use the cheapest online offer for the script version.
 // Returns the price and the chosen node id (empty if none available).
-func resolveProviderPrice(scriptId, version int, nodeId string) (int64, string, error) {
+func resolveProviderPrice(scriptId, version int, nodeId, providerGroupId string) (int64, string, error) {
 	if nodeId != "" {
 		price, ok, err := model.GetCapabilityPrice(nodeId, scriptId, version)
 		if err != nil {
@@ -70,21 +71,23 @@ func resolveProviderPrice(scriptId, version int, nodeId string) (int64, string, 
 		}
 		return price, nodeId, nil
 	}
-	offers, err := model.ListOffersForScript(scriptId, version)
+	offers, err := model.ListOffersForScript(scriptId, version, providerGroupId)
 	if err != nil {
 		return 0, "", err
 	}
-	// Cheapest first; prefer an online offer.
+	// Cheapest first; prefer an available (idle) offer for the quote price. The
+	// actual auto-match at dispatch ranks by success rate + experience + price
+	// among idle nodes; here we only need a representative price to show.
 	for _, o := range offers {
-		if o.Online && o.RemainingQuota > 0 {
-			return o.PriceMicros, o.NodeId, nil
+		if o.Available {
+			return o.PriceMicros, "", nil
 		}
 	}
 	if len(offers) == 0 {
 		return 0, "", ErrNoOffer
 	}
-	// No online offer: quote the cheapest so the client sees a price, but the
-	// chosen node stays empty and the scheduler will match when one comes online.
+	// No available offer right now: quote the cheapest so the client sees a
+	// price; the chosen node stays empty and the scheduler matches later.
 	return offers[0].PriceMicros, "", nil
 }
 
@@ -99,7 +102,7 @@ func GetQuote(req QuoteRequest) (*Quote, error) {
 	if err != nil {
 		return nil, err
 	}
-	providerMicros, chosenNode, err := resolveProviderPrice(req.ScriptId, req.Version, req.NodeId)
+	providerMicros, chosenNode, err := resolveProviderPrice(req.ScriptId, req.Version, req.NodeId, req.ProviderGroupId)
 	if err != nil {
 		return nil, err
 	}
@@ -115,14 +118,15 @@ func GetQuote(req QuoteRequest) (*Quote, error) {
 // CreateRequest is a client's order creation input. Only metadata and the input
 // hash cross the control plane; parameters go over the E2EE data plane (T-004).
 type CreateRequest struct {
-	ClientId       int
-	ScriptId       int
-	Version        int
-	NodeId         string // optional: chosen provider offer
-	InputHash      string
-	IdempotencyKey string
-	RelayGB        float64
-	StorageGBHours float64
+	ClientId        int
+	ScriptId        int
+	Version         int
+	NodeId          string // optional: chosen provider offer
+	ProviderGroupId string // optional: restrict auto-pick to a provider group
+	InputHash       string
+	IdempotencyKey  string
+	RelayGB         float64
+	StorageGBHours  float64
 }
 
 // Create makes an idempotent order: it prices the bid, snapshots the breakdown
@@ -131,7 +135,8 @@ type CreateRequest struct {
 func Create(req CreateRequest) (*model.Order, bool, error) {
 	quote, err := GetQuote(QuoteRequest{
 		ScriptId: req.ScriptId, Version: req.Version, NodeId: req.NodeId,
-		RelayGB: req.RelayGB, StorageGBHours: req.StorageGBHours,
+		ProviderGroupId: req.ProviderGroupId,
+		RelayGB:         req.RelayGB, StorageGBHours: req.StorageGBHours,
 	})
 	if err != nil {
 		return nil, false, err
@@ -147,6 +152,7 @@ func Create(req CreateRequest) (*model.Order, bool, error) {
 		InputHash:       req.InputHash,
 		IdempotencyKey:  req.IdempotencyKey,
 		ChosenNodeId:    quote.ChosenNodeId,
+		ProviderGroupId: req.ProviderGroupId,
 		MaxAmountMicros: bd.MaxCustomerMicros,
 	}
 	snap := &model.OrderPriceSnapshot{

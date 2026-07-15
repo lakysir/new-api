@@ -37,6 +37,8 @@ import {
   listAvailableScriptVersions,
   quoteOrder,
   rechargeAvailable,
+  searchProviderGroups,
+  type ProviderGroup,
   type ScriptOffer,
 } from './api'
 import { ClientRelaySession } from './lib/client-relay-session'
@@ -47,6 +49,10 @@ type PublishedScript = { id: number; title: string; description?: string; latest
 type PurchaseDraft = { scriptId: number; version: number; configText: string }
 
 const DEFAULT_CONFIG_TEXT = '{\n  "prompt": "a dog"\n}'
+
+// Providers per page in the offers list. The market can list many providers, so
+// the list is paginated to stay readable (requirement: paginate when many).
+const OFFERS_PAGE_SIZE = 10
 
 // configTextFromParams turns a version's author-configured script_params into
 // pretty-printed editor text. Falls back to the raw string (or the generic
@@ -128,7 +134,20 @@ export function AitokenPurchasePage() {
   const [availableVersions, setAvailableVersions] = useState<ScriptVersion[]>([])
   const versions = availableVersions.map((item) => item.version).sort((a, b) => b - a)
   const [offers, setOffers] = useState<ScriptOffer[]>([])
-  const [nodeId, setNodeId] = useState('') // chosen offer; empty = cheapest
+  const [nodeId, setNodeId] = useState('') // chosen offer; empty when auto
+  // Auto mode (default): the platform auto-picks the busiest, highest-success
+  // idle provider (within the group filter, if any). Turning it off means the
+  // client picks a specific provider below.
+  const [autoSelect, setAutoSelect] = useState(true)
+  // Provider-group filter: search a group by name to get its id, then offers and
+  // the auto-pick are restricted to that group.
+  const [groupQuery, setGroupQuery] = useState('')
+  const [groupResults, setGroupResults] = useState<ProviderGroup[]>([])
+  const [groupSearching, setGroupSearching] = useState(false)
+  const [groupFilterId, setGroupFilterId] = useState('')
+  const [groupFilterName, setGroupFilterName] = useState('')
+  // Zero-based page index into the offers list.
+  const [offersPage, setOffersPage] = useState(0)
   const [configText, setConfigText] = useState(initialDraft.configText)
   const [quote, setQuote] = useState<PriceBreakdown | null>(null)
   const [order, setOrder] = useState<Order | null>(null)
@@ -155,6 +174,8 @@ export function AitokenPurchasePage() {
     setScriptId(value)
     setOffers([])
     setNodeId('')
+    setAutoSelect(true)
+    setOffersPage(0)
     setQuote(null)
     setOrder(null)
     if (!value) {
@@ -181,21 +202,28 @@ export function AitokenPurchasePage() {
     }
   }
 
-  async function loadOffersFor(selectedScriptId: number, selectedVersion: number) {
+  async function loadOffersFor(
+    selectedScriptId: number,
+    selectedVersion: number,
+    groupId = groupFilterId
+  ) {
     setOffersLoading(true)
+    setOffersPage(0)
     try {
-      const loaded = await listScriptOffers(selectedScriptId, selectedVersion)
+      const loaded = await listScriptOffers(selectedScriptId, selectedVersion, groupId || undefined)
       setOffers(loaded)
-      const selectedNodeId = loaded.find((item) => item.available)?.node_id ?? ''
-      setNodeId(selectedNodeId)
-      if (selectedNodeId) {
+      // Default to Auto: let the platform pick the best idle provider. Price the
+      // group as a whole so the client still sees a representative quote.
+      setAutoSelect(true)
+      setNodeId('')
+      try {
         const priced = await quoteOrder({
           script_id: selectedScriptId,
           version: selectedVersion,
-          node_id: selectedNodeId,
+          provider_group_id: groupId || undefined,
         })
         setQuote(priced.breakdown)
-      } else {
+      } catch {
         setQuote(null)
       }
       if (loaded.length === 0) toast.info(t('No provider offers yet for this version'))
@@ -299,9 +327,14 @@ export function AitokenPurchasePage() {
       return
     }
     try {
-      const q = await quoteOrder({ script_id: scriptId, version, node_id: nodeId || undefined })
+      const q = await quoteOrder({
+        script_id: scriptId,
+        version,
+        node_id: autoSelect ? undefined : nodeId || undefined,
+        provider_group_id: autoSelect ? groupFilterId || undefined : undefined,
+      })
       setQuote(q.breakdown)
-      if (q.chosen_node_id) setNodeId(q.chosen_node_id)
+      if (!autoSelect && q.chosen_node_id) setNodeId(q.chosen_node_id)
     } catch (e) {
       toast.error(String((e as Error).message))
     }
@@ -315,6 +348,57 @@ export function AitokenPurchasePage() {
       setQuote(null)
       toast.error(String((e as Error).message))
     }
+  }
+
+  // selectAuto switches back to platform auto-pick (busiest, highest-success
+  // idle provider within the group filter). Prices the group as a whole.
+  function selectAuto() {
+    setAutoSelect(true)
+    setNodeId('')
+    if (scriptId) {
+      void quoteOrder({
+        script_id: scriptId,
+        version,
+        provider_group_id: groupFilterId || undefined,
+      })
+        .then((priced) => setQuote(priced.breakdown))
+        .catch(() => setQuote(null))
+    }
+  }
+
+  // selectProvider pins a specific provider offer (turns Auto off).
+  function selectProvider(selectedNodeId: string) {
+    setAutoSelect(false)
+    setNodeId(selectedNodeId)
+    void onQuoteForNode(selectedNodeId)
+  }
+
+  // onSearchGroups resolves a provider group by name so offers and the auto-pick
+  // can be filtered to a single provider.
+  async function onSearchGroups() {
+    const query = groupQuery.trim()
+    if (!query) {
+      toast.error(t('Enter a group name to search'))
+      return
+    }
+    setGroupSearching(true)
+    try {
+      setGroupResults(await searchProviderGroups(query))
+    } catch (e) {
+      toast.error(String((e as Error).message))
+    } finally {
+      setGroupSearching(false)
+    }
+  }
+
+  // applyGroupFilter restricts offers + auto-pick to the chosen group and
+  // reloads the offers. Passing '' clears the filter (all providers).
+  async function applyGroupFilter(groupId: string, groupName: string) {
+    setGroupFilterId(groupId)
+    setGroupFilterName(groupName)
+    setGroupResults([])
+    setGroupQuery(groupName)
+    if (scriptId) await loadOffersFor(scriptId, version, groupId)
   }
 
   async function onPurchase() {
@@ -335,7 +419,13 @@ export function AitokenPurchasePage() {
     try {
       const key = `order-${Date.now()}-${Math.random().toString(36).slice(2)}`
       const { order: o } = await createOrder(
-        { script_id: scriptId, version, node_id: nodeId || undefined, input_hash: inputHash },
+        {
+          script_id: scriptId,
+          version,
+          node_id: autoSelect ? undefined : nodeId || undefined,
+          provider_group_id: autoSelect ? groupFilterId || undefined : undefined,
+          input_hash: inputHash,
+        },
         key
       )
       setOrder(o)
@@ -541,6 +631,8 @@ export function AitokenPurchasePage() {
                 setVersion(selectedVersion)
                 setOffers([])
                 setNodeId('')
+                setAutoSelect(true)
+                setOffersPage(0)
                 setQuote(null)
                 const selected = availableVersions.find((item) => item.version === selectedVersion)
                 setConfigText(configTextFromParams(selected?.script_params))
@@ -554,43 +646,164 @@ export function AitokenPurchasePage() {
             </Button>
           </div>
 
-          {offers.length > 0 && (
-            <div className='mt-3'>
-              <div className='text-muted-foreground mb-1 text-xs'>
-                {t('Provider offers (choose one, or leave to auto-pick cheapest)')}
-              </div>
-              <div className='flex flex-col gap-1'>
-                {offers.map((o) => (
-                  <label key={o.node_id} className='flex items-center gap-2 text-sm'>
-                    <input
-                      type='radio'
-                      name='offer'
-                      checked={nodeId === o.node_id}
-                      disabled={!o.available}
-                      onChange={() => {
-                        setNodeId(o.node_id)
-                        void onQuoteForNode(o.node_id)
-                      }}
-                    />
-                    <span className='font-mono text-xs'>{o.node_id}</span>
-                    <span className='font-semibold'>{microsToCurrency(o.price_micros)}</span>
-                    <span>{o.online ? t('Online') : t('Offline')}</span>
-                    <span className='text-muted-foreground text-xs'>
-                      {t('quota')}: {o.remaining_quota}
-                    </span>
-                    {!o.available && (
-                      <span className='text-xs text-red-600'>
-                        {o.unavailable_reason === 'QUOTA_EXHAUSTED' && t('Quota exhausted')}
-                        {o.unavailable_reason === 'NODE_OFFLINE' && t('Node offline')}
-                        {o.unavailable_reason === 'CAPABILITY_TEST_EXPIRED' && t('Capability test expired')}
-                        {o.unavailable_reason === 'BALANCE_CHECK_EXPIRED' && t('Balance check expired')}
-                      </span>
-                    )}
-                  </label>
+          {/* Provider-group filter: search a group by name to restrict offers +
+              the auto-pick to a single provider. Helps when there are many. */}
+          <div className='mt-3 rounded-md border p-3'>
+            <div className='text-muted-foreground mb-1 text-xs'>
+              {t('Filter by provider group (optional)')}
+            </div>
+            <div className='flex flex-wrap items-center gap-2'>
+              <Input
+                className='h-9 w-56'
+                placeholder={t('Search group name')}
+                value={groupQuery}
+                onChange={(e) => setGroupQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    void onSearchGroups()
+                  }
+                }}
+              />
+              <Button variant='outline' className='h-9' onClick={onSearchGroups} disabled={groupSearching}>
+                {groupSearching ? t('Searching...') : t('Search')}
+              </Button>
+              {groupFilterId && (
+                <span className='flex items-center gap-1 text-xs'>
+                  <span className='text-muted-foreground'>{t('Filtered')}:</span>
+                  <span className='font-medium'>{groupFilterName}</span>
+                  <Button
+                    size='sm'
+                    variant='ghost'
+                    className='h-6 px-2'
+                    onClick={() => void applyGroupFilter('', '')}
+                  >
+                    {t('Clear')}
+                  </Button>
+                </span>
+              )}
+            </div>
+            {groupResults.length > 0 && (
+              <div className='mt-2 flex flex-col gap-1'>
+                {groupResults.map((g) => (
+                  <button
+                    key={g.id}
+                    type='button'
+                    className='flex items-center gap-2 rounded px-2 py-1 text-left text-sm hover:bg-muted/50'
+                    onClick={() => void applyGroupFilter(g.id, g.name)}
+                  >
+                    <span className='font-medium'>{g.name}</span>
+                    <span className='font-mono text-xs text-muted-foreground'>{g.id}</span>
+                  </button>
                 ))}
               </div>
+            )}
+          </div>
+
+          <div className='mt-3'>
+            <div className='text-muted-foreground mb-2 text-xs'>
+              {t('Provider offers (Auto picks the best idle provider, or choose one)')}
             </div>
-          )}
+            {/* Auto is the default: platform picks the busiest, highest-success
+                idle provider (within the group filter, if set). */}
+            <label className='flex items-center gap-2 rounded-md border p-2 text-sm'>
+              <input type='radio' name='offer' checked={autoSelect} onChange={selectAuto} />
+              <span className='font-medium'>{t('Auto (recommended)')}</span>
+              <span className='text-muted-foreground text-xs'>
+                {groupFilterId
+                  ? t('Auto-picks the best idle provider in this group')
+                  : t('Auto-picks the best idle provider')}
+              </span>
+            </label>
+
+            {offers.length > 0 && (
+              <div className='mt-2 flex flex-col gap-1'>
+                {offers
+                  .slice(offersPage * OFFERS_PAGE_SIZE, offersPage * OFFERS_PAGE_SIZE + OFFERS_PAGE_SIZE)
+                  .map((o) => {
+                    const rate =
+                      o.executions > 0
+                        ? `${Math.round((o.successes / o.executions) * 100)}% (${o.successes}/${o.executions})`
+                        : '-'
+                    let statusLabel = t('Offline')
+                    if (o.busy) statusLabel = t('Busy')
+                    else if (o.online) statusLabel = t('Online')
+                    return (
+                      <label
+                        key={o.node_id}
+                        className='flex flex-wrap items-center gap-2 rounded-md border p-2 text-sm'
+                      >
+                        <input
+                          type='radio'
+                          name='offer'
+                          checked={!autoSelect && nodeId === o.node_id}
+                          disabled={!o.available}
+                          onChange={() => selectProvider(o.node_id)}
+                        />
+                        <span className='font-mono text-xs'>{o.node_id}</span>
+                        {o.provider_group_name && (
+                          <span className='rounded bg-muted px-1.5 py-0.5 text-xs'>
+                            {o.provider_group_name}
+                          </span>
+                        )}
+                        {o.provider_group_id && (
+                          <span className='font-mono text-xs text-muted-foreground'>
+                            {o.provider_group_id}
+                          </span>
+                        )}
+                        <span className='font-semibold'>{microsToCurrency(o.price_micros)}</span>
+                        <span>{statusLabel}</span>
+                        <span className='text-muted-foreground text-xs'>
+                          {t('Success rate')}: {rate}
+                        </span>
+                        <span className='text-muted-foreground text-xs'>
+                          {t('quota')}: {o.remaining_quota}
+                        </span>
+                        {!o.available && (
+                          <span className='text-xs text-red-600'>
+                            {o.unavailable_reason === 'QUOTA_EXHAUSTED' && t('Quota exhausted')}
+                            {o.unavailable_reason === 'NODE_OFFLINE' && t('Node offline')}
+                            {o.unavailable_reason === 'NODE_BUSY' && t('Provider is busy')}
+                            {o.unavailable_reason === 'CAPABILITY_TEST_EXPIRED' && t('Capability test expired')}
+                            {o.unavailable_reason === 'BALANCE_CHECK_EXPIRED' && t('Balance check expired')}
+                          </span>
+                        )}
+                      </label>
+                    )
+                  })}
+              </div>
+            )}
+
+            {/* Pagination: only when the offer list spills past one page. */}
+            {offers.length > OFFERS_PAGE_SIZE && (
+              <div className='mt-2 flex items-center justify-between text-xs'>
+                <span className='text-muted-foreground'>
+                  {t('{{count}} providers', { count: offers.length })}
+                </span>
+                <div className='flex items-center gap-2'>
+                  <Button
+                    size='sm'
+                    variant='outline'
+                    disabled={offersPage === 0}
+                    onClick={() => setOffersPage((p) => Math.max(0, p - 1))}
+                  >
+                    {t('Previous')}
+                  </Button>
+                  <span>
+                    {offersPage + 1} / {Math.ceil(offers.length / OFFERS_PAGE_SIZE)}
+                  </span>
+                  <Button
+                    size='sm'
+                    variant='outline'
+                    disabled={(offersPage + 1) * OFFERS_PAGE_SIZE >= offers.length}
+                    onClick={() => setOffersPage((p) => p + 1)}
+                  >
+                    {t('Next')}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Config params */}

@@ -27,7 +27,9 @@ func ListScriptOffers(c *gin.Context) {
 		common.ApiErrorMsg(c, "version query param is required")
 		return
 	}
-	offers, err := model.ListOffersForScript(scriptId, version)
+	// Optional provider_group_id filter: restrict offers to a single provider.
+	providerGroupId := c.Query("provider_group_id")
+	offers, err := model.ListOffersForScript(scriptId, version, providerGroupId)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -36,11 +38,12 @@ func ListScriptOffers(c *gin.Context) {
 }
 
 type quoteRequest struct {
-	ScriptId       int     `json:"script_id"`
-	Version        int     `json:"version"`
-	NodeId         string  `json:"node_id"` // optional: chosen provider offer
-	RelayGB        float64 `json:"relay_gb"`
-	StorageGBHours float64 `json:"storage_gb_hours"`
+	ScriptId        int     `json:"script_id"`
+	Version         int     `json:"version"`
+	NodeId          string  `json:"node_id"`           // optional: chosen provider offer
+	ProviderGroupId string  `json:"provider_group_id"` // optional: restrict auto-pick to a group
+	RelayGB         float64 `json:"relay_gb"`
+	StorageGBHours  float64 `json:"storage_gb_hours"`
 }
 
 // QuoteOrder returns an itemized price breakdown for a script version using the
@@ -54,7 +57,8 @@ func QuoteOrder(c *gin.Context) {
 	}
 	q, err := order.GetQuote(order.QuoteRequest{
 		ScriptId: req.ScriptId, Version: req.Version, NodeId: req.NodeId,
-		RelayGB: req.RelayGB, StorageGBHours: req.StorageGBHours,
+		ProviderGroupId: req.ProviderGroupId,
+		RelayGB:         req.RelayGB, StorageGBHours: req.StorageGBHours,
 	})
 	if err != nil {
 		common.ApiErrorMsg(c, err.Error())
@@ -64,12 +68,13 @@ func QuoteOrder(c *gin.Context) {
 }
 
 type createOrderRequest struct {
-	ScriptId       int     `json:"script_id"`
-	Version        int     `json:"version"`
-	NodeId         string  `json:"node_id"` // optional: chosen provider offer
-	InputHash      string  `json:"input_hash"`
-	RelayGB        float64 `json:"relay_gb"`
-	StorageGBHours float64 `json:"storage_gb_hours"`
+	ScriptId        int     `json:"script_id"`
+	Version         int     `json:"version"`
+	NodeId          string  `json:"node_id"`           // optional: chosen provider offer
+	ProviderGroupId string  `json:"provider_group_id"` // optional: restrict auto-pick to a group
+	InputHash       string  `json:"input_hash"`
+	RelayGB         float64 `json:"relay_gb"`
+	StorageGBHours  float64 `json:"storage_gb_hours"`
 }
 
 // CreateOrder creates an idempotent order. The Idempotency-Key header dedupes
@@ -87,14 +92,15 @@ func CreateOrder(c *gin.Context) {
 		return
 	}
 	o, created, err := order.Create(order.CreateRequest{
-		ClientId:       c.GetInt("id"),
-		ScriptId:       req.ScriptId,
-		Version:        req.Version,
-		NodeId:         req.NodeId,
-		InputHash:      req.InputHash,
-		IdempotencyKey: idempotencyKey,
-		RelayGB:        req.RelayGB,
-		StorageGBHours: req.StorageGBHours,
+		ClientId:        c.GetInt("id"),
+		ScriptId:        req.ScriptId,
+		Version:         req.Version,
+		NodeId:          req.NodeId,
+		ProviderGroupId: req.ProviderGroupId,
+		InputHash:       req.InputHash,
+		IdempotencyKey:  idempotencyKey,
+		RelayGB:         req.RelayGB,
+		StorageGBHours:  req.StorageGBHours,
 	})
 	if err != nil {
 		if errors.Is(err, order.ErrScriptNotExecutable) {

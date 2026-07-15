@@ -37,13 +37,17 @@ var (
 // Node is a Provider execution endpoint bound to a device. One device may run
 // one node in the MVP.
 type Node struct {
-	Id         string `json:"id" gorm:"primaryKey;type:varchar(64)"`
-	DeviceId   string `json:"device_id" gorm:"type:varchar(64);index;not null"`
-	UserId     int    `json:"user_id" gorm:"index;not null"`
-	State      string `json:"state" gorm:"type:varchar(16);index;default:OFFLINE"`
-	Region     string `json:"region" gorm:"type:varchar(32)"`
-	Version    string `json:"version" gorm:"type:varchar(32)"`
-	LastSeenAt int64  `json:"last_seen_at" gorm:"index;default:0"`
+	Id       string `json:"id" gorm:"primaryKey;type:varchar(64)"`
+	DeviceId string `json:"device_id" gorm:"type:varchar(64);index;not null"`
+	UserId   int    `json:"user_id" gorm:"index;not null"`
+	// ProviderGroupId is the logical group this node belongs to (one group per
+	// owning user, auto-created from the username). Clients can filter offers to
+	// a single provider by this id.
+	ProviderGroupId string `json:"provider_group_id" gorm:"type:varchar(64);index"`
+	State           string `json:"state" gorm:"type:varchar(16);index;default:OFFLINE"`
+	Region          string `json:"region" gorm:"type:varchar(32)"`
+	Version         string `json:"version" gorm:"type:varchar(32)"`
+	LastSeenAt      int64  `json:"last_seen_at" gorm:"index;default:0"`
 	// Execution outcome counters drive the scheduler's success-rate ranking.
 	SuccessCount int64 `json:"success_count" gorm:"default:0"`
 	FailureCount int64 `json:"failure_count" gorm:"default:0"`
@@ -152,14 +156,17 @@ func (cap *NodeCapability) IsTestValid() bool {
 	return cap.TestExpiresAt > time.Now().Unix()
 }
 
-// UpsertNode registers or updates a node for a device, refreshing presence.
+// UpsertNode registers or updates a node for a device, refreshing presence. The
+// node is placed in the owning user's provider group (created on first use) so
+// every node has a group from its first heartbeat.
 func UpsertNode(userId int, deviceId, nodeId, region, version string) (*Node, error) {
 	now := time.Now().Unix()
+	groupId := ensureUserProviderGroup(userId)
 	var node Node
 	err := DB.Where("id = ?", nodeId).First(&node).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		node = Node{
-			Id: nodeId, DeviceId: deviceId, UserId: userId,
+			Id: nodeId, DeviceId: deviceId, UserId: userId, ProviderGroupId: groupId,
 			State: NodeStateIdle, Region: region, Version: version, LastSeenAt: now,
 		}
 		if err := DB.Create(&node).Error; err != nil {
@@ -174,9 +181,15 @@ func UpsertNode(userId int, deviceId, nodeId, region, version string) (*Node, er
 	if node.State == NodeStateOffline {
 		node.State = NodeStateIdle
 	}
-	if err := DB.Model(&Node{}).Where("id = ?", nodeId).Updates(map[string]any{
+	updates := map[string]any{
 		"region": region, "version": version, "last_seen_at": now, "state": node.State,
-	}).Error; err != nil {
+	}
+	// Backfill the group on pre-existing nodes that predate grouping.
+	if node.ProviderGroupId == "" && groupId != "" {
+		updates["provider_group_id"] = groupId
+		node.ProviderGroupId = groupId
+	}
+	if err := DB.Model(&Node{}).Where("id = ?", nodeId).Updates(updates).Error; err != nil {
 		return nil, err
 	}
 	return &node, nil

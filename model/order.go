@@ -82,8 +82,11 @@ type Order struct {
 	InputHash      string `json:"input_hash" gorm:"type:varchar(80)"`
 	IdempotencyKey string `json:"idempotency_key" gorm:"type:varchar(80);uniqueIndex"`
 	// ChosenNodeId is the provider node the client selected (empty = scheduler
-	// picks the cheapest eligible node within budget).
-	ChosenNodeId      string `json:"chosen_node_id" gorm:"type:varchar(64)"`
+	// picks the best eligible node within budget).
+	ChosenNodeId string `json:"chosen_node_id" gorm:"type:varchar(64)"`
+	// ProviderGroupId (optional) restricts auto-matching to a single provider
+	// group. Empty means any group. Ignored when ChosenNodeId is set.
+	ProviderGroupId   string `json:"provider_group_id" gorm:"type:varchar(64);index"`
 	MaxAmountMicros   int64  `json:"max_amount_micros" gorm:"default:0"`
 	FinalAmountMicros int64  `json:"final_amount_micros" gorm:"default:0"`
 	LockVersion       int64  `json:"lock_version" gorm:"default:0"`

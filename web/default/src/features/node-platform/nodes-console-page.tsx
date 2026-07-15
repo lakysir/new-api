@@ -39,6 +39,7 @@ import {
   deleteDevice,
   deleteNode,
   enableCapability,
+  getMyProviderGroup,
   listAvailableScriptVersions,
   listBalanceChecks,
   listCategories,
@@ -59,7 +60,7 @@ import type {
   NodeInfo,
   ScriptVersion,
 } from './types'
-import type { NodeBalanceCheck, ScriptCategory } from './api'
+import type { NodeBalanceCheck, ProviderGroup, ScriptCategory } from './api'
 
 type PublishedScript = {
   id: number
@@ -149,6 +150,9 @@ export function NodesConsolePage() {
     initialDraft.enableForm
   )
   const [openNodeIds, setOpenNodeIds] = useState(initialDraft.openNodeIds)
+  // The caller's provider group (all their nodes belong to it). Created on first
+  // load from the username; every node defaults into this group.
+  const [providerGroup, setProviderGroup] = useState<ProviderGroup | null>(null)
 
   const visibleDevices = hideInactive
     ? devices.filter((d) => d.status === 'active')
@@ -171,6 +175,12 @@ export function NodesConsolePage() {
       const statList = Array.isArray(stats) ? stats : []
       setDevices(deviceList)
       setNodes(nodeList)
+      // Resolve (and lazily create) the caller's provider group so all their
+      // nodes are grouped under it. Best-effort: the console still works if it
+      // fails.
+      getMyProviderGroup()
+        .then(setProviderGroup)
+        .catch(() => {})
       const items = (sq.data?.data?.items ?? sq.data?.items ?? sq.data?.data ?? []) as PublishedScript[]
       const balanceScriptIds = new Set(
         safeCategoryList.map((category) => category.balance_script_id).filter(Boolean)
@@ -474,6 +484,20 @@ export function NodesConsolePage() {
         </Button>
       </SectionPageLayout.Actions>
       <SectionPageLayout.Content>
+        {/* Provider group: all of the caller's nodes belong to this group. */}
+        {providerGroup && (
+          <div className='mb-4 rounded-lg border p-3'>
+            <div className='text-muted-foreground text-xs'>{t('Provider group')}</div>
+            <div className='mt-1 flex flex-wrap items-center gap-x-3 gap-y-1'>
+              <span className='text-base font-semibold'>{providerGroup.name}</span>
+              <span className='font-mono text-xs text-muted-foreground'>{providerGroup.id}</span>
+            </div>
+            <div className='text-muted-foreground mt-1 text-xs'>
+              {t('All your nodes belong to this group by default.')}
+            </div>
+          </div>
+        )}
+
         {/* Money earned running nodes (provider payable), day/week/month/total. */}
         <div className='mb-6'>
           <div className='mb-2 text-sm font-medium'>{t('Provider earnings')}</div>

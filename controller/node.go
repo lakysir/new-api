@@ -200,6 +200,34 @@ func ListMyCapabilityStats(c *gin.Context) {
 	common.ApiSuccess(c, stats)
 }
 
+// GetMyProviderGroup returns (creating on first use) the caller's provider
+// group — the logical group all their nodes belong to, named after their
+// username. It also backfills any of the caller's nodes that predate grouping.
+func GetMyProviderGroup(c *gin.Context) {
+	userId := c.GetInt("id")
+	username, _ := model.GetUsernameById(userId, false)
+	group, err := model.GetOrCreateProviderGroup(userId, username)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	// Ensure existing nodes join the group (idempotent).
+	_ = model.AssignNodesToProviderGroup(userId, group.Id)
+	common.ApiSuccess(c, group)
+}
+
+// SearchProviderGroups returns provider groups whose name matches ?q, so a
+// client can find a provider's group id to filter offers by. Requires a query.
+func SearchProviderGroups(c *gin.Context) {
+	query := c.Query("q")
+	groups, err := model.SearchProviderGroups(query)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, groups)
+}
+
 // DeleteMyNode permanently removes an OFFLINE node and its capabilities.
 func DeleteMyNode(c *gin.Context) {
 	nodeId := c.Param("id")

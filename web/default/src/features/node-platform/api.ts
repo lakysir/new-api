@@ -259,17 +259,49 @@ export function enableCapability(
 
 export type ScriptOffer = {
   node_id: string
+  provider_group_id?: string
+  provider_group_name?: string
   price_micros: number
   online: boolean
+  /** Online but currently running a task, so it can't take a new one. */
+  busy: boolean
   remaining_quota: number
   state: string
+  /** Lifetime task attempts (success + failure) on this node. */
+  executions: number
+  /** Lifetime successful task attempts on this node. */
+  successes: number
   available: boolean
   unavailable_reason?: string
 }
 
-export function listScriptOffers(scriptId: number, version: number) {
-  return unwrap<ScriptOffer[]>(
-    api.get(`/api/scripts/${scriptId}/offers?version=${version}`)
+// A provider group is the logical group a provider's nodes belong to (one per
+// user, named after the username).
+export type ProviderGroup = {
+  id: string
+  user_id: number
+  name: string
+  created_at: number
+  updated_at: number
+}
+
+export function listScriptOffers(scriptId: number, version: number, providerGroupId?: string) {
+  const params = new URLSearchParams({ version: String(version) })
+  if (providerGroupId) params.set('provider_group_id', providerGroupId)
+  return unwrap<ScriptOffer[]>(api.get(`/api/scripts/${scriptId}/offers?${params.toString()}`))
+}
+
+// getMyProviderGroup returns (creating on first use) the caller's provider group
+// and backfills their existing nodes into it.
+export function getMyProviderGroup() {
+  return unwrap<ProviderGroup>(api.get('/api/nodes/provider-group/mine'))
+}
+
+// searchProviderGroups finds provider groups by name so a client can filter
+// offers to a single provider. Empty query returns nothing.
+export function searchProviderGroups(query: string) {
+  return unwrap<ProviderGroup[]>(
+    api.get('/api/nodes/provider-groups/search', { params: { q: query } })
   )
 }
 
@@ -277,6 +309,7 @@ export function quoteOrder(body: {
   script_id: number
   version: number
   node_id?: string
+  provider_group_id?: string
   relay_gb?: number
   storage_gb_hours?: number
 }) {
@@ -290,6 +323,7 @@ export function createOrder(
     script_id: number
     version: number
     node_id?: string
+    provider_group_id?: string
     input_hash: string
     relay_gb?: number
     storage_gb_hours?: number

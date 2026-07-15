@@ -13,58 +13,90 @@ type CandidateNode struct {
 	Score       float64 `json:"score"`
 }
 
+// maxScoreExecutions caps the executions used in the experience component of the
+// candidate score so a very high-volume node can't dominate purely on count;
+// beyond this the experience term is saturated and success rate/price decide.
+const maxScoreExecutions = 50.0
+
 // ScriptOffer is a Provider's public offer for a script version: its execution
-// price and online/quality signal. Clients browse offers before ordering.
+// price, online/idle signal, provider group and execution track record. Clients
+// browse offers before ordering. A node that is online but already running a
+// task (state BUSY) is reported not-available: a provider executes at most one
+// script at a time (PRD N-006), even when it lists several capabilities.
 type ScriptOffer struct {
-	NodeId           string `json:"node_id"`
-	PriceMicros      int64  `json:"price_micros"`
-	Online           bool   `json:"online"`
-	RemainingQuota   int    `json:"remaining_quota"`
-	State            string `json:"state"`
-	Available        bool   `json:"available"`
+	NodeId            string `json:"node_id"`
+	ProviderGroupId   string `json:"provider_group_id,omitempty"`
+	ProviderGroupName string `json:"provider_group_name,omitempty"`
+	PriceMicros       int64  `json:"price_micros"`
+	Online            bool   `json:"online"`
+	// Busy is true when the node is online but currently executing a task and so
+	// cannot accept a new one.
+	Busy              bool   `json:"busy"`
+	RemainingQuota    int    `json:"remaining_quota"`
+	State             string `json:"state"`
+	// Executions / Successes are this node's lifetime task outcomes (success +
+	// failure counters), used to show a success rate in the same format as the
+	// provider console.
+	Executions        int64  `json:"executions"`
+	Successes         int64  `json:"successes"`
+	Available         bool   `json:"available"`
 	UnavailableReason string `json:"unavailable_reason,omitempty"`
 }
 
 // ListOffersForScript returns all active, tested offers for a script version
 // (online or not), cheapest first — the client-facing "how much does one
-// execution cost" catalog (architecture §13.2).
-func ListOffersForScript(scriptId, version int) ([]ScriptOffer, error) {
+// execution cost" catalog (architecture §13.2). When providerGroupId is
+// non-empty the result is restricted to nodes in that group so a client can
+// filter by provider.
+func ListOffersForScript(scriptId, version int, providerGroupId string) ([]ScriptOffer, error) {
 	cutoff := time.Now().Add(-NodePresenceTimeout).Unix()
 	now := time.Now().Unix()
 	type row struct {
-		NodeId           string
-		PriceMicros      int64
-		RemainingQuota   int
-		LastSeenAt       int64
-		State            string
-		TestExpiresAt    int64
-		CategoryId       int
-		BalanceOk        bool
-		BalanceExpiresAt int64
+		NodeId            string
+		ProviderGroupId   string
+		ProviderGroupName string
+		PriceMicros       int64
+		RemainingQuota    int
+		LastSeenAt        int64
+		State             string
+		SuccessCount      int64
+		FailureCount      int64
+		TestExpiresAt     int64
+		CategoryId        int
+		BalanceOk         bool
+		BalanceExpiresAt  int64
 	}
 	var rows []row
 	// Return all listed capabilities so clients can distinguish "no offer" from
 	// an offer that is temporarily offline, out of quota or needs re-validation.
-	err := DB.Table("node_capabilities AS cap").
-		Select("cap.node_id, cap.price_micros, cap.remaining_quota, cap.test_expires_at, cap.category_id, n.last_seen_at, n.state, s.balance_ok, s.expires_at AS balance_expires_at").
+	q := DB.Table("node_capabilities AS cap").
+		Select(`cap.node_id, cap.price_micros, cap.remaining_quota, cap.test_expires_at, cap.category_id,
+			n.last_seen_at, n.state, n.success_count, n.failure_count, n.provider_group_id,
+			pg.name AS provider_group_name, s.balance_ok, s.expires_at AS balance_expires_at`).
 		Joins("JOIN nodes n ON n.id = cap.node_id").
+		Joins("LEFT JOIN provider_groups pg ON pg.id = n.provider_group_id").
 		Joins("LEFT JOIN node_site_status s ON s.node_id = cap.node_id AND s.category_id = cap.category_id").
 		Where("cap.script_id = ? AND cap.version = ?", scriptId, version).
-		Where("cap.status = ?", CapabilityStatusActive).
-		Order("cap.price_micros asc").
-		Scan(&rows).Error
-	if err != nil {
+		Where("cap.status = ?", CapabilityStatusActive)
+	if providerGroupId != "" {
+		q = q.Where("n.provider_group_id = ?", providerGroupId)
+	}
+	if err := q.Order("cap.price_micros asc").Scan(&rows).Error; err != nil {
 		return nil, err
 	}
 	offers := make([]ScriptOffer, 0, len(rows))
 	for _, r := range rows {
 		online := r.State != NodeStateOffline && r.LastSeenAt >= cutoff
+		busy := online && r.State == NodeStateBusy
 		testValid := r.TestExpiresAt > now
 		balanceValid := r.CategoryId == 0 || (r.BalanceOk && r.BalanceExpiresAt > now)
-		available := online && r.RemainingQuota > 0 && testValid && balanceValid
+		// A busy node is online but cannot take a new task (single-task-per-node).
+		available := online && !busy && r.RemainingQuota > 0 && testValid && balanceValid
 		reason := ""
 		if !online {
 			reason = "NODE_OFFLINE"
+		} else if busy {
+			reason = "NODE_BUSY"
 		} else if r.RemainingQuota <= 0 {
 			reason = "QUOTA_EXHAUSTED"
 		} else if !testValid {
@@ -73,12 +105,17 @@ func ListOffersForScript(scriptId, version int) ([]ScriptOffer, error) {
 			reason = "BALANCE_CHECK_EXPIRED"
 		}
 		offers = append(offers, ScriptOffer{
-			NodeId:           r.NodeId,
-			PriceMicros:      r.PriceMicros,
-			Online:           online,
-			RemainingQuota:   r.RemainingQuota,
-			State:            r.State,
-			Available:        available,
+			NodeId:            r.NodeId,
+			ProviderGroupId:   r.ProviderGroupId,
+			ProviderGroupName: r.ProviderGroupName,
+			PriceMicros:       r.PriceMicros,
+			Online:            online,
+			Busy:              busy,
+			RemainingQuota:    r.RemainingQuota,
+			State:             r.State,
+			Executions:        r.SuccessCount + r.FailureCount,
+			Successes:         r.SuccessCount,
+			Available:         available,
 			UnavailableReason: reason,
 		})
 	}
@@ -102,7 +139,10 @@ func GetCapabilityPrice(nodeId string, scriptId, version int) (int64, bool, erro
 // mirrors §10.1: online + IDLE + active capability + valid test + quota + price.
 // Scoring in the MVP is a simplified static score; quality/latency signals are
 // added in later phases.
-func ScheduleCandidates(scriptId, version int, maxPriceMicros int64, limit int) ([]CandidateNode, error) {
+// providerGroupId (optional) restricts candidates to a single provider group so
+// the client can auto-pick within a chosen group (offer filtering); empty means
+// all groups.
+func ScheduleCandidates(scriptId, version int, maxPriceMicros int64, limit int, providerGroupId string) ([]CandidateNode, error) {
 	cutoff := time.Now().Add(-NodePresenceTimeout).Unix()
 
 	type row struct {
@@ -117,7 +157,7 @@ func ScheduleCandidates(scriptId, version int, maxPriceMicros int64, limit int) 
 	// low-success node is only picked when all higher-success nodes are busy
 	// (hence absent from this set) — exactly the desired fallback behavior.
 	now := time.Now().Unix()
-	err := DB.Table("node_capabilities AS cap").
+	q := DB.Table("node_capabilities AS cap").
 		Select("cap.node_id AS node_id, cap.price_micros AS price_micros, n.success_count AS success_count, n.failure_count AS failure_count").
 		Joins("JOIN nodes n ON n.id = cap.node_id").
 		Joins("LEFT JOIN node_site_status s ON s.node_id = cap.node_id AND s.category_id = cap.category_id").
@@ -129,9 +169,11 @@ func ScheduleCandidates(scriptId, version int, maxPriceMicros int64, limit int) 
 		Where("n.state = ?", NodeStateIdle).
 		Where("n.last_seen_at >= ?", cutoff).
 		// Node must have a valid balance check for the category (or no category).
-		Where("cap.category_id = 0 OR (s.balance_ok = ? AND s.expires_at > ?)", true, now).
-		Scan(&rows).Error
-	if err != nil {
+		Where("cap.category_id = 0 OR (s.balance_ok = ? AND s.expires_at > ?)", true, now)
+	if providerGroupId != "" {
+		q = q.Where("n.provider_group_id = ?", providerGroupId)
+	}
+	if err := q.Scan(&rows).Error; err != nil {
 		return nil, err
 	}
 
@@ -141,7 +183,7 @@ func ScheduleCandidates(scriptId, version int, maxPriceMicros int64, limit int) 
 		candidates = append(candidates, CandidateNode{
 			NodeId:      r.NodeId,
 			PriceMicros: r.PriceMicros,
-			Score:       scoreCandidate(n.SuccessRate(), r.PriceMicros, maxPriceMicros),
+			Score:       scoreCandidate(n.SuccessRate(), r.SuccessCount+r.FailureCount, r.PriceMicros, maxPriceMicros),
 		})
 	}
 	// Higher score first; tie-break by lower price then node id for determinism.
@@ -160,13 +202,16 @@ func ScheduleCandidates(scriptId, version int, maxPriceMicros int64, limit int) 
 	return candidates, nil
 }
 
-// scoreCandidate is the MVP price-only component of the §10.2 score, normalized
-// to [0,1] where a lower price scores higher. Quality/stability/latency signals
-// are layered in once receipts and metrics exist.
-// scoreCandidate ranks a node by success rate (dominant) with price as a minor
-// tie-breaker. Client prefers high-success nodes; a low-success node only wins
-// when the higher ones are busy (excluded from candidates upstream).
-func scoreCandidate(successRate float64, priceMicros, maxPriceMicros int64) float64 {
+// scoreCandidate ranks an idle node by a weighted blend so "auto" picks the
+// most-executed, highest-success idle provider (product requirement 3), with
+// price as a minor tie-breaker:
+//   - success rate (weight 0.55): reliability dominates.
+//   - experience (weight 0.30): executions normalized to [0,1] against a cap, so
+//     a proven high-volume node outranks an untried one at similar reliability.
+//   - price (weight 0.15): cheaper breaks near-ties.
+// All three are in [0,1]. A low-success/untried node still only wins when the
+// better ones are busy (excluded from candidates upstream).
+func scoreCandidate(successRate float64, executions, priceMicros, maxPriceMicros int64) float64 {
 	priceScore := 0.0
 	if maxPriceMicros > 0 {
 		priceScore = 1.0 - float64(priceMicros)/float64(maxPriceMicros)
@@ -174,6 +219,9 @@ func scoreCandidate(successRate float64, priceMicros, maxPriceMicros int64) floa
 			priceScore = 0
 		}
 	}
-	// Success rate weight 0.85 dominates; price weight 0.15 breaks near-ties.
-	return 0.85*successRate + 0.15*priceScore
+	experienceScore := float64(executions) / maxScoreExecutions
+	if experienceScore > 1 {
+		experienceScore = 1
+	}
+	return 0.55*successRate + 0.30*experienceScore + 0.15*priceScore
 }
