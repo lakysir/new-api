@@ -68,43 +68,46 @@ export function MissingModelsDialog({
 
   const handleConfigureModel = async (modelName: string) => {
     setLoadingModel(modelName)
+    let model = { model_name: modelName } as Model
     try {
       const result = await getUpstreamModelMetadata(modelName)
       if (!result.success || !result.data) {
         toast.error(result.message || t('Unable to read upstream model metadata'))
-        return
+      } else {
+        const metadata = result.data
+        model = {
+          model_name: metadata.model_name,
+          description: metadata.description,
+          description_en: metadata.description_en,
+          icon: metadata.icon || metadata.vendor_icon,
+          tags: metadata.tags,
+          vendor_name: metadata.vendor_name,
+          endpoints: metadata.supported_endpoint_types
+            ? JSON.stringify(metadata.supported_endpoint_types)
+            : '',
+          request_price_units: metadata.request_price_units,
+          request_price_display_unit: metadata.request_price_display_unit,
+          quota_type: metadata.quota_type,
+          model_ratio: metadata.model_ratio,
+          model_price: metadata.model_price,
+          completion_ratio: metadata.completion_ratio,
+          cache_ratio: metadata.cache_ratio,
+          create_cache_ratio: metadata.create_cache_ratio,
+          image_ratio: metadata.image_ratio,
+          audio_ratio: metadata.audio_ratio,
+          audio_completion_ratio: metadata.audio_completion_ratio,
+        } as Model
+        toast.success(t('Upstream model metadata loaded'))
       }
-      const metadata = result.data
-      setCurrentRow({
-        model_name: metadata.model_name,
-        description: metadata.description,
-        description_en: metadata.description_en,
-        icon: metadata.icon || metadata.vendor_icon,
-        tags: metadata.tags,
-        vendor_name: metadata.vendor_name,
-        endpoints: metadata.supported_endpoint_types
-          ? JSON.stringify(metadata.supported_endpoint_types)
-          : '',
-        request_price_units: metadata.request_price_units,
-        request_price_display_unit: metadata.request_price_display_unit,
-        quota_type: metadata.quota_type,
-        model_ratio: metadata.model_ratio,
-        model_price: metadata.model_price,
-        completion_ratio: metadata.completion_ratio,
-        cache_ratio: metadata.cache_ratio,
-        create_cache_ratio: metadata.create_cache_ratio,
-        image_ratio: metadata.image_ratio,
-        audio_ratio: metadata.audio_ratio,
-        audio_completion_ratio: metadata.audio_completion_ratio,
-      } as Model)
-      onOpenChange(false)
-      setOpen('create-model')
-      toast.success(t('Upstream model metadata loaded'))
     } catch (error) {
       toast.error(String((error as Error).message))
     } finally {
       setLoadingModel(null)
     }
+
+    setCurrentRow(model)
+    onOpenChange(false)
+    setOpen('create-model')
   }
 
   useEffect(() => {
