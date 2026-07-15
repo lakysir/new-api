@@ -681,13 +681,18 @@ export function NodesConsolePage() {
               <TableBody>
                 {list.map((c) => {
                   const stat = capStats[`${nodeId}:${c.script_id}:${c.version}`]
+                  const scriptTitle = pubScripts.find(
+                    (script) => script.id === c.script_id
+                  )?.title
                   const rate =
                     stat && stat.executions > 0
                       ? `${Math.round((stat.successes / stat.executions) * 100)}% (${stat.successes}/${stat.executions})`
                       : '-'
                   return (
                   <TableRow key={c.id}>
-                    <TableCell>#{c.script_id}</TableCell>
+                    <TableCell>
+                      #{c.script_id}{scriptTitle ? ` ${scriptTitle}` : ''}
+                    </TableCell>
                     <TableCell>v{c.version}</TableCell>
                     <TableCell>{microsToCurrency(c.price_micros)}</TableCell>
                     <TableCell>
