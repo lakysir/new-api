@@ -82,14 +82,14 @@ func Dispatch(orderId string, attempt int) (*Result, error) {
 	if len(candidates) == 0 {
 		return nil, ErrNoCandidates
 	}
-	best := candidates[0]
-	// If the client chose a specific provider offer, prefer it (must be among
-	// the eligible candidates — online/idle/tested/quota/price).
+	// Build the ordered list of candidates to attempt. In auto mode we try the
+	// ranked candidates in turn; in chosen mode only the client's node.
+	attemptOrder := candidates
 	if o.ChosenNodeId != "" {
 		matched := false
 		for _, cnd := range candidates {
 			if cnd.NodeId == o.ChosenNodeId {
-				best = cnd
+				attemptOrder = []model.CandidateNode{cnd}
 				matched = true
 				break
 			}
@@ -101,38 +101,60 @@ func Dispatch(orderId string, attempt int) (*Result, error) {
 	}
 
 	taskId := orderId // 1:1 order:task in the MVP
+	// Try candidates in ranked order. A node can pass the ScheduleCandidates
+	// filter (state=IDLE) yet still fail reservation with ErrNodeBusy when it
+	// carries a stale active lease (expired-but-not-yet-reaped, or a lost race).
+	// Skip past those to the next idle candidate instead of failing the whole
+	// dispatch — otherwise "auto" reports "node already has an active lease"
+	// while other free nodes sit unused. A chosen node has a single-element
+	// list, so it still surfaces ErrNodeBusy as before.
 	var result *Result
-	err = model.DB.Transaction(func(tx *gorm.DB) error {
-		// Reuse the atomic reservation primitive, but within this tx we also
-		// advance the order and enqueue the offer so all three commit together.
-		lease, ta, rerr := reserveInTx(tx, taskId, orderId, best.NodeId, attempt, DefaultLeaseTTL)
-		if rerr != nil {
-			return rerr
-		}
-		leaseExpires := time.Now().Add(DefaultLeaseTTL).Unix()
-		payload, _ := json.Marshal(taskOfferPayload{
-			TaskId: taskId, Attempt: attempt, OrderId: orderId,
-			ScriptId: o.ScriptId, ScriptVersion: o.Version, InputHash: o.InputHash,
-			OfferedMicros: best.PriceMicros, LeaseExpiresAt: leaseExpires, MaxDurationSecs: 180,
-			TargetSite: targetSite,
+	for _, best := range attemptOrder {
+		var attemptResult *Result
+		txErr := model.DB.Transaction(func(tx *gorm.DB) error {
+			// Reuse the atomic reservation primitive, but within this tx we also
+			// advance the order and enqueue the offer so all three commit together.
+			lease, ta, rerr := reserveInTx(tx, taskId, orderId, best.NodeId, attempt, DefaultLeaseTTL)
+			if rerr != nil {
+				return rerr
+			}
+			leaseExpires := time.Now().Add(DefaultLeaseTTL).Unix()
+			payload, _ := json.Marshal(taskOfferPayload{
+				TaskId: taskId, Attempt: attempt, OrderId: orderId,
+				ScriptId: o.ScriptId, ScriptVersion: o.Version, InputHash: o.InputHash,
+				OfferedMicros: best.PriceMicros, LeaseExpiresAt: leaseExpires, MaxDurationSecs: 180,
+				TargetSite: targetSite,
+			})
+			ev, eerr := model.EnqueueOutboxTx(tx, "task.offer", taskId, string(payload))
+			if eerr != nil {
+				return eerr
+			}
+			// Advance order to OFFERED with the same optimistic-lock discipline.
+			if terr := transitionInTx(tx, orderId, model.OrderOffered); terr != nil {
+				return terr
+			}
+			attemptResult = &Result{
+				OrderId: orderId, TaskId: taskId, Attempt: attempt, NodeId: best.NodeId,
+				LeaseId: lease.Id, EventId: ev.EventId, OfferedMicros: best.PriceMicros,
+			}
+			_ = ta
+			return nil
 		})
-		ev, eerr := model.EnqueueOutboxTx(tx, "task.offer", taskId, string(payload))
-		if eerr != nil {
-			return eerr
+		if txErr == nil {
+			result = attemptResult
+			break
 		}
-		// Advance order to OFFERED with the same optimistic-lock discipline.
-		if terr := transitionInTx(tx, orderId, model.OrderOffered); terr != nil {
-			return terr
+		// A busy node is a soft failure: try the next ranked candidate.
+		if errors.Is(txErr, model.ErrNodeBusy) {
+			continue
 		}
-		result = &Result{
-			OrderId: orderId, TaskId: taskId, Attempt: attempt, NodeId: best.NodeId,
-			LeaseId: lease.Id, EventId: ev.EventId, OfferedMicros: best.PriceMicros,
-		}
-		_ = ta
-		return nil
-	})
-	if err != nil {
-		return nil, err
+		return nil, txErr
+	}
+	if result == nil {
+		// Every candidate turned out busy — treat as "no eligible node" so the
+		// caller (CreateOrder) leaves the order matching for the async offer
+		// retry rather than hard-failing the request with ErrNodeBusy.
+		return nil, ErrNoCandidates
 	}
 	return result, nil
 }

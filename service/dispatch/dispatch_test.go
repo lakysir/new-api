@@ -126,6 +126,42 @@ func TestDispatchNoCandidates(t *testing.T) {
 	}
 }
 
+// TestDispatchSkipsBusyCandidateToIdleOne reproduces the "node already has an
+// active lease" bug in auto mode: a node can pass the ScheduleCandidates filter
+// (state=IDLE) while still carrying a stale active lease (e.g. expired but not
+// yet reaped). Dispatch must skip it and reserve the next idle candidate rather
+// than failing the whole request.
+func TestDispatchSkipsBusyCandidateToIdleOne(t *testing.T) {
+	scriptId := 9004
+	v := seedScriptVersion(t, scriptId, 100)
+	// Two idle candidates. Cheaper node is ranked first so it's attempted first.
+	seedNodeWithCapability(t, "dn-stale", 200, scriptId, v, 100000)
+	seedNodeWithCapability(t, "dn-free", 201, scriptId, v, 110000)
+
+	// Plant a stale active lease on the top-ranked node while it still shows
+	// state=IDLE in the nodes table (the reaper hasn't released it yet).
+	active := true
+	if err := model.DB.Create(&model.Lease{
+		Id: "lea_stale", NodeId: "dn-stale", TaskId: "old-task", Attempt: 1,
+		Active: &active, ExpiresAt: time.Now().Add(-time.Minute).Unix(),
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	o := seedFundedOrder(t, 500, scriptId, v, 200000, "disp-stale")
+	res, err := Dispatch(o.Id, 1)
+	if err != nil {
+		t.Fatalf("dispatch should fall through to the idle node, got %v", err)
+	}
+	if res.NodeId != "dn-free" {
+		t.Fatalf("expected dispatch to the idle node dn-free, got %s", res.NodeId)
+	}
+	got, _ := model.GetOrder(o.Id)
+	if got.State != model.OrderOffered {
+		t.Fatalf("order should be OFFERED, got %s", got.State)
+	}
+}
+
 func TestConcurrentDispatchSingleNodeOneWinner(t *testing.T) {
 	scriptId := 9003
 	v := seedScriptVersion(t, scriptId, 100)
