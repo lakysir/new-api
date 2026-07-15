@@ -76,12 +76,12 @@ const emptyForm = {
 // to help authors understand parameter passing and the required return shape.
 const EXAMPLE_PARAMS = JSON.stringify(
   {
-    prompt: 'a futuristic city at sunset',
+    prompt: '一个男孩和一只狗。',
     referenceImageUrls: [
       'https://oss.aimh8.com/international/2026/07/05/233ac22e11714a66abf40de604f88fb3.jpg',
     ],
     model: 'NARWHAL',
-    resolution: '2K',
+    resolution: '1K',
     aspectRatio: '16:9',
     timeoutMs: 120000,
   },
@@ -89,66 +89,75 @@ const EXAMPLE_PARAMS = JSON.stringify(
   2
 )
 
-const EXAMPLE_CODE = `// ─── Script parameters ────────────────────────────────────────────────────
-// All fields defined in "Script Params" are available as globals:
-//   params.prompt, params.model, params.resolution, …
-//
-// Additional sandbox globals:
-//   context.apiKey   – provider's API key for the target site (string)
-//   fetch            – standard Web Fetch API (Promise-based)
-//   AbortSignal      – standard Web API
+const EXAMPLE_CODE = `async function runGeneratedTest(config) {
+  /*
+  runGeneratedTest(config) parameter contract:
+  The JSON in the Script Params box is passed as config.
+  - config.prompt: 图片生成提示词，不能为空。
+  - config.referenceImageUrls: 可选，参考图 URL 数组。
+  - config.model: 可选，默认 "NARWHAL"。
+  - config.resolution: 可选，"1K"/"2K"/"4K"，默认 "1K"。
+  - config.aspectRatio: 可选，"16:9"/"1:1"/"9:16"，默认 "16:9"。
+  - config.timeoutMs: 可选，超时毫秒，默认 120000。
+  */
 
-const {
-  prompt,
-  referenceImageUrls = [],
-  model = 'NARWHAL',
-  resolution = '2K',
-  aspectRatio = '1:1',
-  timeoutMs = 120000,
-} = params
+  // ── 脚本运行于目标站点 MAIN world（浏览器扩展注入）
+  // ── 可访问 document / location / fetch（with credentials）
 
-// ─── Call the target site API ──────────────────────────────────────────────
-const response = await fetch('https://api.example.com/v1/generate', {
-  method: 'POST',
-  headers: {
-    Authorization: \`Bearer \${context.apiKey}\`,
-    'Content-Type': 'application/json',
-  },
-  body: JSON.stringify({
-    prompt,
-    model,
-    resolution,
-    aspect_ratio: aspectRatio,
-    reference_images: referenceImageUrls,
-  }),
-  signal: AbortSignal.timeout(timeoutMs),
-})
+  // 1. 获取 session token（浏览器已登录，凭 cookie 直接读取）
+  var token = null;
+  for (var path of ["/api/auth/session", "/fx/api/auth/session"]) {
+    try {
+      var r = await fetch(path, { credentials: "include", cache: "no-store" });
+      if (!r.ok) continue;
+      var j = await r.json();
+      token = j && (j.accessToken || j.access_token || j.token);
+      if (token) break;
+    } catch (_) {}
+  }
+  if (!token) {
+    return {
+      status: "failed",
+      stage: "session",
+      balance: 0,
+      error: "无法取得 access_token，请确认已登录目标站点"
+    };
+  }
 
-if (!response.ok) {
-  const errText = await response.text()
-  throw new Error(\`Generation failed (\${response.status}): \${errText}\`)
-}
+  // 2. 读取账户余额（供平台更新节点 remaining_quota）
+  var balance = 0;
+  try {
+    var cr = await fetch("https://aisandbox-pa.googleapis.com/v1/credits", {
+      headers: { Authorization: "Bearer " + token }
+    });
+    if (cr.ok) {
+      var cd = await cr.json();
+      balance = parseInt(cd && cd.credits || 0, 10) || 0;
+    }
+  } catch (_) {}
 
-const data = await response.json()
+  // 3. 调用生图接口（示意，替换为真实接口）
+  var prompt = String(config.prompt || "");
+  var model  = String(config.model  || "NARWHAL");
 
-// ─── Return value ──────────────────────────────────────────────────────────
-// The return value MUST be a plain JSON-serialisable object with two fields:
-//
-//   output   (required) – the task result delivered to the requester.
-//                         Can be any JSON value: object, string, array, …
-//
-//   balance  (required) – current credit / remaining-quota on the target
-//                         site account, as an integer.
-//                         The platform reads this to update the node's
-//                         remaining-balance display after each execution.
-//                         Return 0 if the site does not expose a balance.
-return {
-  output: {
-    imageUrl: data.images?.[0]?.url ?? null,
-    seed: data.seed ?? null,
-    model: data.model,
-  },
-  balance: data.account?.credits_remaining ?? 0,
+  // ... 此处填入真实请求逻辑 ...
+
+  // ── 返回值规范 ────────────────────────────────────────────────────────────
+  // status   (必填) "success" | "failed" | "error"
+  // balance  (必填) 账户当前剩余额度（整数）；平台读此字段更新节点 remaining_quota
+  // 其余字段自定义，可放图片 URL、种子、模型名等任意可序列化数据
+  return {
+    status: "success",
+    type: "flow_image",
+    balance: balance,           // ← 平台读此字段，务必填写
+    prompt: prompt,
+    model: model,
+    image_url: "",              // 替换为真实生图结果 URL
+    page: {
+      title: typeof document !== "undefined" ? document.title : null,
+      url:   typeof location  !== "undefined" ? location.href  : null
+    }
+  };
 }
 `
 
