@@ -19,6 +19,12 @@ type submitReceiptRequest struct {
 	PayloadHash  string `json:"payload_hash"`
 	Signature    string `json:"signature"`
 	SignerDevice string `json:"signer_device"`
+	// Balance is the script-reported target-site account balance, sent on the
+	// provider receipt so it is persisted before settlement reads it. The
+	// result_ready control frame carries it too, but that frame can arrive after
+	// reconciliation; the receipt POST is what triggers settlement, so storing it
+	// here closes the race. Only a positive value is stored.
+	Balance int `json:"balance"`
 }
 
 // SubmitReceipt stores a signed party receipt for a task attempt, then attempts
@@ -43,6 +49,12 @@ func SubmitReceipt(c *gin.Context) {
 	if err := model.SaveReceipt(r); err != nil {
 		common.ApiError(c, err)
 		return
+	}
+	// Persist the provider-reported balance before reconciling so the settlement
+	// layer can update the capability's remaining_quota in the same request that
+	// settles the order (the result_ready frame may not have arrived yet).
+	if req.Party == "provider" && req.Balance > 0 {
+		_ = model.SetTaskAttemptBalance(req.TaskId, req.Attempt, req.Balance)
 	}
 	// Receipts can beat the control-channel result_ready frame by a few
 	// milliseconds. Bring a running order to its reconciliation state so a
