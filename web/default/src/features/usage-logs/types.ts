@@ -67,6 +67,8 @@ export interface DrawingLogFilters extends CommonFilters {
  */
 export interface TaskLogFilters extends CommonFilters {
   taskId?: string
+  model?: string
+  username?: string
 }
 
 /**
@@ -345,8 +347,35 @@ export interface GetTaskLogsParams {
   page_size?: number
   channel_id?: string
   task_id?: string
+  model_name?: string
+  username?: string
   start_timestamp?: number
   end_timestamp?: number
+}
+
+/**
+ * Task log cost statistics (discounted/actual charged quota, by status)
+ */
+export interface TaskLogStatistics {
+  success_quota: number
+  failure_quota: number
+  running_quota: number
+}
+
+export interface GetTaskLogStatsParams {
+  channel_id?: string
+  task_id?: string
+  model_name?: string
+  username?: string
+  status?: string
+  start_timestamp?: number
+  end_timestamp?: number
+}
+
+export interface GetTaskLogStatsResponse {
+  success: boolean
+  message?: string
+  data?: TaskLogStatistics
 }
 
 // ============================================================================

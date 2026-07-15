@@ -446,21 +446,31 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 	if err != nil {
 		common.SysLog("failed to record task billing log: " + err.Error())
 	}
-	if params.LogType == LogTypeConsume && common.DataExportEnabled {
+	// 数据看板统计（quota_data）只应反映成功消费的额度。
+	// 异步任务在提交时按 LogTypeConsume 预扣并写入 quota_data；任务失败退款时
+	// 以 LogTypeRefund 记录，这里对应写入负向 delta 抵消，使看板不再统计失败任务的费用。
+	if common.DataExportEnabled && (params.LogType == LogTypeConsume || params.LogType == LogTypeRefund) {
 		nodeName := params.NodeName
 		if nodeName == "" {
 			nodeName = common.NodeName
+		}
+		quota := params.Quota
+		count := 1
+		if params.LogType == LogTypeRefund {
+			quota = -params.Quota
+			count = -1
 		}
 		LogQuotaData(QuotaDataLogParams{
 			UserID:    params.UserId,
 			Username:  username,
 			ModelName: params.ModelName,
-			Quota:     params.Quota,
+			Quota:     quota,
 			CreatedAt: createdAt,
 			UseGroup:  params.Group,
 			TokenID:   params.TokenId,
 			ChannelID: params.ChannelId,
 			NodeName:  nodeName,
+			Count:     count,
 		})
 	}
 }

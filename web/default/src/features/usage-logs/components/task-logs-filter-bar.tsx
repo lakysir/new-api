@@ -33,6 +33,7 @@ import {
   LogsFilterInput,
   LogsFilterToolbar,
 } from './logs-filter-toolbar'
+import { TaskLogsStats } from './task-logs-stats'
 
 const route = getRouteApi('/_authenticated/usage-logs/$section')
 
@@ -98,6 +99,10 @@ export function TaskLogsFilterBar<TData>(props: TaskLogsFilterBarProps<TData>) {
         : {
             ...baseFilters,
             ...(searchParams.filter ? { taskId: searchParams.filter } : {}),
+            ...(searchParams.model ? { model: searchParams.model } : {}),
+            ...(searchParams.username
+              ? { username: searchParams.username }
+              : {}),
           }
 
     setFilters(next)
@@ -107,6 +112,8 @@ export function TaskLogsFilterBar<TData>(props: TaskLogsFilterBarProps<TData>) {
     searchParams.endTime,
     searchParams.channel,
     searchParams.filter,
+    searchParams.model,
+    searchParams.username,
   ])
 
   const handleChange = useCallback(
@@ -127,6 +134,7 @@ export function TaskLogsFilterBar<TData>(props: TaskLogsFilterBarProps<TData>) {
       },
     })
     queryClient.invalidateQueries({ queryKey: ['logs'] })
+    queryClient.invalidateQueries({ queryKey: ['task-logs-stats'] })
   }, [filters, navigate, props.logCategory, queryClient])
 
   const handleReset = useCallback(() => {
@@ -144,6 +152,7 @@ export function TaskLogsFilterBar<TData>(props: TaskLogsFilterBarProps<TData>) {
       },
     })
     queryClient.invalidateQueries({ queryKey: ['logs'] })
+    queryClient.invalidateQueries({ queryKey: ['task-logs-stats'] })
   }, [navigate, props.logCategory, queryClient])
 
   const handleKeyDown = useCallback(
@@ -160,12 +169,24 @@ export function TaskLogsFilterBar<TData>(props: TaskLogsFilterBarProps<TData>) {
     [props.logCategory]
   )
 
+  const handleTaskFieldChange = (
+    field: 'model' | 'username',
+    value: string
+  ) => {
+    setFilters((prev) => ({ ...prev, [field]: value }))
+  }
+
+  const isTask = props.logCategory === 'task'
+  const taskFilters = filters as TaskLogFilters
   const filterValue = getFilterValue(filters, props.logCategory)
   const placeholder =
     props.logCategory === 'drawing'
       ? t('Filter by MjProxy task ID')
       : t('Filter by task ID')
-  const hasAdditionalFilters = !!filterValue || !!filters.channel
+  const hasAdditionalFilters =
+    !!filterValue ||
+    !!filters.channel ||
+    (isTask && (!!taskFilters.model || !!taskFilters.username))
   const dateRangeFilter = (
     <LogsFilterField wide>
       <CompactDateTimeRangePicker
@@ -189,6 +210,27 @@ export function TaskLogsFilterBar<TData>(props: TaskLogsFilterBarProps<TData>) {
       />
     </LogsFilterField>
   )
+  const modelFilter = isTask ? (
+    <LogsFilterField>
+      <LogsFilterInput
+        placeholder={t('Model Name')}
+        value={taskFilters.model || ''}
+        onChange={(e) => handleTaskFieldChange('model', e.target.value)}
+        onKeyDown={handleKeyDown}
+      />
+    </LogsFilterField>
+  ) : null
+  const usernameFilter =
+    isTask && isAdmin ? (
+      <LogsFilterField>
+        <LogsFilterInput
+          placeholder={t('Username')}
+          value={taskFilters.username || ''}
+          onChange={(e) => handleTaskFieldChange('username', e.target.value)}
+          onKeyDown={handleKeyDown}
+        />
+      </LogsFilterField>
+    ) : null
   const channelFilter = isAdmin ? (
     <LogsFilterField>
       <LogsFilterInput
@@ -200,13 +242,29 @@ export function TaskLogsFilterBar<TData>(props: TaskLogsFilterBarProps<TData>) {
     </LogsFilterField>
   ) : null
 
+  const statsBar = isTask ? (
+    <div className='flex flex-wrap items-center gap-2'>
+      <TaskLogsStats />
+    </div>
+  ) : undefined
+
+  const mobileFilterCount = [
+    filterValue,
+    filters.channel,
+    isTask ? taskFilters.model : undefined,
+    isTask ? taskFilters.username : undefined,
+  ].filter(Boolean).length
+
   return (
     <LogsFilterToolbar
       table={props.table}
+      stats={statsBar}
       primaryFilters={
         <>
           {dateRangeFilter}
           {taskIdFilter}
+          {modelFilter}
+          {usernameFilter}
           {channelFilter}
         </>
       }
@@ -214,10 +272,12 @@ export function TaskLogsFilterBar<TData>(props: TaskLogsFilterBarProps<TData>) {
       mobileFilters={
         <>
           {taskIdFilter}
+          {modelFilter}
+          {usernameFilter}
           {channelFilter}
         </>
       }
-      mobileFilterCount={[filterValue, filters.channel].filter(Boolean).length}
+      mobileFilterCount={mobileFilterCount}
       hasActiveFilters={hasAdditionalFilters}
       onSearch={handleApply}
       searchLoading={fetchingLogs > 0}

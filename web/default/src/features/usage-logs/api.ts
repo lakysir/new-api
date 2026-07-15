@@ -26,6 +26,8 @@ import type {
   GetLogStatsResponse,
   GetMidjourneyLogsParams,
   GetTaskLogsParams,
+  GetTaskLogStatsParams,
+  GetTaskLogStatsResponse,
   UserInfo,
 } from './types'
 
@@ -110,3 +112,22 @@ export const getAllTaskLogs = (params: GetTaskLogsParams) =>
 
 export const getUserTaskLogs = (params: GetTaskLogsParams) =>
   fetchLogs('/api/task', params, false)
+
+async function fetchTaskLogStats(
+  params: GetTaskLogStatsParams,
+  isAdmin: boolean
+): Promise<GetTaskLogStatsResponse> {
+  const queryParams = buildQueryParams(
+    params as unknown as Record<string, unknown>
+  )
+  const path = isAdmin ? '/api/task/stat' : '/api/task/self/stat'
+  const res = await api.get(`${path}?${queryParams}`)
+  return res.data
+}
+
+export const getTaskLogStats = (params: GetTaskLogStatsParams = {}) =>
+  fetchTaskLogStats(params, true)
+
+export const getUserTaskLogStats = (
+  params: Omit<GetTaskLogStatsParams, 'username' | 'channel_id'> = {}
+) => fetchTaskLogStats(params, false)

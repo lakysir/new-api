@@ -10,6 +10,8 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	commonRelay "github.com/QuantumNous/new-api/relay/common"
+
+	"gorm.io/gorm"
 )
 
 type TaskStatus string
@@ -51,6 +53,7 @@ type Task struct {
 	Group      string                `json:"group" gorm:"type:varchar(50)"` // 修正计费用
 	ChannelId  int                   `json:"channel_id" gorm:"index"`
 	Quota      int                   `json:"quota"`
+	ModelName  string                `json:"model_name" gorm:"type:varchar(191);index"` // 模型名称，用于搜索与统计
 	Action     string                `json:"action" gorm:"type:varchar(40);index"` // 任务类型, song, lyrics, description-mode
 	Status     TaskStatus            `json:"status" gorm:"type:varchar(20);index"` // 任务状态
 	FailReason string                `json:"fail_reason"`
@@ -163,11 +166,50 @@ type SyncTaskQueryParams struct {
 	ChannelID      string
 	TaskID         string
 	UserID         string
+	ModelName      string
 	Action         string
 	Status         string
 	StartTimestamp int64
 	EndTimestamp   int64
 	UserIDs        []int
+}
+
+// applyTaskQueryFilters 将任务列表/统计通用的过滤条件应用到查询上。
+// admin 为 true 时应用管理员专属过滤（渠道、用户），false 时用户视图不含这些条件。
+func applyTaskQueryFilters(query *gorm.DB, queryParams SyncTaskQueryParams, admin bool) *gorm.DB {
+	if admin {
+		if queryParams.ChannelID != "" {
+			query = query.Where("channel_id = ?", queryParams.ChannelID)
+		}
+		if queryParams.UserID != "" {
+			query = query.Where("user_id = ?", queryParams.UserID)
+		}
+		if len(queryParams.UserIDs) != 0 {
+			query = query.Where("user_id in (?)", queryParams.UserIDs)
+		}
+	}
+	if queryParams.Platform != "" {
+		query = query.Where("platform = ?", queryParams.Platform)
+	}
+	if queryParams.TaskID != "" {
+		query = query.Where("task_id = ?", queryParams.TaskID)
+	}
+	if queryParams.ModelName != "" {
+		query = query.Where("model_name LIKE ?", "%"+queryParams.ModelName+"%")
+	}
+	if queryParams.Action != "" {
+		query = query.Where("action = ?", queryParams.Action)
+	}
+	if queryParams.Status != "" {
+		query = query.Where("status = ?", queryParams.Status)
+	}
+	if queryParams.StartTimestamp != 0 {
+		query = query.Where("submit_time >= ?", queryParams.StartTimestamp)
+	}
+	if queryParams.EndTimestamp != 0 {
+		query = query.Where("submit_time <= ?", queryParams.EndTimestamp)
+	}
+	return query
 }
 
 func InitTask(platform constant.TaskPlatform, relayInfo *commonRelay.RelayInfo) *Task {
@@ -203,6 +245,7 @@ func InitTask(platform constant.TaskPlatform, relayInfo *commonRelay.RelayInfo) 
 		Progress:    "0%",
 		ChannelId:   relayInfo.ChannelId,
 		Platform:    platform,
+		ModelName:   properties.OriginModelName,
 		Properties:  properties,
 		PrivateData: privateData,
 	}
@@ -214,27 +257,7 @@ func TaskGetAllUserTask(userId int, startIdx int, num int, queryParams SyncTaskQ
 	var err error
 
 	// 初始化查询构建器
-	query := DB.Where("user_id = ?", userId)
-
-	if queryParams.TaskID != "" {
-		query = query.Where("task_id = ?", queryParams.TaskID)
-	}
-	if queryParams.Action != "" {
-		query = query.Where("action = ?", queryParams.Action)
-	}
-	if queryParams.Status != "" {
-		query = query.Where("status = ?", queryParams.Status)
-	}
-	if queryParams.Platform != "" {
-		query = query.Where("platform = ?", queryParams.Platform)
-	}
-	if queryParams.StartTimestamp != 0 {
-		// 假设您已将前端传来的时间戳转换为数据库所需的时间格式，并处理了时间戳的验证和解析
-		query = query.Where("submit_time >= ?", queryParams.StartTimestamp)
-	}
-	if queryParams.EndTimestamp != 0 {
-		query = query.Where("submit_time <= ?", queryParams.EndTimestamp)
-	}
+	query := applyTaskQueryFilters(DB.Where("user_id = ?", userId), queryParams, false)
 
 	// 获取数据
 	err = query.Omit("channel_id").Order("id desc").Limit(num).Offset(startIdx).Find(&tasks).Error
@@ -249,37 +272,8 @@ func TaskGetAllTasks(startIdx int, num int, queryParams SyncTaskQueryParams) []*
 	var tasks []*Task
 	var err error
 
-	// 初始化查询构建器
-	query := DB
-
-	// 添加过滤条件
-	if queryParams.ChannelID != "" {
-		query = query.Where("channel_id = ?", queryParams.ChannelID)
-	}
-	if queryParams.Platform != "" {
-		query = query.Where("platform = ?", queryParams.Platform)
-	}
-	if queryParams.UserID != "" {
-		query = query.Where("user_id = ?", queryParams.UserID)
-	}
-	if len(queryParams.UserIDs) != 0 {
-		query = query.Where("user_id in (?)", queryParams.UserIDs)
-	}
-	if queryParams.TaskID != "" {
-		query = query.Where("task_id = ?", queryParams.TaskID)
-	}
-	if queryParams.Action != "" {
-		query = query.Where("action = ?", queryParams.Action)
-	}
-	if queryParams.Status != "" {
-		query = query.Where("status = ?", queryParams.Status)
-	}
-	if queryParams.StartTimestamp != 0 {
-		query = query.Where("submit_time >= ?", queryParams.StartTimestamp)
-	}
-	if queryParams.EndTimestamp != 0 {
-		query = query.Where("submit_time <= ?", queryParams.EndTimestamp)
-	}
+	// 初始化查询构建器并添加过滤条件
+	query := applyTaskQueryFilters(DB, queryParams, true)
 
 	// 获取数据
 	err = query.Order("id desc").Limit(num).Offset(startIdx).Find(&tasks).Error
@@ -465,34 +459,7 @@ type TaskQuotaUsage struct {
 // TaskCountAllTasks returns total tasks that match the given query params (admin usage)
 func TaskCountAllTasks(queryParams SyncTaskQueryParams) int64 {
 	var total int64
-	query := DB.Model(&Task{})
-	if queryParams.ChannelID != "" {
-		query = query.Where("channel_id = ?", queryParams.ChannelID)
-	}
-	if queryParams.Platform != "" {
-		query = query.Where("platform = ?", queryParams.Platform)
-	}
-	if queryParams.UserID != "" {
-		query = query.Where("user_id = ?", queryParams.UserID)
-	}
-	if len(queryParams.UserIDs) != 0 {
-		query = query.Where("user_id in (?)", queryParams.UserIDs)
-	}
-	if queryParams.TaskID != "" {
-		query = query.Where("task_id = ?", queryParams.TaskID)
-	}
-	if queryParams.Action != "" {
-		query = query.Where("action = ?", queryParams.Action)
-	}
-	if queryParams.Status != "" {
-		query = query.Where("status = ?", queryParams.Status)
-	}
-	if queryParams.StartTimestamp != 0 {
-		query = query.Where("submit_time >= ?", queryParams.StartTimestamp)
-	}
-	if queryParams.EndTimestamp != 0 {
-		query = query.Where("submit_time <= ?", queryParams.EndTimestamp)
-	}
+	query := applyTaskQueryFilters(DB.Model(&Task{}), queryParams, true)
 	_ = query.Count(&total).Error
 	return total
 }
@@ -500,27 +467,36 @@ func TaskCountAllTasks(queryParams SyncTaskQueryParams) int64 {
 // TaskCountAllUserTask returns total tasks for given user
 func TaskCountAllUserTask(userId int, queryParams SyncTaskQueryParams) int64 {
 	var total int64
-	query := DB.Model(&Task{}).Where("user_id = ?", userId)
-	if queryParams.TaskID != "" {
-		query = query.Where("task_id = ?", queryParams.TaskID)
-	}
-	if queryParams.Action != "" {
-		query = query.Where("action = ?", queryParams.Action)
-	}
-	if queryParams.Status != "" {
-		query = query.Where("status = ?", queryParams.Status)
-	}
-	if queryParams.Platform != "" {
-		query = query.Where("platform = ?", queryParams.Platform)
-	}
-	if queryParams.StartTimestamp != 0 {
-		query = query.Where("submit_time >= ?", queryParams.StartTimestamp)
-	}
-	if queryParams.EndTimestamp != 0 {
-		query = query.Where("submit_time <= ?", queryParams.EndTimestamp)
-	}
+	query := applyTaskQueryFilters(DB.Model(&Task{}).Where("user_id = ?", userId), queryParams, false)
 	_ = query.Count(&total).Error
 	return total
+}
+
+// TaskQuotaStat 任务费用统计（折扣后的实际扣费额度）。
+type TaskQuotaStat struct {
+	SuccessQuota int64 `json:"success_quota"`
+	FailureQuota int64 `json:"failure_quota"`
+	RunningQuota int64 `json:"running_quota"`
+}
+
+// TaskSumQuota 按状态汇总任务的已扣费额度（task.quota 已是折扣后的实际扣费）。
+// 运行中的定义与代码库其它位置一致：非终态（既不是 SUCCESS 也不是 FAILURE）。
+// 使用 SUM(CASE WHEN ...) + COALESCE，兼容 SQLite / MySQL / PostgreSQL。
+func TaskSumQuota(userId int, queryParams SyncTaskQueryParams) (TaskQuotaStat, error) {
+	var stat TaskQuotaStat
+	admin := userId <= 0
+	query := DB.Model(&Task{})
+	if !admin {
+		query = query.Where("user_id = ?", userId)
+	}
+	query = applyTaskQueryFilters(query, queryParams, admin)
+	err := query.Select(
+		"COALESCE(SUM(CASE WHEN status = ? THEN quota ELSE 0 END), 0) AS success_quota, "+
+			"COALESCE(SUM(CASE WHEN status = ? THEN quota ELSE 0 END), 0) AS failure_quota, "+
+			"COALESCE(SUM(CASE WHEN status NOT IN (?, ?) THEN quota ELSE 0 END), 0) AS running_quota",
+		TaskStatusSuccess, TaskStatusFailure, TaskStatusSuccess, TaskStatusFailure,
+	).Scan(&stat).Error
+	return stat, err
 }
 func (t *Task) ToOpenAIVideo() *dto.OpenAIVideo {
 	openAIVideo := dto.NewOpenAIVideo()

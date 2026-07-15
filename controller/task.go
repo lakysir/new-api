@@ -22,12 +22,15 @@ func GetAllTask(c *gin.Context) {
 	queryParams := model.SyncTaskQueryParams{
 		Platform:       constant.TaskPlatform(c.Query("platform")),
 		TaskID:         c.Query("task_id"),
+		ModelName:      c.Query("model_name"),
 		Status:         c.Query("status"),
 		Action:         c.Query("action"),
 		StartTimestamp: startTimestamp,
 		EndTimestamp:   endTimestamp,
 		ChannelID:      c.Query("channel_id"),
+		UserID:         c.Query("user_id"),
 	}
+	applyTaskUsernameFilter(c, &queryParams)
 
 	items := model.TaskGetAllTasks(pageInfo.GetStartIdx(), pageInfo.GetPageSize(), queryParams)
 	total := model.TaskCountAllTasks(queryParams)
@@ -47,6 +50,7 @@ func GetUserTask(c *gin.Context) {
 	queryParams := model.SyncTaskQueryParams{
 		Platform:       constant.TaskPlatform(c.Query("platform")),
 		TaskID:         c.Query("task_id"),
+		ModelName:      c.Query("model_name"),
 		Status:         c.Query("status"),
 		Action:         c.Query("action"),
 		StartTimestamp: startTimestamp,
@@ -58,6 +62,67 @@ func GetUserTask(c *gin.Context) {
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(tasksToDto(items, false))
 	common.ApiSuccess(c, pageInfo)
+}
+
+// applyTaskUsernameFilter 将 username 查询解析为 user id 列表，复用已有的 UserIDs 过滤（走 user_id 索引）。
+// 找不到匹配用户时写入一个不存在的 id，保证结果为空而非返回全部。
+func applyTaskUsernameFilter(c *gin.Context, queryParams *model.SyncTaskQueryParams) {
+	username := c.Query("username")
+	if username == "" {
+		return
+	}
+	ids := model.GetUserIdsByUsername(username)
+	if len(ids) == 0 {
+		queryParams.UserIDs = []int{-1}
+		return
+	}
+	queryParams.UserIDs = ids
+}
+
+func GetTaskStat(c *gin.Context) {
+	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
+	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
+	queryParams := model.SyncTaskQueryParams{
+		Platform:       constant.TaskPlatform(c.Query("platform")),
+		TaskID:         c.Query("task_id"),
+		ModelName:      c.Query("model_name"),
+		Status:         c.Query("status"),
+		Action:         c.Query("action"),
+		StartTimestamp: startTimestamp,
+		EndTimestamp:   endTimestamp,
+		ChannelID:      c.Query("channel_id"),
+		UserID:         c.Query("user_id"),
+	}
+	applyTaskUsernameFilter(c, &queryParams)
+
+	stat, err := model.TaskSumQuota(0, queryParams)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, stat)
+}
+
+func GetUserTaskStat(c *gin.Context) {
+	userId := c.GetInt("id")
+	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
+	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
+	queryParams := model.SyncTaskQueryParams{
+		Platform:       constant.TaskPlatform(c.Query("platform")),
+		TaskID:         c.Query("task_id"),
+		ModelName:      c.Query("model_name"),
+		Status:         c.Query("status"),
+		Action:         c.Query("action"),
+		StartTimestamp: startTimestamp,
+		EndTimestamp:   endTimestamp,
+	}
+
+	stat, err := model.TaskSumQuota(userId, queryParams)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, stat)
 }
 
 func tasksToDto(tasks []*model.Task, fillUser bool) []*dto.TaskDto {

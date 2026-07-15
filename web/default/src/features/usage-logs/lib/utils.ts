@@ -38,6 +38,7 @@ import type {
   FetchLogsConfig,
   GetMidjourneyLogsParams,
   GetTaskLogsParams,
+  GetTaskLogStatsParams,
 } from '../types'
 
 // ============================================================================
@@ -249,6 +250,27 @@ export function buildApiParams(config: {
   return params
 }
 
+/**
+ * Build task log stat params from search params (task cost statistics)
+ */
+export function buildTaskStatParams(config: {
+  searchParams: Record<string, unknown>
+  isAdmin: boolean
+}): GetTaskLogStatsParams {
+  const { searchParams, isAdmin } = config
+  return {
+    ...(searchParams.channel
+      ? { channel_id: String(searchParams.channel) }
+      : {}),
+    ...(searchParams.filter ? { task_id: String(searchParams.filter) } : {}),
+    ...(searchParams.model ? { model_name: String(searchParams.model) } : {}),
+    ...(isAdmin && searchParams.username
+      ? { username: String(searchParams.username) }
+      : {}),
+    ...buildTimeRangeParams(searchParams, false),
+  }
+}
+
 // ============================================================================
 // Data Fetching
 // ============================================================================
@@ -287,7 +309,15 @@ export async function fetchLogsByCategory(
       ? { mj_id: searchParams.filter as string | undefined }
       : {}),
     ...(logCategory === 'task'
-      ? { task_id: searchParams.filter as string | undefined }
+      ? {
+          task_id: searchParams.filter as string | undefined,
+          ...(searchParams.model
+            ? { model_name: String(searchParams.model) }
+            : {}),
+          ...(isAdmin && searchParams.username
+            ? { username: String(searchParams.username) }
+            : {}),
+        }
       : {}),
   }
 

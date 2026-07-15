@@ -329,6 +329,16 @@ func GetUserById(id int, selectAll bool) (*User, error) {
 	return &user, err
 }
 
+// GetUserIdsByUsername 按用户名模糊匹配返回 user id 列表，用于日志/任务的用户名搜索。
+func GetUserIdsByUsername(username string) []int {
+	if username == "" {
+		return nil
+	}
+	var ids []int
+	_ = DB.Model(&User{}).Where("username LIKE ?", "%"+username+"%").Pluck("id", &ids).Error
+	return ids
+}
+
 func GetUserIdByAffCode(affCode string) (int, error) {
 	if affCode == "" {
 		return 0, errors.New("affCode 为空！")
