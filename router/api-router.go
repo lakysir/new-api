@@ -108,6 +108,9 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.POST("/waffo-pancake/pay", middleware.CriticalRateLimit(), controller.RequestWaffoPancakePay)
 				selfRoute.POST("/aff_transfer", controller.TransferAffQuota)
 				selfRoute.PUT("/setting", controller.UpdateUserSetting)
+				selfRoute.GET("/invoice", controller.GetInvoiceOverview)
+				selfRoute.POST("/invoice", middleware.CriticalRateLimit(), controller.CreateInvoiceApplication)
+				selfRoute.POST("/invoice/:id/cancel", controller.CancelInvoiceApplication)
 
 				// 2FA routes
 				selfRoute.GET("/2fa/status", controller.Get2FAStatus)
@@ -141,6 +144,9 @@ func SetApiRouter(router *gin.Engine) {
 				adminRoute.PUT("/", controller.UpdateUser)
 				adminRoute.DELETE("/:id", controller.DeleteUser)
 				adminRoute.DELETE("/:id/reset_passkey", controller.AdminResetPasskey)
+				adminRoute.GET("/invoice/applications", controller.AdminListInvoiceApplications)
+				adminRoute.POST("/invoice/applications/:id/review", controller.AdminReviewInvoiceApplication)
+				adminRoute.POST("/invoice/applications/:id/sent", controller.AdminMarkInvoiceSent)
 
 				// Admin 2FA routes
 				adminRoute.GET("/2fa/stats", controller.Admin2FAStats)

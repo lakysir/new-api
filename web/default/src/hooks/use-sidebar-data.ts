@@ -151,6 +151,11 @@ export function useSidebarData(): SidebarData {
             icon: Users,
           },
           {
+            title: t('Invoice approval'),
+            url: '/invoices',
+            icon: FileText,
+          },
+          {
             title: t('Redemption Codes'),
             url: '/redemption-codes',
             icon: Ticket,

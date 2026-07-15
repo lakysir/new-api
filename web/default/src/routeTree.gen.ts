@@ -52,6 +52,7 @@ import { Route as AuthenticatedNodesConsoleIndexRouteImport } from './routes/_au
 import { Route as AuthenticatedMyScriptsIndexRouteImport } from './routes/_authenticated/my-scripts/index'
 import { Route as AuthenticatedModelsIndexRouteImport } from './routes/_authenticated/models/index'
 import { Route as AuthenticatedKeysIndexRouteImport } from './routes/_authenticated/keys/index'
+import { Route as AuthenticatedInvoicesIndexRouteImport } from './routes/_authenticated/invoices/index'
 import { Route as AuthenticatedDashboardIndexRouteImport } from './routes/_authenticated/dashboard/index'
 import { Route as AuthenticatedChannelsIndexRouteImport } from './routes/_authenticated/channels/index'
 import { Route as AuthenticatedBuyAitokenIndexRouteImport } from './routes/_authenticated/buy-aitoken/index'
@@ -303,6 +304,12 @@ const AuthenticatedKeysIndexRoute = AuthenticatedKeysIndexRouteImport.update({
   path: '/keys/',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedInvoicesIndexRoute =
+  AuthenticatedInvoicesIndexRouteImport.update({
+    id: '/invoices/',
+    path: '/invoices/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedDashboardIndexRoute =
   AuthenticatedDashboardIndexRouteImport.update({
     id: '/dashboard/',
@@ -475,6 +482,7 @@ export interface FileRoutesByFullPath {
   '/buy-aitoken/': typeof AuthenticatedBuyAitokenIndexRoute
   '/channels/': typeof AuthenticatedChannelsIndexRoute
   '/dashboard/': typeof AuthenticatedDashboardIndexRoute
+  '/invoices/': typeof AuthenticatedInvoicesIndexRoute
   '/keys/': typeof AuthenticatedKeysIndexRoute
   '/models/': typeof AuthenticatedModelsIndexRoute
   '/my-scripts/': typeof AuthenticatedMyScriptsIndexRoute
@@ -540,6 +548,7 @@ export interface FileRoutesByTo {
   '/buy-aitoken': typeof AuthenticatedBuyAitokenIndexRoute
   '/channels': typeof AuthenticatedChannelsIndexRoute
   '/dashboard': typeof AuthenticatedDashboardIndexRoute
+  '/invoices': typeof AuthenticatedInvoicesIndexRoute
   '/keys': typeof AuthenticatedKeysIndexRoute
   '/models': typeof AuthenticatedModelsIndexRoute
   '/my-scripts': typeof AuthenticatedMyScriptsIndexRoute
@@ -609,6 +618,7 @@ export interface FileRoutesById {
   '/_authenticated/buy-aitoken/': typeof AuthenticatedBuyAitokenIndexRoute
   '/_authenticated/channels/': typeof AuthenticatedChannelsIndexRoute
   '/_authenticated/dashboard/': typeof AuthenticatedDashboardIndexRoute
+  '/_authenticated/invoices/': typeof AuthenticatedInvoicesIndexRoute
   '/_authenticated/keys/': typeof AuthenticatedKeysIndexRoute
   '/_authenticated/models/': typeof AuthenticatedModelsIndexRoute
   '/_authenticated/my-scripts/': typeof AuthenticatedMyScriptsIndexRoute
@@ -677,6 +687,7 @@ export interface FileRouteTypes {
     | '/buy-aitoken/'
     | '/channels/'
     | '/dashboard/'
+    | '/invoices/'
     | '/keys/'
     | '/models/'
     | '/my-scripts/'
@@ -742,6 +753,7 @@ export interface FileRouteTypes {
     | '/buy-aitoken'
     | '/channels'
     | '/dashboard'
+    | '/invoices'
     | '/keys'
     | '/models'
     | '/my-scripts'
@@ -810,6 +822,7 @@ export interface FileRouteTypes {
     | '/_authenticated/buy-aitoken/'
     | '/_authenticated/channels/'
     | '/_authenticated/dashboard/'
+    | '/_authenticated/invoices/'
     | '/_authenticated/keys/'
     | '/_authenticated/models/'
     | '/_authenticated/my-scripts/'
@@ -1167,6 +1180,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedKeysIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/invoices/': {
+      id: '/_authenticated/invoices/'
+      path: '/invoices'
+      fullPath: '/invoices/'
+      preLoaderRoute: typeof AuthenticatedInvoicesIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/dashboard/': {
       id: '/_authenticated/dashboard/'
       path: '/dashboard'
@@ -1425,6 +1445,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedBuyAitokenIndexRoute: typeof AuthenticatedBuyAitokenIndexRoute
   AuthenticatedChannelsIndexRoute: typeof AuthenticatedChannelsIndexRoute
   AuthenticatedDashboardIndexRoute: typeof AuthenticatedDashboardIndexRoute
+  AuthenticatedInvoicesIndexRoute: typeof AuthenticatedInvoicesIndexRoute
   AuthenticatedKeysIndexRoute: typeof AuthenticatedKeysIndexRoute
   AuthenticatedModelsIndexRoute: typeof AuthenticatedModelsIndexRoute
   AuthenticatedMyScriptsIndexRoute: typeof AuthenticatedMyScriptsIndexRoute
@@ -1453,6 +1474,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedBuyAitokenIndexRoute: AuthenticatedBuyAitokenIndexRoute,
   AuthenticatedChannelsIndexRoute: AuthenticatedChannelsIndexRoute,
   AuthenticatedDashboardIndexRoute: AuthenticatedDashboardIndexRoute,
+  AuthenticatedInvoicesIndexRoute: AuthenticatedInvoicesIndexRoute,
   AuthenticatedKeysIndexRoute: AuthenticatedKeysIndexRoute,
   AuthenticatedModelsIndexRoute: AuthenticatedModelsIndexRoute,
   AuthenticatedMyScriptsIndexRoute: AuthenticatedMyScriptsIndexRoute,

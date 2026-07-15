@@ -23,6 +23,7 @@ import { SectionPageLayout } from '@/components/layout'
 import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { getSelf } from '@/lib/api'
+import { InvoicePanel } from '@/features/invoices/invoice-panel'
 
 import { AffiliateRewardsCard } from './components/affiliate-rewards-card'
 import { BillingHistoryDialog } from './components/dialogs/billing-history-dialog'
@@ -325,6 +326,7 @@ export function Wallet(props: WalletProps) {
               }
               loading={affiliateLoading}
             />
+            <InvoicePanel />
           </div>
         </SectionPageLayout.Content>
       </SectionPageLayout>
