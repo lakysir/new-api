@@ -438,6 +438,7 @@ export function ScriptReviewConsolePage() {
               <TableHead>ID</TableHead>
               <TableHead>{t('Title')}</TableHead>
               <TableHead>{t('Author')}</TableHead>
+              <TableHead>{t('Category')}</TableHead>
               <TableHead>{t('Author share')}</TableHead>
               <TableHead>{t('Platform fee %')}</TableHead>
               <TableHead>{t('View Code')}</TableHead>
@@ -451,6 +452,9 @@ export function ScriptReviewConsolePage() {
                 <TableCell>{s.id}</TableCell>
                 <TableCell>{s.title}</TableCell>
                 <TableCell>{s.author_username || `#${s.user_id}`}</TableCell>
+                <TableCell>
+                  {categoryNames.get(s.category_id || 0) || t('Uncategorized')}
+                </TableCell>
                 <TableCell>{ppmToPercent(s.author_share_rate_ppm)}%</TableCell>
                 <TableCell>
                   <Input
@@ -502,7 +506,7 @@ export function ScriptReviewConsolePage() {
             ))}
             {pending.length === 0 && (
               <TableRow>
-                <TableCell colSpan={8} className='text-muted-foreground text-center'>
+                <TableCell colSpan={9} className='text-muted-foreground text-center'>
                   {loading ? t('Loading...') : t('No pending scripts')}
                 </TableCell>
               </TableRow>
