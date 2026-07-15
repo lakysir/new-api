@@ -30,10 +30,11 @@ export function AdminInvoices() {
   const [status, setStatus] = useState('all')
   const [rejecting, setRejecting] = useState<InvoiceApplication | null>(null)
   const [reason, setReason] = useState('')
-  const { data = [], isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['admin-invoices', status],
     queryFn: () => listInvoices(status === 'all' ? '' : status),
   })
+  const applications = Array.isArray(data) ? data : []
   const refresh = () =>
     client.invalidateQueries({ queryKey: ['admin-invoices'] })
   const approve = async (id: number) => {
@@ -86,7 +87,17 @@ export function AdminInvoices() {
                 </tr>
               </thead>
               <tbody className='divide-y'>
-                {!isLoading && data.length === 0 && (
+                {isError && (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className='text-destructive p-8 text-center'
+                    >
+                      {t('Failed to load invoice applications')}
+                    </td>
+                  </tr>
+                )}
+                {!isLoading && !isError && applications.length === 0 && (
                   <tr>
                     <td
                       colSpan={6}
@@ -96,7 +107,7 @@ export function AdminInvoices() {
                     </td>
                   </tr>
                 )}
-                {data.map((item) => (
+                {applications.map((item) => (
                   <tr key={item.id}>
                     <td className='p-3'>
                       {item.username}

@@ -39,6 +39,15 @@ type InvoiceApplication struct {
 	UpdatedAt      int64  `json:"updated_at" gorm:"autoUpdateTime"`
 }
 
+type ManualInvoiceCredit struct {
+	Id          int   `json:"id"`
+	UserId      int   `json:"user_id" gorm:"index;not null"`
+	AdminId     int   `json:"admin_id" gorm:"index;not null"`
+	QuotaAmount int   `json:"quota_amount" gorm:"not null"`
+	AmountCents int64 `json:"amount_cents" gorm:"not null"`
+	CreatedAt   int64 `json:"created_at" gorm:"autoCreateTime"`
+}
+
 type InvoiceOverview struct {
 	Enabled        bool                  `json:"enabled"`
 	PaidCents      int64                 `json:"paid_cents"`
@@ -56,7 +65,62 @@ func paidTopUpCents(tx *gorm.DB, userId int) (int64, error) {
 	for _, topup := range topups {
 		total += int64(math.Round(topup.Money * 100))
 	}
+	var manualTotal int64
+	if err := tx.Model(&ManualInvoiceCredit{}).Where("user_id = ?", userId).Select("COALESCE(SUM(amount_cents), 0)").Scan(&manualTotal).Error; err != nil {
+		return 0, err
+	}
+	total += manualTotal
 	return total, nil
+}
+
+func AdjustUserQuotaWithManualInvoiceCredit(userId, adminId int, mode string, value int, invoiceAmountCents int64) (int, error) {
+	newQuota := 0
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		var user User
+		if err := tx.Set("gorm:query_option", "FOR UPDATE").First(&user, userId).Error; err != nil {
+			return err
+		}
+
+		positiveDelta := 0
+		switch mode {
+		case "add":
+			if value <= 0 {
+				return errors.New("quota adjustment must be positive")
+			}
+			positiveDelta = value
+			newQuota = user.Quota + value
+		case "subtract":
+			if value <= 0 {
+				return errors.New("quota adjustment must be positive")
+			}
+			newQuota = user.Quota - value
+		case "override":
+			newQuota = value
+			if value > user.Quota {
+				positiveDelta = value - user.Quota
+			}
+		default:
+			return errors.New("invalid quota adjustment mode")
+		}
+
+		if err := tx.Model(&User{}).Where("id = ?", userId).Update("quota", newQuota).Error; err != nil {
+			return err
+		}
+		if positiveDelta == 0 {
+			return nil
+		}
+		if invoiceAmountCents <= 0 {
+			return errors.New("invoiceable CNY amount is required for a positive quota adjustment")
+		}
+		credit := ManualInvoiceCredit{
+			UserId:      userId,
+			AdminId:     adminId,
+			QuotaAmount: positiveDelta,
+			AmountCents: invoiceAmountCents,
+		}
+		return tx.Create(&credit).Error
+	})
+	return newQuota, err
 }
 
 func invoiceOccupiedCents(tx *gorm.DB, userId int) (int64, error) {

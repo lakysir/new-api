@@ -465,6 +465,28 @@ export function UsersMutateDrawer({
                       </FormItem>
                     )}
                   />
+                  <FormField
+                    control={form.control}
+                    name='invoice_enabled'
+                    render={({ field }) => (
+                      <FormItem className='flex items-center justify-between gap-4 rounded-md border p-3'>
+                        <div>
+                          <FormLabel>{t('Invoice applications')}</FormLabel>
+                          <FormDescription>
+                            {t(
+                              'Allow this user to request invoices from the wallet page.'
+                            )}
+                          </FormDescription>
+                        </div>
+                        <FormControl>
+                          <Switch
+                            checked={field.value === true}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
                 </SideDrawerSection>
               )}
 
@@ -540,28 +562,6 @@ export function UsersMutateDrawer({
                           </FormItem>
                         )
                       }}
-                    />
-                    <FormField
-                      control={form.control}
-                      name='invoice_enabled'
-                      render={({ field }) => (
-                        <FormItem className='flex items-center justify-between gap-4 rounded-md border p-3'>
-                          <div>
-                            <FormLabel>{t('Invoice applications')}</FormLabel>
-                            <FormDescription>
-                              {t(
-                                'Allow this user to request invoices from the wallet page.'
-                              )}
-                            </FormDescription>
-                          </div>
-                          <FormControl>
-                            <Switch
-                              checked={field.value === true}
-                              onCheckedChange={field.onChange}
-                            />
-                          </FormControl>
-                        </FormItem>
-                      )}
                     />
                     {currentUser && (
                       <p className='text-muted-foreground text-xs'>

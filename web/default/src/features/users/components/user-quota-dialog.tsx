@@ -43,6 +43,7 @@ export function UserQuotaDialog(props: UserQuotaDialogProps) {
   const { t } = useTranslation()
   const [mode, setMode] = useState<QuotaAdjustMode>('add')
   const [amount, setAmount] = useState('')
+  const [invoiceAmount, setInvoiceAmount] = useState('')
   const [loading, setLoading] = useState(false)
 
   const { meta: currencyMeta } = getCurrencyDisplay()
@@ -51,6 +52,10 @@ export function UserQuotaDialog(props: UserQuotaDialogProps) {
 
   const amountValue = parseFloat(amount) || 0
   const quotaValue = parseQuotaFromDollars(Math.abs(amountValue))
+  const isPositiveAdjustment =
+    mode === 'add' ||
+    (mode === 'override' &&
+      parseQuotaFromDollars(amountValue) > props.currentQuota)
 
   const getPreviewText = () => {
     const current = props.currentQuota
@@ -72,6 +77,11 @@ export function UserQuotaDialog(props: UserQuotaDialogProps) {
   const handleConfirm = async () => {
     if (!amount && mode !== 'override') return
     if (quotaValue <= 0 && mode !== 'override') return
+    const invoiceAmountValue = parseFloat(invoiceAmount) || 0
+    if (isPositiveAdjustment && invoiceAmountValue <= 0) {
+      toast.error(t('Enter the actual invoiceable CNY amount received.'))
+      return
+    }
 
     setLoading(true)
     try {
@@ -82,11 +92,15 @@ export function UserQuotaDialog(props: UserQuotaDialogProps) {
         action: 'add_quota',
         mode,
         value: mode === 'override' ? value : Math.abs(value),
+        invoice_amount_cents: isPositiveAdjustment
+          ? Math.round(invoiceAmountValue * 100)
+          : undefined,
       })
       if (result.success) {
         toast.success(t('Quota adjusted successfully'))
         setAmount('')
         setMode('add')
+        setInvoiceAmount('')
         props.onOpenChange(false)
         props.onSuccess()
       } else {
@@ -102,6 +116,7 @@ export function UserQuotaDialog(props: UserQuotaDialogProps) {
   const handleCancel = () => {
     setAmount('')
     setMode('add')
+    setInvoiceAmount('')
     props.onOpenChange(false)
   }
 
@@ -147,6 +162,7 @@ export function UserQuotaDialog(props: UserQuotaDialogProps) {
                 onClick={() => {
                   setMode(m)
                   setAmount('')
+                  setInvoiceAmount('')
                 }}
               >
                 {m === 'add'
@@ -175,6 +191,25 @@ export function UserQuotaDialog(props: UserQuotaDialogProps) {
             }}
           />
         </div>
+
+        {isPositiveAdjustment && (
+          <div className='space-y-2'>
+            <Label>{t('Actual invoiceable amount received (CNY)')}</Label>
+            <Input
+              type='number'
+              min={0.01}
+              step={0.01}
+              value={invoiceAmount}
+              onChange={(e) => setInvoiceAmount(e.target.value)}
+              placeholder={t('Enter the actual corporate payment amount')}
+            />
+            <p className='text-muted-foreground text-xs'>
+              {t(
+                'This amount increases the customer invoice balance and may differ from the quota display amount.'
+              )}
+            </p>
+          </div>
+        )}
       </div>
     </Dialog>
   )

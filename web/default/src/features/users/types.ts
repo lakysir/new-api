@@ -131,6 +131,7 @@ export interface ManageUserQuotaPayload {
   action: 'add_quota'
   mode: QuotaAdjustMode
   value: number
+  invoice_amount_cents?: number
 }
 
 // ============================================================================

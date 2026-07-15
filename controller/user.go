@@ -984,10 +984,11 @@ func updateAdminPermissionsForUserInTx(c *gin.Context, tx *gorm.DB, userID int, 
 }
 
 type ManageRequest struct {
-	Id     int    `json:"id"`
-	Action string `json:"action"`
-	Value  int    `json:"value"`
-	Mode   string `json:"mode"`
+	Id                 int    `json:"id"`
+	Action             string `json:"action"`
+	Value              int    `json:"value"`
+	Mode               string `json:"mode"`
+	InvoiceAmountCents int64  `json:"invoice_amount_cents"`
 }
 
 // ManageUser Only admin user can do this
@@ -1060,25 +1061,27 @@ func ManageUser(c *gin.Context) {
 		}
 		user.Role = common.RoleCommonUser
 	case "add_quota":
+		oldQuota := user.Quota
 		switch req.Mode {
 		case "add":
 			if req.Value <= 0 {
 				common.ApiErrorI18n(c, i18n.MsgUserQuotaChangeZero)
 				return
 			}
-			if err := model.IncreaseUserQuota(user.Id, req.Value, true); err != nil {
+			if _, err := model.AdjustUserQuotaWithManualInvoiceCredit(user.Id, c.GetInt("id"), req.Mode, req.Value, req.InvoiceAmountCents); err != nil {
 				common.ApiError(c, err)
 				return
 			}
 			recordManageAuditFor(c, user.Id, "user.quota_add", map[string]interface{}{
-				"quota": logger.LogQuota(req.Value),
+				"quota":                logger.LogQuota(req.Value),
+				"invoice_amount_cents": req.InvoiceAmountCents,
 			})
 		case "subtract":
 			if req.Value <= 0 {
 				common.ApiErrorI18n(c, i18n.MsgUserQuotaChangeZero)
 				return
 			}
-			if err := model.DecreaseUserQuota(user.Id, req.Value, true); err != nil {
+			if _, err := model.AdjustUserQuotaWithManualInvoiceCredit(user.Id, c.GetInt("id"), req.Mode, req.Value, 0); err != nil {
 				common.ApiError(c, err)
 				return
 			}
@@ -1086,18 +1089,21 @@ func ManageUser(c *gin.Context) {
 				"quota": logger.LogQuota(req.Value),
 			})
 		case "override":
-			oldQuota := user.Quota
-			if err := model.DB.Model(&model.User{}).Where("id = ?", user.Id).Update("quota", req.Value).Error; err != nil {
+			if _, err := model.AdjustUserQuotaWithManualInvoiceCredit(user.Id, c.GetInt("id"), req.Mode, req.Value, req.InvoiceAmountCents); err != nil {
 				common.ApiError(c, err)
 				return
 			}
 			recordManageAuditFor(c, user.Id, "user.quota_override", map[string]interface{}{
-				"from": logger.LogQuota(oldQuota),
-				"to":   logger.LogQuota(req.Value),
+				"from":                 logger.LogQuota(oldQuota),
+				"to":                   logger.LogQuota(req.Value),
+				"invoice_amount_cents": req.InvoiceAmountCents,
 			})
 		default:
 			common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 			return
+		}
+		if err := model.InvalidateUserCache(user.Id); err != nil {
+			common.SysLog(fmt.Sprintf("failed to invalidate user cache for user %d: %s", user.Id, err.Error()))
 		}
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,

@@ -15,7 +15,7 @@ export async function listInvoices(status = ''): Promise<InvoiceApplication[]> {
   const res = await api.get('/api/user/invoice/applications', {
     params: { status },
   })
-  return res.data.data
+  return Array.isArray(res.data.data) ? res.data.data : []
 }
 export async function reviewInvoice(
   id: number,
