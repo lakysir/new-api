@@ -36,9 +36,8 @@ type QuotaDataLogParams struct {
 	TokenID   int
 	ChannelID int
 	NodeName  string
-	// Count 为本次记录贡献的请求次数，默认 1。
-	// 异步任务失败退款时传入负值（例如 -1）以抵消提交时记录的消费，
-	// 使数据看板仅统计成功消费。
+	// Count 为本次记录贡献的请求次数：消费为 1，费用调整为 0，
+	// 失败退款为 -1。
 	Count int
 }
 
@@ -82,10 +81,6 @@ func logQuotaDataCache(quotaData *QuotaData) {
 func LogQuotaData(params QuotaDataLogParams) {
 	// 只精确到小时
 	createdAt := params.CreatedAt - (params.CreatedAt % 3600)
-	count := params.Count
-	if count == 0 {
-		count = 1
-	}
 	quotaData := &QuotaData{
 		UserID:    params.UserID,
 		Username:  params.Username,
@@ -95,7 +90,7 @@ func LogQuotaData(params QuotaDataLogParams) {
 		TokenID:   params.TokenID,
 		ChannelID: params.ChannelID,
 		NodeName:  params.NodeName,
-		Count:     count,
+		Count:     params.Count,
 		Quota:     params.Quota,
 		TokenUsed: params.TokenUsed,
 	}

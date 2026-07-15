@@ -169,15 +169,17 @@ func RefundTaskQuota(ctx context.Context, task *model.Task, reason string) {
 	other["task_id"] = task.TaskID
 	other["reason"] = reason
 	model.RecordTaskBillingLog(model.RecordTaskBillingLogParams{
-		UserId:    task.UserId,
-		LogType:   model.LogTypeRefund,
-		Content:   "",
-		ChannelId: task.ChannelId,
-		ModelName: taskModelName(task),
-		Quota:     quota,
-		TokenId:   task.PrivateData.TokenId,
-		Group:     task.Group,
-		Other:     other,
+		UserId:        task.UserId,
+		LogType:       model.LogTypeRefund,
+		Content:       "",
+		ChannelId:     task.ChannelId,
+		ModelName:     taskModelName(task),
+		Quota:         quota,
+		TokenId:       task.PrivateData.TokenId,
+		Group:         task.Group,
+		Other:         other,
+		NodeName:      task.PrivateData.NodeName,
+		CancelRequest: true,
 	})
 }
 

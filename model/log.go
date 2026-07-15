@@ -399,6 +399,7 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 			TokenID:   params.TokenId,
 			ChannelID: params.ChannelId,
 			NodeName:  common.NodeName,
+			Count:     1,
 		})
 	}
 }
@@ -414,6 +415,8 @@ type RecordTaskBillingLogParams struct {
 	Group     string
 	Other     map[string]interface{}
 	NodeName  string // 任务发起节点；为空时回退当前节点
+	// CancelRequest 表示退款取消整次调用；差价退款应保持为 false。
+	CancelRequest bool
 }
 
 func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
@@ -458,7 +461,10 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 		count := 1
 		if params.LogType == LogTypeRefund {
 			quota = -params.Quota
-			count = -1
+			count = 0
+			if params.CancelRequest {
+				count = -1
+			}
 		}
 		LogQuotaData(QuotaDataLogParams{
 			UserID:    params.UserId,

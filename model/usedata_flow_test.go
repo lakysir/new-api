@@ -149,6 +149,7 @@ func TestLogQuotaDataSplitsRowsByUseGroupTokenChannelAndNode(t *testing.T) {
 		NodeName:  "node-a",
 		Quota:     100,
 		TokenUsed: 40,
+		Count:     1,
 	})
 	LogQuotaData(QuotaDataLogParams{
 		UserID:    1,
@@ -161,6 +162,7 @@ func TestLogQuotaDataSplitsRowsByUseGroupTokenChannelAndNode(t *testing.T) {
 		NodeName:  "node-a",
 		Quota:     50,
 		TokenUsed: 20,
+		Count:     1,
 	})
 	LogQuotaData(QuotaDataLogParams{
 		UserID:    1,
@@ -173,6 +175,7 @@ func TestLogQuotaDataSplitsRowsByUseGroupTokenChannelAndNode(t *testing.T) {
 		NodeName:  "node-a",
 		Quota:     25,
 		TokenUsed: 10,
+		Count:     1,
 	})
 
 	SaveQuotaDataCache()
@@ -190,4 +193,47 @@ func TestLogQuotaDataSplitsRowsByUseGroupTokenChannelAndNode(t *testing.T) {
 	require.Equal(t, 60, rows[0].TokenUsed)
 	require.Equal(t, "default", rows[1].UseGroup)
 	require.Equal(t, 25, rows[1].Quota)
+}
+
+func TestQuotaDataRefundsReportNetModelCostAndSuccessfulRequests(t *testing.T) {
+	truncateTables(t)
+	CacheQuotaDataLock.Lock()
+	CacheQuotaData = make(map[string]*QuotaData)
+	CacheQuotaDataLock.Unlock()
+
+	base := QuotaDataLogParams{
+		UserID:    1,
+		Username:  "alice",
+		ModelName: "gpt-a",
+		CreatedAt: 3661,
+		UseGroup:  "default",
+		TokenID:   11,
+		ChannelID: 1,
+		NodeName:  "node-a",
+	}
+
+	failed := base
+	failed.Quota = 100
+	failed.Count = 1
+	LogQuotaData(failed)
+	failed.Quota = -100
+	failed.Count = -1
+	LogQuotaData(failed)
+
+	succeeded := base
+	succeeded.Quota = 80
+	succeeded.Count = 1
+	LogQuotaData(succeeded)
+	succeeded.Quota = -30
+	succeeded.Count = 0
+	LogQuotaData(succeeded)
+
+	SaveQuotaDataCache()
+
+	rows, err := GetAllQuotaDates(3600, 7200, "")
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	require.Equal(t, "gpt-a", rows[0].ModelName)
+	require.Equal(t, 50, rows[0].Quota)
+	require.Equal(t, 1, rows[0].Count)
 }
