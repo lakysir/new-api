@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { FileText, X } from 'lucide-react'
-import { useState } from 'react'
+import { FileText, Settings2, X } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -14,7 +14,13 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { createInvoice, cancelInvoice, getInvoiceOverview } from './api'
+import {
+  createInvoice,
+  cancelInvoice,
+  getInvoiceOverview,
+  listInvoiceProfiles,
+} from './api'
+import { InvoiceProfileDialog } from './invoice-profile-dialog'
 
 const statusLabels = {
   pending: 'Pending review',
@@ -33,22 +39,35 @@ export function InvoicePanel() {
     queryKey: ['invoice-overview'],
     queryFn: getInvoiceOverview,
   })
+  const { data: profiles = [] } = useQuery({
+    queryKey: ['invoice-profiles'],
+    queryFn: listInvoiceProfiles,
+  })
   const [type, setType] = useState<'personal' | 'enterprise'>('enterprise')
   const [title, setTitle] = useState('')
-  const [taxNumber, setTaxNumber] = useState('')
   const [email, setEmail] = useState('')
   const [amount, setAmount] = useState(1000)
   const [remark, setRemark] = useState('')
   const [saving, setSaving] = useState(false)
+  const [profileId, setProfileId] = useState('')
+  const [profilesOpen, setProfilesOpen] = useState(false)
+  useEffect(() => {
+    if (!profileId && profiles.length > 0) {
+      setProfileId(
+        String(
+          (profiles.find((profile) => profile.is_default) ?? profiles[0]).id
+        )
+      )
+    }
+  }, [profileId, profiles])
   if (!data?.enabled) return null
   const refresh = () =>
     client.invalidateQueries({ queryKey: ['invoice-overview'] })
   const submit = async () => {
     if (
-      !title.trim() ||
-      !email.trim() ||
+      (type === 'personal' && (!title.trim() || !email.trim())) ||
       amount < 1000 ||
-      (type === 'enterprise' && !taxNumber.trim())
+      (type === 'enterprise' && !profileId)
     ) {
       toast.error(t('Please complete valid invoice information.'))
       return
@@ -57,8 +76,8 @@ export function InvoicePanel() {
     try {
       const result = await createInvoice({
         invoice_type: type,
+        profile_id: type === 'enterprise' ? Number(profileId) : 0,
         title,
-        tax_number: taxNumber,
         email,
         amount_cents: Math.round(amount * 100),
         remark,
@@ -66,7 +85,6 @@ export function InvoicePanel() {
       if (result.success) {
         toast.success(t('Invoice application submitted'))
         setTitle('')
-        setTaxNumber('')
         setRemark('')
         refresh()
       }
@@ -104,35 +122,61 @@ export function InvoicePanel() {
               </SelectContent>
             </Select>
           </div>
-          <div>
-            <Label>{t('Invoice title')}</Label>
-            <Input
-              className='mt-1'
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              maxLength={200}
-            />
-          </div>
-          {type === 'enterprise' && (
+          {type === 'enterprise' ? (
             <div>
-              <Label>{t('Tax identification number')}</Label>
-              <Input
-                className='mt-1'
-                value={taxNumber}
-                onChange={(e) => setTaxNumber(e.target.value)}
-                maxLength={64}
-              />
+              <div className='flex items-center justify-between gap-2'>
+                <Label>{t('Enterprise invoice profile')}</Label>
+                <Button
+                  size='sm'
+                  variant='ghost'
+                  onClick={() => setProfilesOpen(true)}
+                >
+                  <Settings2 />
+                  {t('Manage')}
+                </Button>
+              </div>
+              <Select value={profileId} onValueChange={setProfileId}>
+                <SelectTrigger className='mt-1 w-full'>
+                  <SelectValue
+                    placeholder={t('Select a saved enterprise profile')}
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {profiles.map((profile) => (
+                    <SelectItem key={profile.id} value={String(profile.id)}>
+                      {profile.title} - {profile.tax_number}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {profiles.length === 0 && (
+                <p className='text-muted-foreground mt-1 text-xs'>
+                  {t('Save an enterprise invoice profile before applying.')}
+                </p>
+              )}
             </div>
+          ) : (
+            <>
+              <div>
+                <Label>{t('Invoice title')}</Label>
+                <Input
+                  className='mt-1'
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  maxLength={200}
+                />
+              </div>
+              <div>
+                <Label>{t('Delivery email')}</Label>
+                <Input
+                  className='mt-1'
+                  type='email'
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+            </>
           )}
-          <div>
-            <Label>{t('Delivery email')}</Label>
-            <Input
-              className='mt-1'
-              type='email'
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
           <div>
             <Label>{t('Invoice amount (CNY)')}</Label>
             <Input
@@ -209,6 +253,14 @@ export function InvoicePanel() {
           </div>
         </div>
       </div>
+      <InvoiceProfileDialog
+        open={profilesOpen}
+        onOpenChange={setProfilesOpen}
+        profiles={profiles}
+        onSaved={() =>
+          client.invalidateQueries({ queryKey: ['invoice-profiles'] })
+        }
+      />
     </section>
   )
 }

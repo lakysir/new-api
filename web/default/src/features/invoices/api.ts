@@ -1,5 +1,9 @@
 import { api } from '@/lib/api'
-import type { InvoiceApplication, InvoiceOverview } from './types'
+import type {
+  InvoiceApplication,
+  InvoiceOverview,
+  InvoiceProfile,
+} from './types'
 
 export async function getInvoiceOverview(): Promise<InvoiceOverview> {
   const res = await api.get('/api/user/invoice')
@@ -10,6 +14,16 @@ export async function createInvoice(data: Partial<InvoiceApplication>) {
 }
 export async function cancelInvoice(id: number) {
   return (await api.post(`/api/user/invoice/${id}/cancel`)).data
+}
+export async function listInvoiceProfiles(): Promise<InvoiceProfile[]> {
+  const res = await api.get('/api/user/invoice/profiles')
+  return Array.isArray(res.data.data) ? res.data.data : []
+}
+export async function saveInvoiceProfile(data: Partial<InvoiceProfile>) {
+  return (await api.post('/api/user/invoice/profiles', data)).data
+}
+export async function deleteInvoiceProfile(id: number) {
+  return (await api.delete(`/api/user/invoice/profiles/${id}`)).data
 }
 export async function listInvoices(status = ''): Promise<InvoiceApplication[]> {
   const res = await api.get('/api/user/invoice/applications', {

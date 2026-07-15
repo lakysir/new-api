@@ -24,8 +24,13 @@ type InvoiceApplication struct {
 	UserId         int    `json:"user_id" gorm:"index;not null"`
 	Username       string `json:"username" gorm:"-:all"`
 	InvoiceType    string `json:"invoice_type" gorm:"type:varchar(16);not null"`
+	ProfileId      int    `json:"profile_id" gorm:"index"`
 	Title          string `json:"title" gorm:"type:varchar(200);not null"`
 	TaxNumber      string `json:"tax_number" gorm:"type:varchar(64)"`
+	RegisteredAddress string `json:"registered_address" gorm:"type:varchar(255)"`
+	RegisteredPhone   string `json:"registered_phone" gorm:"type:varchar(64)"`
+	BankName          string `json:"bank_name" gorm:"type:varchar(128)"`
+	BankAccount       string `json:"bank_account" gorm:"type:varchar(64)"`
 	Email          string `json:"email" gorm:"type:varchar(128);not null"`
 	AmountCents    int64  `json:"amount_cents" gorm:"not null"`
 	Remark         string `json:"remark" gorm:"type:varchar(500)"`
@@ -37,6 +42,73 @@ type InvoiceApplication struct {
 	SentAt         int64  `json:"sent_at"`
 	CreatedAt      int64  `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt      int64  `json:"updated_at" gorm:"autoUpdateTime"`
+}
+
+type InvoiceProfile struct {
+	Id                int    `json:"id"`
+	UserId            int    `json:"user_id" gorm:"index;not null"`
+	Title             string `json:"title" gorm:"type:varchar(200);not null"`
+	TaxNumber         string `json:"tax_number" gorm:"type:varchar(64);not null"`
+	RegisteredAddress string `json:"registered_address" gorm:"type:varchar(255)"`
+	RegisteredPhone   string `json:"registered_phone" gorm:"type:varchar(64)"`
+	BankName          string `json:"bank_name" gorm:"type:varchar(128)"`
+	BankAccount       string `json:"bank_account" gorm:"type:varchar(64)"`
+	Email             string `json:"email" gorm:"type:varchar(128);not null"`
+	IsDefault         bool   `json:"is_default" gorm:"column:is_default"`
+	CreatedAt         int64  `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt         int64  `json:"updated_at" gorm:"autoUpdateTime"`
+}
+
+func normalizeInvoiceProfile(profile *InvoiceProfile) error {
+	profile.Title = strings.TrimSpace(profile.Title)
+	profile.TaxNumber = strings.TrimSpace(profile.TaxNumber)
+	profile.RegisteredAddress = strings.TrimSpace(profile.RegisteredAddress)
+	profile.RegisteredPhone = strings.TrimSpace(profile.RegisteredPhone)
+	profile.BankName = strings.TrimSpace(profile.BankName)
+	profile.BankAccount = strings.TrimSpace(profile.BankAccount)
+	profile.Email = strings.TrimSpace(profile.Email)
+	if profile.Title == "" || profile.TaxNumber == "" || profile.Email == "" {
+		return errors.New("enterprise title, tax number and email are required")
+	}
+	if len(profile.Title) > 200 || len(profile.TaxNumber) > 64 || len(profile.RegisteredAddress) > 255 || len(profile.RegisteredPhone) > 64 || len(profile.BankName) > 128 || len(profile.BankAccount) > 64 || len(profile.Email) > 128 {
+		return errors.New("invoice profile information is too long")
+	}
+	if _, err := mail.ParseAddress(profile.Email); err != nil {
+		return errors.New("invalid delivery email")
+	}
+	return nil
+}
+
+func SaveInvoiceProfile(userId int, profile *InvoiceProfile) error {
+	if err := normalizeInvoiceProfile(profile); err != nil { return err }
+	return DB.Transaction(func(tx *gorm.DB) error {
+		if profile.IsDefault {
+			if err := tx.Model(&InvoiceProfile{}).Where("user_id = ?", userId).Update("is_default", false).Error; err != nil { return err }
+		}
+		profile.UserId = userId
+		if profile.Id == 0 { return tx.Create(profile).Error }
+		result := tx.Model(&InvoiceProfile{}).Where("id = ? AND user_id = ?", profile.Id, userId).Updates(map[string]interface{}{
+			"title": profile.Title, "tax_number": profile.TaxNumber, "registered_address": profile.RegisteredAddress,
+			"registered_phone": profile.RegisteredPhone, "bank_name": profile.BankName, "bank_account": profile.BankAccount,
+			"email": profile.Email, "is_default": profile.IsDefault,
+		})
+		if result.Error != nil { return result.Error }
+		if result.RowsAffected != 1 { return errors.New("invoice profile not found") }
+		return tx.Where("id = ? AND user_id = ?", profile.Id, userId).First(profile).Error
+	})
+}
+
+func ListInvoiceProfiles(userId int) ([]*InvoiceProfile, error) {
+	var profiles []*InvoiceProfile
+	err := DB.Where("user_id = ?", userId).Order("is_default DESC, id DESC").Find(&profiles).Error
+	return profiles, err
+}
+
+func DeleteInvoiceProfile(userId, id int) error {
+	result := DB.Where("id = ? AND user_id = ?", id, userId).Delete(&InvoiceProfile{})
+	if result.Error != nil { return result.Error }
+	if result.RowsAffected != 1 { return errors.New("invoice profile not found") }
+	return nil
 }
 
 type ManualInvoiceCredit struct {
@@ -175,6 +247,18 @@ func CreateInvoiceApplication(userId int, application *InvoiceApplication) error
 		application.Title = strings.TrimSpace(application.Title)
 		application.TaxNumber = strings.TrimSpace(application.TaxNumber)
 		application.Email = strings.TrimSpace(application.Email)
+		if application.InvoiceType == "enterprise" {
+			if application.ProfileId == 0 { return errors.New("select a saved enterprise invoice profile") }
+			var profile InvoiceProfile
+			if err := tx.Where("id = ? AND user_id = ?", application.ProfileId, userId).First(&profile).Error; err != nil { return errors.New("invoice profile not found") }
+			application.Title = profile.Title
+			application.TaxNumber = profile.TaxNumber
+			application.RegisteredAddress = profile.RegisteredAddress
+			application.RegisteredPhone = profile.RegisteredPhone
+			application.BankName = profile.BankName
+			application.BankAccount = profile.BankAccount
+			application.Email = profile.Email
+		}
 		if application.Title == "" || application.Email == "" || (application.InvoiceType != "personal" && application.InvoiceType != "enterprise") {
 			return errors.New("invalid invoice information")
 		}

@@ -10,8 +10,13 @@ export interface InvoiceApplication {
   user_id: number
   username?: string
   invoice_type: 'personal' | 'enterprise'
+  profile_id: number
   title: string
   tax_number: string
+  registered_address: string
+  registered_phone: string
+  bank_name: string
+  bank_account: string
   email: string
   amount_cents: number
   remark: string
@@ -20,6 +25,18 @@ export interface InvoiceApplication {
   created_at: number
   reviewed_at: number
   sent_at: number
+}
+
+export interface InvoiceProfile {
+  id: number
+  title: string
+  tax_number: string
+  registered_address: string
+  registered_phone: string
+  bank_name: string
+  bank_account: string
+  email: string
+  is_default: boolean
 }
 
 export interface InvoiceOverview {

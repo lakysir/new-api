@@ -122,6 +122,16 @@ export function AdminInvoices() {
                           ? item.tax_number
                           : t('Personal')}
                       </span>
+                      {item.registered_address && (
+                        <span className='text-muted-foreground block'>
+                          {item.registered_address} {item.registered_phone}
+                        </span>
+                      )}
+                      {item.bank_name && (
+                        <span className='text-muted-foreground block'>
+                          {item.bank_name} {item.bank_account}
+                        </span>
+                      )}
                       {item.remark && (
                         <span className='text-muted-foreground block'>
                           {item.remark}

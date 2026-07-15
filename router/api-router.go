@@ -111,6 +111,9 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.GET("/invoice", controller.GetInvoiceOverview)
 				selfRoute.POST("/invoice", middleware.CriticalRateLimit(), controller.CreateInvoiceApplication)
 				selfRoute.POST("/invoice/:id/cancel", controller.CancelInvoiceApplication)
+				selfRoute.GET("/invoice/profiles", controller.ListInvoiceProfiles)
+				selfRoute.POST("/invoice/profiles", controller.SaveInvoiceProfile)
+				selfRoute.DELETE("/invoice/profiles/:id", controller.DeleteInvoiceProfile)
 
 				// 2FA routes
 				selfRoute.GET("/2fa/status", controller.Get2FAStatus)
