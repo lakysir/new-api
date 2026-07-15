@@ -64,8 +64,13 @@ type TaskAttempt struct {
 	LeaseId   string `json:"lease_id" gorm:"type:varchar(64)"`
 	State     string `json:"state" gorm:"type:varchar(16);default:RESERVED"`
 	ErrorCode string `json:"error_code,omitempty" gorm:"type:varchar(48)"`
-	CreatedAt int64  `json:"created_at" gorm:"autoCreateTime"`
-	UpdatedAt int64  `json:"updated_at" gorm:"autoUpdateTime"`
+	// ScriptBalance is the account balance on the target site as reported by the
+	// node plugin when the task completes. Nil means the plugin did not include a
+	// balance in its result. Used by the settlement layer to update the capability's
+	// remaining balance after a successful reconciliation.
+	ScriptBalance *int  `json:"script_balance,omitempty" gorm:"column:script_balance"`
+	CreatedAt     int64 `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt     int64 `json:"updated_at" gorm:"autoUpdateTime"`
 }
 
 func (TaskAttempt) TableName() string { return "task_attempts" }
@@ -243,6 +248,16 @@ func FinalizeTaskAttempt(taskId string, attempt int, state string) error {
 		Where("task_id = ? AND attempt = ? AND state NOT IN ?",
 			taskId, attempt, []string{AttemptSucceeded, AttemptFailed}).
 		Updates(map[string]any{"state": state, "updated_at": time.Now().Unix()}).Error
+}
+
+// SetTaskAttemptBalance stores the script-reported account balance for a task
+// attempt. Called when the node plugin includes a balance field in its
+// task.result_ready message so the settlement layer can later update the
+// capability's remaining balance. Idempotent: safe to call multiple times.
+func SetTaskAttemptBalance(taskId string, attempt, balance int) error {
+	return DB.Model(&TaskAttempt{}).
+		Where("task_id = ? AND attempt = ?", taskId, attempt).
+		Update("script_balance", balance).Error
 }
 
 // GetNode returns a node by id.

@@ -110,13 +110,15 @@ func CreateCapabilityTest(c *gin.Context) {
 type enableCapabilityRequest struct {
 	Version       int    `json:"version"`
 	PriceMicros   int64  `json:"price_micros"`
-	DailyQuota    int    `json:"daily_quota"`
+	DailyLimit    int    `json:"daily_limit"`
 	WorkWindow    string `json:"work_window"`
 	TestExpiresAt int64  `json:"test_expires_at"`
 }
 
-// EnableCapability lists a script version on a node with price/quota. Requires a
-// valid test window (from CreateCapabilityTest) and an executable version.
+// EnableCapability lists a script version on a node with price and daily limit.
+// Requires a valid test window (from CreateCapabilityTest) and an executable
+// version. The initial balance defaults to 10 on first listing and is updated
+// from actual execution results thereafter — the provider does not set it.
 func EnableCapability(c *gin.Context) {
 	nodeId, scriptId, _, ok := parseCapabilityParams(c)
 	if !ok {
@@ -137,7 +139,7 @@ func EnableCapability(c *gin.Context) {
 		Version:       req.Version,
 		UserId:        c.GetInt("id"),
 		PriceMicros:   req.PriceMicros,
-		DailyQuota:    req.DailyQuota,
+		DailyLimit:    req.DailyLimit,
 		WorkWindow:    req.WorkWindow,
 		TestExpiresAt: req.TestExpiresAt,
 	}

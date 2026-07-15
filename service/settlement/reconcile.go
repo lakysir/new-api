@@ -44,10 +44,12 @@ func ReconcileAndSettle(orderId, taskId string, attempt int) (*ReconcileResult, 
 		receipt.Receipt{TaskId: taskId, Attempt: attempt, ResultHash: providerReceipt.ResultHash},
 		receipt.Receipt{TaskId: taskId, Attempt: attempt, ResultHash: clientReceipt.ResultHash},
 	)
-	// Resolve the executing node up front so we can record its outcome.
+	// Resolve the executing node and any script-reported balance up front.
 	var execNodeId string
+	var scriptBalance *int
 	if ta, _ := model.GetTaskAttempt(taskId, attempt); ta != nil {
 		execNodeId = ta.NodeId
+		scriptBalance = ta.ScriptBalance
 	}
 
 	if !rec.Match {
@@ -74,10 +76,15 @@ func ReconcileAndSettle(orderId, taskId string, attempt int) (*ReconcileResult, 
 	}
 	settled, err := Settle(orderId, participants)
 	if err == nil && execNodeId != "" && o.State != model.OrderSettled {
-		// Success raises the node's scheduling success rate.
+		// Success: raise the node's scheduling success rate.
 		_ = model.RecordTaskOutcome(execNodeId, true)
 		_ = model.FinalizeTaskAttempt(taskId, attempt, model.AttemptSucceeded)
-		_ = model.ConsumeCapabilityQuota(execNodeId, o.ScriptId, o.Version)
+		// Update the capability's remaining balance from the script execution
+		// result (if the plugin reported one), then increment the daily counter.
+		if scriptBalance != nil {
+			_ = model.UpdateCapabilityBalance(execNodeId, o.ScriptId, o.Version, *scriptBalance)
+		}
+		_ = model.IncrementDailyUsed(execNodeId, o.ScriptId, o.Version)
 	}
 	if err != nil {
 		return nil, err

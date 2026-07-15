@@ -67,7 +67,7 @@ type PublishedScript = {
   category_id?: number
 }
 
-type EnableFormValue = { scriptId: string; version: string; price: string; quota: string }
+type EnableFormValue = { scriptId: string; version: string; price: string; dailyLimit: string }
 type NodesConsoleDraft = {
   hideInactive: boolean
   enableForm: Record<string, EnableFormValue>
@@ -78,7 +78,7 @@ const DEFAULT_ENABLE_FORM: EnableFormValue = {
   scriptId: '',
   version: '1',
   price: '',
-  quota: '10',
+  dailyLimit: '0',
 }
 
 function getDraftStorageKey() {
@@ -102,7 +102,7 @@ function loadNodesConsoleDraft(): NodesConsoleDraft {
               scriptId: typeof form.scriptId === 'string' ? form.scriptId : '',
               version: typeof form.version === 'string' ? form.version : '',
               price: typeof form.price === 'string' ? form.price : '',
-              quota: typeof form.quota === 'string' ? form.quota : '10',
+              dailyLimit: typeof (form as any).dailyLimit === 'string' ? (form as any).dailyLimit : '0',
             },
           ] as const,
         ]
@@ -281,7 +281,7 @@ export function NodesConsolePage() {
       await enableCapability(nodeId, scriptId, {
         version,
         price_micros: displayToMicros(f.price || '0'),
-        daily_quota: Number(f.quota || '0'),
+        daily_limit: Number(f.dailyLimit || '0'),
         test_expires_at: test.test_expires_at,
       })
       toast.success(t('Capability listed'))
@@ -656,9 +656,9 @@ export function NodesConsolePage() {
               />
               <Input
                 className='w-24'
-                placeholder={t('Daily quota')}
-                value={enableForm[nodeId]?.quota ?? '10'}
-                onChange={(e) => setForm(nodeId, { quota: e.target.value })}
+                placeholder={t('Daily limit')}
+                value={enableForm[nodeId]?.dailyLimit ?? '0'}
+                onChange={(e) => setForm(nodeId, { dailyLimit: e.target.value })}
               />
               <Button size='sm' onClick={() => onEnableCapability(nodeId)}>
                 {t('List capability')}
@@ -671,7 +671,8 @@ export function NodesConsolePage() {
                   <TableHead>{t('Script')}</TableHead>
                   <TableHead>{t('Version')}</TableHead>
                   <TableHead>{t('Price')}</TableHead>
-                  <TableHead>{t('Quota')}</TableHead>
+                  <TableHead>{t('Balance')}</TableHead>
+                  <TableHead>{t('Today')}</TableHead>
                   <TableHead>{t('Success rate')}</TableHead>
                   <TableHead>{t('Revenue')}</TableHead>
                   <TableHead>{t('Status')}</TableHead>
@@ -688,6 +689,10 @@ export function NodesConsolePage() {
                     stat && stat.executions > 0
                       ? `${Math.round((stat.successes / stat.executions) * 100)}% (${stat.successes}/${stat.executions})`
                       : '-'
+                  // Daily usage: "used / limit" or "used / ∞" when limit is 0.
+                  const dailyUsed = c.daily_used ?? 0
+                  const dailyLimit = c.daily_limit ?? 0
+                  const dailyDisplay = dailyLimit > 0 ? `${dailyUsed}/${dailyLimit}` : `${dailyUsed}/∞`
                   return (
                   <TableRow key={c.id}>
                     <TableCell>
@@ -695,8 +700,11 @@ export function NodesConsolePage() {
                     </TableCell>
                     <TableCell>v{c.version}</TableCell>
                     <TableCell>{microsToCurrency(c.price_micros)}</TableCell>
-                    <TableCell>
-                      {c.remaining_quota}/{c.daily_quota}
+                    <TableCell title={t('Balance from last execution result')}>
+                      {c.remaining_quota}
+                    </TableCell>
+                    <TableCell title={t('Executions today / daily limit (resets at midnight CST)')}>
+                      {dailyDisplay}
                     </TableCell>
                     <TableCell>{rate}</TableCell>
                     <TableCell>{microsToCurrency(stat?.revenue_micros)}</TableCell>
@@ -715,7 +723,7 @@ export function NodesConsolePage() {
                 })}
                 {list.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={8} className='text-muted-foreground text-center'>
+                    <TableCell colSpan={9} className='text-muted-foreground text-center'>
                       {t('No capabilities')}
                     </TableCell>
                   </TableRow>

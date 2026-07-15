@@ -85,7 +85,13 @@ export type NodeCapability = {
   script_id: number
   version: number
   price_micros: number
-  daily_quota: number
+  /** Max executions per day; 0 = unlimited. Resets at midnight CST (UTC+8). */
+  daily_limit: number
+  /** Executions today since the last Beijing-midnight reset. */
+  daily_used: number
+  /** Unix timestamp (s) of the last Beijing-midnight reset. */
+  daily_reset_at: number
+  /** Balance on the target-site account as reported by the last successful execution. */
   remaining_quota: number
   work_window: string
   status: string

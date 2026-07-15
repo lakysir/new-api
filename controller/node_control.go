@@ -145,6 +145,14 @@ func HandleNodeControl(c *gin.Context) {
 			}
 			if ta, _ := model.GetTaskAttempt(taskID, attempt); ta != nil {
 				_ = model.ReleaseLease(ta.LeaseId, "result_ready")
+				// If the plugin reports the account balance alongside the result,
+				// store it so the settlement layer can update the capability's
+				// remaining balance after a successful reconciliation.
+				if bal, ok := msg["balance"]; ok {
+					if balInt := int(numberValue(bal)); balInt > 0 {
+						_ = model.SetTaskAttemptBalance(taskID, attempt, balInt)
+					}
+				}
 			}
 			_ = wrapped.SendJSON(map[string]any{"type": "ack", "event_id": msg["event_id"]})
 		case "task.reject", "task.failed":

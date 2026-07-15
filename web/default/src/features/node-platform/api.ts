@@ -245,11 +245,12 @@ export function createCapabilityTest(nodeId: string, scriptId: number, version: 
 }
 
 // enableCapability lists a script version on a node with the provider's price
-// and daily quota. Requires a valid test window.
+// and daily execution limit. The initial balance defaults to 10 on first
+// listing and is updated from actual execution results — providers do not set it.
 export function enableCapability(
   nodeId: string,
   scriptId: number,
-  body: { version: number; price_micros: number; daily_quota: number; test_expires_at: number }
+  body: { version: number; price_micros: number; daily_limit: number; test_expires_at: number }
 ) {
   return unwrap<NodeCapability>(api.put(`/api/nodes/${nodeId}/capabilities/${scriptId}`, body))
 }

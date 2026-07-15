@@ -72,6 +72,86 @@ const emptyForm = {
   draft_code: '',
 }
 
+// EXAMPLE_SCRIPT is the complete reference implementation shown in the editor
+// to help authors understand parameter passing and the required return shape.
+const EXAMPLE_PARAMS = JSON.stringify(
+  {
+    prompt: 'a futuristic city at sunset',
+    referenceImageUrls: [
+      'https://oss.aimh8.com/international/2026/07/05/233ac22e11714a66abf40de604f88fb3.jpg',
+    ],
+    model: 'NARWHAL',
+    resolution: '2K',
+    aspectRatio: '16:9',
+    timeoutMs: 120000,
+  },
+  null,
+  2
+)
+
+const EXAMPLE_CODE = `// ─── Script parameters ────────────────────────────────────────────────────
+// All fields defined in "Script Params" are available as globals:
+//   params.prompt, params.model, params.resolution, …
+//
+// Additional sandbox globals:
+//   context.apiKey   – provider's API key for the target site (string)
+//   fetch            – standard Web Fetch API (Promise-based)
+//   AbortSignal      – standard Web API
+
+const {
+  prompt,
+  referenceImageUrls = [],
+  model = 'NARWHAL',
+  resolution = '2K',
+  aspectRatio = '1:1',
+  timeoutMs = 120000,
+} = params
+
+// ─── Call the target site API ──────────────────────────────────────────────
+const response = await fetch('https://api.example.com/v1/generate', {
+  method: 'POST',
+  headers: {
+    Authorization: \`Bearer \${context.apiKey}\`,
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    prompt,
+    model,
+    resolution,
+    aspect_ratio: aspectRatio,
+    reference_images: referenceImageUrls,
+  }),
+  signal: AbortSignal.timeout(timeoutMs),
+})
+
+if (!response.ok) {
+  const errText = await response.text()
+  throw new Error(\`Generation failed (\${response.status}): \${errText}\`)
+}
+
+const data = await response.json()
+
+// ─── Return value ──────────────────────────────────────────────────────────
+// The return value MUST be a plain JSON-serialisable object with two fields:
+//
+//   output   (required) – the task result delivered to the requester.
+//                         Can be any JSON value: object, string, array, …
+//
+//   balance  (required) – current credit / remaining-quota on the target
+//                         site account, as an integer.
+//                         The platform reads this to update the node's
+//                         remaining-balance display after each execution.
+//                         Return 0 if the site does not expose a balance.
+return {
+  output: {
+    imageUrl: data.images?.[0]?.url ?? null,
+    seed: data.seed ?? null,
+    model: data.model,
+  },
+  balance: data.account?.credits_remaining ?? 0,
+}
+`
+
 function formatTime(value?: number) {
   if (!value) return '-'
   return new Date(value * 1000).toLocaleString()
@@ -299,6 +379,8 @@ export function MyScriptsPage() {
   const [submitCategory, setSubmitCategory] = useState<string>('')
   const [submitShare, setSubmitShare] = useState<string>('3')
   const [categories, setCategories] = useState<{ id: number; name: string; site: string }[]>([])
+  // Controls whether the reference example panel is expanded in the editor.
+  const [showExample, setShowExample] = useState(false)
 
   const editorTitle = useMemo(
     () =>
@@ -703,29 +785,146 @@ export function MyScriptsPage() {
                 }))
               }
             />
-            <Textarea
-              value={editing.script_params}
-              placeholder={t('Script Params')}
-              rows={8}
-              className='min-h-[180px] resize-y font-mono text-xs'
-              onChange={(event) =>
-                setEditing((prev) => ({
-                  ...prev,
-                  script_params: event.target.value,
-                }))
-              }
-            />
-            <Textarea
-              value={editing.draft_code}
-              placeholder={t('JavaScript code')}
-              className='min-h-[360px] font-mono text-xs'
-              onChange={(event) =>
-                setEditing((prev) => ({
-                  ...prev,
-                  draft_code: event.target.value,
-                }))
-              }
-            />
+
+            {/* ── Collapsible reference example ───────────────────────── */}
+            <div className='rounded-lg border'>
+              <button
+                type='button'
+                className='flex w-full items-center justify-between px-3 py-2 text-left text-sm font-medium transition-colors hover:bg-muted/50'
+                onClick={() => setShowExample((v) => !v)}
+              >
+                <span className='flex items-center gap-2'>
+                  <span>{showExample ? '▾' : '▸'}</span>
+                  {t('Parameter & return value example')}
+                </span>
+                {!showExample && (
+                  <span className='text-muted-foreground text-xs font-normal'>
+                    {t('Click to expand')}
+                  </span>
+                )}
+              </button>
+
+              {showExample && (
+                <div className='border-t px-3 pb-3 pt-2'>
+                  {/* Brief guide */}
+                  <p className='text-muted-foreground mb-3 text-xs leading-relaxed'>
+                    {t(
+                      'The sandbox exposes params (your Script Params object) and context.apiKey. Your script must return { output, balance } — balance updates the node\'s remaining display after each run.'
+                    )}
+                  </p>
+
+                  {/* Side-by-side: params + code */}
+                  <div className='grid gap-3 lg:grid-cols-2'>
+                    <div>
+                      <div className='mb-1 flex items-center justify-between'>
+                        <span className='text-muted-foreground text-xs font-medium'>
+                          {t('Script Params (JSON)')}
+                        </span>
+                        <Button
+                          type='button'
+                          variant='ghost'
+                          size='sm'
+                          className='h-6 px-2 text-xs'
+                          onClick={() =>
+                            setEditing((prev) => ({
+                              ...prev,
+                              script_params: EXAMPLE_PARAMS,
+                            }))
+                          }
+                        >
+                          {t('Load params')}
+                        </Button>
+                      </div>
+                      <pre className='overflow-auto rounded-md bg-muted/40 p-2 font-mono text-xs leading-relaxed'>
+                        {EXAMPLE_PARAMS}
+                      </pre>
+                    </div>
+
+                    <div>
+                      <div className='mb-1 flex items-center justify-between'>
+                        <span className='text-muted-foreground text-xs font-medium'>
+                          {t('Script code (JavaScript)')}
+                        </span>
+                        <Button
+                          type='button'
+                          variant='ghost'
+                          size='sm'
+                          className='h-6 px-2 text-xs'
+                          onClick={() =>
+                            setEditing((prev) => ({
+                              ...prev,
+                              draft_code: EXAMPLE_CODE,
+                            }))
+                          }
+                        >
+                          {t('Load code')}
+                        </Button>
+                      </div>
+                      <pre className='overflow-auto rounded-md bg-muted/40 p-2 font-mono text-xs leading-relaxed'>
+                        {EXAMPLE_CODE}
+                      </pre>
+                    </div>
+                  </div>
+
+                  <div className='mt-2 flex justify-end'>
+                    <Button
+                      type='button'
+                      variant='secondary'
+                      size='sm'
+                      onClick={() => {
+                        setEditing((prev) => ({
+                          ...prev,
+                          script_params: EXAMPLE_PARAMS,
+                          draft_code: EXAMPLE_CODE,
+                        }))
+                        setShowExample(false)
+                        toast.success(t('Example loaded'))
+                      }}
+                    >
+                      {t('Load full example')}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+            {/* ────────────────────────────────────────────────────────── */}
+
+            <div>
+              <div className='text-muted-foreground mb-1 text-xs'>
+                {t('Script Params')}
+                <span className='ml-1 font-normal opacity-70'>(JSON)</span>
+              </div>
+              <Textarea
+                value={editing.script_params}
+                placeholder={t('Script Params')}
+                rows={8}
+                className='min-h-[180px] resize-y font-mono text-xs'
+                onChange={(event) =>
+                  setEditing((prev) => ({
+                    ...prev,
+                    script_params: event.target.value,
+                  }))
+                }
+              />
+            </div>
+
+            <div>
+              <div className='text-muted-foreground mb-1 text-xs'>
+                {t('Script code')}
+                <span className='ml-1 font-normal opacity-70'>(JavaScript)</span>
+              </div>
+              <Textarea
+                value={editing.draft_code}
+                placeholder={t('JavaScript code')}
+                className='min-h-[360px] font-mono text-xs'
+                onChange={(event) =>
+                  setEditing((prev) => ({
+                    ...prev,
+                    draft_code: event.target.value,
+                  }))
+                }
+              />
+            </div>
           </div>
         </Dialog>
 

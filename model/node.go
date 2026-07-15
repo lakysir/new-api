@@ -108,18 +108,34 @@ func (s *NodeSiteStatus) IsValid() bool {
 	return s.BalanceOk && s.ExpiresAt > time.Now().Unix()
 }
 
-// NodeCapability is a script version a node has enabled, with its price, quota,
-// working window and test validity. Default is disabled: a node must explicitly
-// enable each (PRD N-002).
+// NodeCapability is a script version a node has enabled, with its price, daily
+// limit, working window and test validity. Default is disabled: a node must
+// explicitly enable each (PRD N-002).
+//
+// Balance model: RemainingQuota is the account balance on the target site as
+// reported by the last successful script execution — it is NOT set by the
+// provider at listing time. First-time listing defaults to 10. DailyLimit caps
+// how many executions are dispatched per Beijing calendar day; DailyUsed counts
+// today's executions and is reset automatically at midnight CST (UTC+8).
 type NodeCapability struct {
-	Id             int    `json:"id" gorm:"primaryKey;autoIncrement"`
-	NodeId         string `json:"node_id" gorm:"type:varchar(64);index:idx_node_cap,unique;not null"`
-	ScriptId       int    `json:"script_id" gorm:"index:idx_node_cap,unique;not null"`
-	Version        int    `json:"version" gorm:"index:idx_node_cap,unique;not null"`
-	CategoryId     int    `json:"category_id" gorm:"index;default:0"` // denormalized from the script
-	UserId         int    `json:"user_id" gorm:"index;not null"`
-	PriceMicros    int64  `json:"price_micros" gorm:"default:0"`
-	DailyQuota     int    `json:"daily_quota" gorm:"default:0"`
+	Id         int    `json:"id" gorm:"primaryKey;autoIncrement"`
+	NodeId     string `json:"node_id" gorm:"type:varchar(64);index:idx_node_cap,unique;not null"`
+	ScriptId   int    `json:"script_id" gorm:"index:idx_node_cap,unique;not null"`
+	Version    int    `json:"version" gorm:"index:idx_node_cap,unique;not null"`
+	CategoryId int    `json:"category_id" gorm:"index;default:0"` // denormalized from the script
+	UserId     int    `json:"user_id" gorm:"index;not null"`
+	PriceMicros int64 `json:"price_micros" gorm:"default:0"`
+	// DailyLimit is the maximum script executions dispatched per day.
+	// Zero means no daily cap. Resets at midnight Beijing time (CST, UTC+8).
+	DailyLimit int `json:"daily_limit" gorm:"column:daily_quota;default:0"`
+	// DailyUsed counts successful executions since the last Beijing midnight.
+	DailyUsed int `json:"daily_used" gorm:"column:daily_used;default:0"`
+	// DailyResetAt is the Unix timestamp (seconds) of the Beijing midnight at
+	// which DailyUsed was last zeroed. Zero means it has never been reset.
+	DailyResetAt int64 `json:"daily_reset_at" gorm:"column:daily_reset_at;default:0"`
+	// RemainingQuota is the target-site account balance as last reported by a
+	// successful execution. Updated from the script result; defaults to 10 on
+	// first listing.
 	RemainingQuota int    `json:"remaining_quota" gorm:"default:0"`
 	WorkWindow     string `json:"work_window" gorm:"type:varchar(64)"`
 	Status         string `json:"status" gorm:"type:varchar(16);index;default:suspended"`
@@ -253,6 +269,11 @@ func ListNodeSiteStatuses(nodeId string) ([]NodeSiteStatus, error) {
 // the referenced version to be executable, a valid challenge-test window, AND a
 // passing balance check for the script's category (the node proved the target
 // site is usable by reading its balance, not by running a generation).
+//
+// On first listing RemainingQuota is set to 10 as the initial balance estimate;
+// subsequent executions update it from the actual script result. Re-listing an
+// existing capability preserves the last-known balance and daily counters so
+// the provider's execution history is not wiped on config changes.
 func EnableCapability(cap *NodeCapability) error {
 	sv, err := GetExecutableScriptVersion(cap.ScriptId, cap.Version)
 	if err != nil {
@@ -273,27 +294,27 @@ func EnableCapability(cap *NodeCapability) error {
 		}
 	}
 	cap.Status = CapabilityStatusActive
-	if cap.RemainingQuota == 0 {
-		cap.RemainingQuota = cap.DailyQuota
-	}
 	return DB.Transaction(func(tx *gorm.DB) error {
 		var existing NodeCapability
 		err := tx.Where("node_id = ? AND script_id = ? AND version = ?", cap.NodeId, cap.ScriptId, cap.Version).First(&existing).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
+			// First listing: seed balance with a conservative default of 10.
+			cap.RemainingQuota = 10
 			return tx.Create(cap).Error
 		}
 		if err != nil {
 			return err
 		}
 		cap.Id = existing.Id
+		// Re-listing: update only listing metadata. Preserve the existing balance
+		// (from prior execution results) and daily counters so history is kept.
 		return tx.Model(&NodeCapability{}).Where("id = ?", existing.Id).Updates(map[string]any{
-			"category_id":     cap.CategoryId,
-			"price_micros":    cap.PriceMicros,
-			"daily_quota":     cap.DailyQuota,
-			"remaining_quota": cap.RemainingQuota,
-			"work_window":     cap.WorkWindow,
-			"status":          CapabilityStatusActive,
-			"suspend_reason":  "",
+			"category_id":    cap.CategoryId,
+			"price_micros":   cap.PriceMicros,
+			"daily_quota":    cap.DailyLimit,
+			"work_window":    cap.WorkWindow,
+			"status":         CapabilityStatusActive,
+			"suspend_reason": "",
 			"test_expires_at": cap.TestExpiresAt,
 		}).Error
 	})
@@ -314,12 +335,51 @@ func RemoveCapability(userId int, nodeId string, scriptId, version int) error {
 	return nil
 }
 
-// ConsumeCapabilityQuota decrements one successful execution from the exact
-// capability used by a settled task. The guarded update prevents underflow.
-func ConsumeCapabilityQuota(nodeId string, scriptId, version int) error {
+// beijingMidnightUnix returns the Unix timestamp (seconds) of the start of the
+// current calendar day in Beijing time (CST, UTC+8). Used to detect day rollover
+// for daily execution counter resets.
+func beijingMidnightUnix() int64 {
+	loc, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		// Fallback: UTC+8 fixed offset if the timezone database is unavailable.
+		loc = time.FixedZone("CST", 8*3600)
+	}
+	now := time.Now().In(loc)
+	midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+	return midnight.Unix()
+}
+
+// UpdateCapabilityBalance sets RemainingQuota to the balance value reported by a
+// successful script execution. Called by the settlement layer after reconciling
+// a succeeded task; the script result carries the current account balance on the
+// target site. Only updates if balance > 0 to avoid overwriting with a zero
+// returned by a script that doesn't report balance.
+func UpdateCapabilityBalance(nodeId string, scriptId, version, balance int) error {
+	if balance <= 0 {
+		return nil
+	}
 	return DB.Model(&NodeCapability{}).
-		Where("node_id = ? AND script_id = ? AND version = ? AND remaining_quota > 0", nodeId, scriptId, version).
-		UpdateColumn("remaining_quota", gorm.Expr("remaining_quota - 1")).Error
+		Where("node_id = ? AND script_id = ? AND version = ?", nodeId, scriptId, version).
+		UpdateColumn("remaining_quota", balance).Error
+}
+
+// IncrementDailyUsed increments the today-execution counter for a capability.
+// If the current Beijing calendar day has advanced since the last reset
+// (daily_reset_at < today midnight), it zeroes the counter first and records
+// the new day boundary. Safe to call on every successful settlement; the CASE
+// expression makes the reset+increment atomic in a single UPDATE statement.
+func IncrementDailyUsed(nodeId string, scriptId, version int) error {
+	today := beijingMidnightUnix()
+	return DB.Model(&NodeCapability{}).
+		Where("node_id = ? AND script_id = ? AND version = ?", nodeId, scriptId, version).
+		Updates(map[string]any{
+			"daily_used": gorm.Expr(
+				"CASE WHEN daily_reset_at < ? THEN 1 ELSE daily_used + 1 END", today,
+			),
+			"daily_reset_at": gorm.Expr(
+				"CASE WHEN daily_reset_at < ? THEN ? ELSE daily_reset_at END", today, today,
+			),
+		}).Error
 }
 
 // ListNodeCapabilities returns capabilities for a node.
