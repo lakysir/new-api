@@ -29,6 +29,7 @@ import { Dialog } from '@/components/dialog'
 import { PasswordInput } from '@/components/password-input'
 import { Turnstile } from '@/components/turnstile'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Form,
   FormControl,
@@ -55,6 +56,43 @@ import {
 } from '@/lib/passkey'
 import { cn } from '@/lib/utils'
 
+const REMEMBERED_CREDENTIALS_KEY = 'auth:remembered-credentials'
+
+interface RememberedCredentials {
+  username: string
+  password: string
+}
+
+function getRememberedCredentials(): RememberedCredentials | null {
+  if (typeof window === 'undefined') return null
+
+  try {
+    const savedCredentials = window.localStorage.getItem(
+      REMEMBERED_CREDENTIALS_KEY
+    )
+    if (!savedCredentials) return null
+
+    const parsedCredentials: unknown = JSON.parse(savedCredentials)
+    if (
+      typeof parsedCredentials === 'object' &&
+      parsedCredentials !== null &&
+      'username' in parsedCredentials &&
+      'password' in parsedCredentials &&
+      typeof parsedCredentials.username === 'string' &&
+      typeof parsedCredentials.password === 'string'
+    ) {
+      return {
+        username: parsedCredentials.username,
+        password: parsedCredentials.password,
+      }
+    }
+  } catch {
+    window.localStorage.removeItem(REMEMBERED_CREDENTIALS_KEY)
+  }
+
+  return null
+}
+
 export function UserAuthForm({
   className,
   redirectTo,
@@ -68,6 +106,9 @@ export function UserAuthForm({
   const [isPasskeyLoading, setIsPasskeyLoading] = useState(false)
   const [isWeChatDialogOpen, setIsWeChatDialogOpen] = useState(false)
   const [isWeChatSubmitting, setIsWeChatSubmitting] = useState(false)
+  const [rememberCredentials, setRememberCredentials] = useState(
+    () => getRememberedCredentials() !== null
+  )
   const legalConsentErrorMessage = t('Please agree to the legal terms first')
   const loginFailedMessage = t('Login failed')
 
@@ -121,11 +162,12 @@ export function UserAuthForm({
       .catch(() => setPasskeySupported(false))
   }, [])
 
+  const rememberedCredentials = useMemo(() => getRememberedCredentials(), [])
   const form = useForm<z.infer<typeof loginFormSchema>>({
     resolver: zodResolver(loginFormSchema),
     defaultValues: {
-      username: '',
-      password: '',
+      username: rememberedCredentials?.username ?? '',
+      password: rememberedCredentials?.password ?? '',
     },
   })
 
@@ -160,6 +202,15 @@ export function UserAuthForm({
       })
 
       if (res.success) {
+        if (rememberCredentials) {
+          window.localStorage.setItem(
+            REMEMBERED_CREDENTIALS_KEY,
+            JSON.stringify({ username: data.username, password: data.password })
+          )
+        } else {
+          window.localStorage.removeItem(REMEMBERED_CREDENTIALS_KEY)
+        }
+
         if (res.data?.require_2fa) {
           redirectTo2FA()
           return
@@ -371,6 +422,26 @@ export function UserAuthForm({
                 </FormItem>
               )}
             />
+
+            <div className='flex items-center gap-2'>
+              <Checkbox
+                id='remember-credentials'
+                checked={rememberCredentials}
+                onCheckedChange={(checked) => {
+                  const shouldRemember = checked === true
+                  setRememberCredentials(shouldRemember)
+                  if (!shouldRemember) {
+                    window.localStorage.removeItem(REMEMBERED_CREDENTIALS_KEY)
+                  }
+                }}
+              />
+              <Label
+                htmlFor='remember-credentials'
+                className='cursor-pointer text-sm font-normal'
+              >
+                {t('Remember username and password')}
+              </Label>
+            </div>
 
             {/* Submit Button */}
             <Button
