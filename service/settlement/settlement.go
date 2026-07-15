@@ -22,6 +22,32 @@ func Deposit(clientId int, amountMicros int64, reference string) (*model.LedgerT
 	})
 }
 
+// Withdraw debits an earnings account (provider/author payable, or platform
+// revenue) and credits the external funding source — funds leaving the
+// marketplace back to the caller's main wallet. It is the inverse of Deposit.
+// The debit is rejected with ErrInsufficientBalance when the account holds less
+// than amountMicros, so the caller never over-withdraws. Idempotent per
+// reference.
+func Withdraw(ownerType string, ownerId int, kind string, amountMicros int64, reference string) (*model.LedgerTransaction, error) {
+	key := fmt.Sprintf("withdraw:%s", reference)
+	return model.PostTransaction(key, model.TxWithdraw, reference, []model.EntryInput{
+		{OwnerType: ownerType, OwnerId: ownerId, Kind: kind, Currency: Currency, Direction: model.DirDebit, Amount: amountMicros},
+		{OwnerType: model.OwnerExternal, OwnerId: model.PlatformOwnerId, Kind: model.KindSource, Currency: Currency, Direction: model.DirCredit, Amount: amountMicros},
+	})
+}
+
+// ReverseWithdraw compensates a posted Withdraw whose downstream wallet credit
+// failed: it credits the earnings account back and debits the external source,
+// restoring both balances. Idempotent per reference (distinct key from the
+// original withdraw, so both post exactly once).
+func ReverseWithdraw(ownerType string, ownerId int, kind string, amountMicros int64, reference string) (*model.LedgerTransaction, error) {
+	key := fmt.Sprintf("withdraw-reverse:%s", reference)
+	return model.PostTransaction(key, model.TxReversal, reference, []model.EntryInput{
+		{OwnerType: model.OwnerExternal, OwnerId: model.PlatformOwnerId, Kind: model.KindSource, Currency: Currency, Direction: model.DirDebit, Amount: amountMicros},
+		{OwnerType: ownerType, OwnerId: ownerId, Kind: kind, Currency: Currency, Direction: model.DirCredit, Amount: amountMicros},
+	})
+}
+
 // ReserveFunds moves the order's max amount from the client's available balance
 // into a reserved bucket and advances the order to FUNDS_RESERVED. Insufficient
 // balance fails without changing order state.

@@ -297,6 +297,8 @@ func SetApiRouter(router *gin.Engine) {
 				scriptAdminRoute.POST("/signing-key/generate", controller.GenerateScriptSigningKey)
 				// Platform revenue summary (day/week/month/lifetime service fees).
 				scriptAdminRoute.GET("/platform-earnings", controller.GetPlatformEarnings)
+				// Withdraw platform revenue to the admin's main wallet quota.
+				scriptAdminRoute.POST("/platform-earnings/withdraw", middleware.CriticalRateLimit(), controller.WithdrawPlatformEarnings)
 			}
 
 			scriptVersionRoute := scriptRoute.Group("/")
@@ -388,6 +390,7 @@ func SetApiRouter(router *gin.Engine) {
 			ledgerRoute.GET("/balances", controller.GetMyLedgerBalances)
 			ledgerRoute.GET("/earnings", controller.GetMyEarnings)
 			ledgerRoute.POST("/recharge", middleware.CriticalRateLimit(), controller.RechargeAvailable)
+			ledgerRoute.POST("/withdraw", middleware.CriticalRateLimit(), controller.WithdrawEarnings)
 		}
 
 		// Payment: deposit address, fee estimate, withdrawal (Stage G).

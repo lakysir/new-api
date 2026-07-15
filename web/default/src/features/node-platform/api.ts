@@ -384,3 +384,20 @@ export function rechargeAvailable(amountMicros: number) {
     api.post('/api/ledger/recharge', { amount_micros: amountMicros })
   )
 }
+
+// withdrawEarnings transfers the caller's payable balance for a role (provider =
+// node earnings, author = script earnings) into their main /wallet quota (1:1 in
+// USD). The inverse of rechargeAvailable — a real transfer, not a simulation.
+export function withdrawEarnings(role: 'provider' | 'author', amountMicros: number) {
+  return unwrap<{ transaction_id: number; type: string; quota_credited: number }>(
+    api.post('/api/ledger/withdraw', { amount_micros: amountMicros }, { params: { role } })
+  )
+}
+
+// withdrawPlatformEarnings transfers the platform's revenue balance into the
+// calling admin's main /wallet quota (admin only), 1:1 in USD.
+export function withdrawPlatformEarnings(amountMicros: number) {
+  return unwrap<{ transaction_id: number; type: string; quota_credited: number }>(
+    api.post('/api/scripts/platform-earnings/withdraw', { amount_micros: amountMicros })
+  )
+}

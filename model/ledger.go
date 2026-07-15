@@ -37,6 +37,7 @@ const (
 	TxRefund   = "refund"
 	TxRelease  = "release"
 	TxReversal = "reversal"
+	TxWithdraw = "withdraw"
 )
 
 // Entry directions.

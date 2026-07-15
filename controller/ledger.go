@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"time"
@@ -167,4 +168,80 @@ func RechargeAvailable(c *gin.Context) {
 	}
 	model.RecordLog(userId, model.LogTypeManage, fmt.Sprintf("充值可用余额 %d micros，扣除钱包额度 %d", req.AmountMicros, quota))
 	common.ApiSuccess(c, gin.H{"transaction_id": tx.Id, "type": tx.Type, "quota_deducted": quota})
+}
+
+type withdrawEarningsRequest struct {
+	AmountMicros int64 `json:"amount_micros"`
+}
+
+// withdrawToWallet moves amountMicros out of an earnings account (owner + kind)
+// and credits the equivalent quota to userId's main wallet. It debits the ledger
+// first (which fails cleanly with ErrInsufficientBalance without touching the
+// wallet) then credits the wallet quota; if the quota credit fails, the ledger
+// debit is reversed so the two never diverge. accountUserId owns the earnings
+// account (the caller for provider/author; the platform singleton for revenue),
+// while userId is always the caller whose wallet is credited.
+func withdrawToWallet(c *gin.Context, ownerType string, accountUserId int, kind string, userId int, amountMicros int64) {
+	if amountMicros <= 0 {
+		common.ApiErrorMsg(c, "amount_micros must be positive")
+		return
+	}
+	quota := microsToQuota(amountMicros)
+	if quota <= 0 {
+		common.ApiErrorMsg(c, "amount too small to withdraw")
+		return
+	}
+
+	reference := fmt.Sprintf("wallet:%d:%d", userId, time.Now().UnixNano())
+	tx, err := settlement.Withdraw(ownerType, accountUserId, kind, amountMicros, reference)
+	if err != nil {
+		if errors.Is(err, model.ErrInsufficientBalance) {
+			common.ApiErrorMsg(c, "insufficient earnings balance")
+			return
+		}
+		common.ApiError(c, err)
+		return
+	}
+	if err := model.IncreaseUserQuota(userId, quota, true); err != nil {
+		// Wallet credit failed after the ledger debit posted; reverse it so the
+		// earnings balance is restored and no funds are lost.
+		if _, rerr := settlement.ReverseWithdraw(ownerType, accountUserId, kind, amountMicros, reference); rerr != nil {
+			common.SysError(fmt.Sprintf("withdraw wallet credit failed and ledger reverse failed for user %d: credit=%v reverse=%v", userId, err, rerr))
+		}
+		common.ApiError(c, err)
+		return
+	}
+	model.RecordLog(userId, model.LogTypeManage, fmt.Sprintf("提现收益 %d micros 到钱包，增加额度 %d", amountMicros, quota))
+	common.ApiSuccess(c, gin.H{"transaction_id": tx.Id, "type": tx.Type, "quota_credited": quota})
+}
+
+// WithdrawEarnings transfers the caller's payable balance for a role
+// (?role=provider|author, default provider) into their main wallet quota (the
+// balance shown on /wallet). The marketplace payable ledger is debited and the
+// wallet is credited 1:1 in USD.
+func WithdrawEarnings(c *gin.Context) {
+	var req withdrawEarningsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	userId := c.GetInt("id")
+	ownerType := model.OwnerProvider
+	if c.Query("role") == "author" {
+		ownerType = model.OwnerAuthor
+	}
+	withdrawToWallet(c, ownerType, userId, model.KindPayable, userId, req.AmountMicros)
+}
+
+// WithdrawPlatformEarnings transfers the platform's revenue balance into the
+// calling admin's main wallet quota (admin only). The platform revenue ledger is
+// debited and the admin's wallet is credited 1:1 in USD.
+func WithdrawPlatformEarnings(c *gin.Context) {
+	var req withdrawEarningsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	userId := c.GetInt("id")
+	withdrawToWallet(c, model.OwnerPlatform, model.PlatformOwnerId, model.KindRevenue, userId, req.AmountMicros)
 }
