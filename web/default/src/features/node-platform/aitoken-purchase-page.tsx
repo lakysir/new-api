@@ -482,39 +482,38 @@ export function AitokenPurchasePage() {
         </Button>
       </SectionPageLayout.Actions>
       <SectionPageLayout.Content>
-        {/* Wallet */}
-        <div className='mb-4 grid grid-cols-2 gap-3 md:grid-cols-4'>
-          {[
-            ['Available', bal?.client_available],
-            ['Reserved', bal?.client_reserved],
-          ].map(([label, v]) => (
-            <div key={String(label)} className='rounded-lg border p-3'>
-              <div className='text-muted-foreground text-xs'>{t(label as string)}</div>
-              <div className='mt-1 text-lg font-semibold'>
-                {microsToCurrency(v as number)}
+        {/* Wallet balances and the available-balance recharge action. */}
+        <div className='mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2'>
+          <div className='rounded-lg border p-3'>
+            <div className='flex flex-wrap items-end justify-between gap-3'>
+              <div>
+                <div className='text-muted-foreground text-xs'>{t('Available')}</div>
+                <div className='mt-1 text-lg font-semibold'>
+                  {microsToCurrency(bal?.client_available)}
+                </div>
+              </div>
+              <div className='flex items-center gap-2'>
+                <Input
+                  className='h-9 w-28'
+                  value={rechargeAmt}
+                  onChange={(e) => setRechargeAmt(e.target.value)}
+                  aria-label={t('Recharge amount')}
+                />
+                <Button className='h-9' onClick={onRecharge} disabled={recharging}>
+                  {recharging ? t('Recharging...') : t('Recharge')}
+                </Button>
               </div>
             </div>
-          ))}
-        </div>
-
-        {/* Recharge available balance from the main wallet (real 1:1 transfer). */}
-        <div className='mb-4 rounded-lg border p-4'>
-          <div className='mb-1 text-sm font-medium'>{t('Recharge available balance')}</div>
-          <div className='text-muted-foreground mb-2 text-xs'>
-            {t('Funds are transferred from your wallet balance at a 1:1 rate.')}
-            {walletQuota != null && (
-              <> {t('Wallet balance')}: {formatQuotaWithCurrency(walletQuota)}</>
-            )}
+            <div className='text-muted-foreground mt-2 text-xs'>
+              {t('Recharge available balance')} · {t('Wallet balance')}:{' '}
+              {walletQuota != null ? formatQuotaWithCurrency(walletQuota) : '--'}
+            </div>
           </div>
-          <div className='flex flex-wrap items-center gap-2'>
-            <Input
-              className='w-40'
-              value={rechargeAmt}
-              onChange={(e) => setRechargeAmt(e.target.value)}
-            />
-            <Button onClick={onRecharge} disabled={recharging}>
-              {recharging ? t('Recharging...') : t('Recharge')}
-            </Button>
+          <div className='rounded-lg border p-3'>
+            <div className='text-muted-foreground text-xs'>{t('Reserved')}</div>
+            <div className='mt-1 text-lg font-semibold'>
+              {microsToCurrency(bal?.client_reserved)}
+            </div>
           </div>
         </div>
 
