@@ -65,13 +65,14 @@ func ListOffersForScript(scriptId, version int, providerGroupId string) ([]Scrip
 		CategoryId        int
 		BalanceOk         bool
 		BalanceExpiresAt  int64
+		Enabled           bool
 	}
 	var rows []row
 	// Return all listed capabilities so clients can distinguish "no offer" from
 	// an offer that is temporarily offline, out of quota or needs re-validation.
 	q := DB.Table("node_capabilities AS cap").
 		Select(`cap.node_id, cap.price_micros, cap.remaining_quota, cap.test_expires_at, cap.category_id,
-			n.last_seen_at, n.state, n.success_count, n.failure_count, n.provider_group_id,
+			n.last_seen_at, n.state, n.success_count, n.failure_count, n.provider_group_id, n.enabled,
 			pg.name AS provider_group_name, s.balance_ok, s.expires_at AS balance_expires_at`).
 		Joins("JOIN nodes n ON n.id = cap.node_id").
 		Joins("LEFT JOIN provider_groups pg ON pg.id = n.provider_group_id").
@@ -91,10 +92,14 @@ func ListOffersForScript(scriptId, version int, providerGroupId string) ([]Scrip
 		testValid := r.TestExpiresAt > now
 		balanceValid := r.CategoryId == 0 || (r.BalanceOk && r.BalanceExpiresAt > now)
 		// A busy node is online but cannot take a new task (single-task-per-node).
-		available := online && !busy && r.RemainingQuota > 0 && testValid && balanceValid
+		// A disabled node is never a candidate even when online and validated: the
+		// provider must explicitly turn it on.
+		available := r.Enabled && online && !busy && r.RemainingQuota > 0 && testValid && balanceValid
 		reason := ""
 		if !online {
 			reason = "NODE_OFFLINE"
+		} else if !r.Enabled {
+			reason = "NODE_DISABLED"
 		} else if busy {
 			reason = "NODE_BUSY"
 		} else if r.RemainingQuota <= 0 {
@@ -167,6 +172,7 @@ func ScheduleCandidates(scriptId, version int, maxPriceMicros int64, limit int, 
 		Where("cap.remaining_quota > 0").
 		Where("cap.price_micros <= ?", maxPriceMicros).
 		Where("n.state = ?", NodeStateIdle).
+		Where("n.enabled = ?", true).
 		Where("n.last_seen_at >= ?", cutoff).
 		// Node must have a valid balance check for the category (or no category).
 		Where("cap.category_id = 0 OR (s.balance_ok = ? AND s.expires_at > ?)", true, now)

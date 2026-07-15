@@ -763,6 +763,7 @@ export function AitokenPurchasePage() {
                           <span className='text-xs text-red-600'>
                             {o.unavailable_reason === 'QUOTA_EXHAUSTED' && t('Quota exhausted')}
                             {o.unavailable_reason === 'NODE_OFFLINE' && t('Node offline')}
+                            {o.unavailable_reason === 'NODE_DISABLED' && t('Provider disabled this node')}
                             {o.unavailable_reason === 'NODE_BUSY' && t('Provider is busy')}
                             {o.unavailable_reason === 'CAPABILITY_TEST_EXPIRED' && t('Capability test expired')}
                             {o.unavailable_reason === 'BALANCE_CHECK_EXPIRED' && t('Balance check expired')}

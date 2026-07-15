@@ -357,6 +357,7 @@ func SetApiRouter(router *gin.Engine) {
 			nodeRoute.GET("/provider-group/mine", controller.GetMyProviderGroup)
 			nodeRoute.GET("/provider-groups/search", controller.SearchProviderGroups)
 			nodeRoute.DELETE("/:id", controller.DeleteMyNode)
+			nodeRoute.POST("/:id/enabled", controller.SetNodeEnabled)
 			nodeRoute.POST("/:id/heartbeat", controller.NodeHeartbeat)
 			nodeRoute.POST("/:id/balance-check", controller.ReportBalanceCheck)
 			nodeRoute.POST("/:id/balance-check/request", controller.RequestBalanceCheck)

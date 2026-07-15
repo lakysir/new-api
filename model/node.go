@@ -2,6 +2,8 @@ package model
 
 import (
 	"errors"
+	"strconv"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -45,6 +47,12 @@ type Node struct {
 	// a single provider by this id.
 	ProviderGroupId string `json:"provider_group_id" gorm:"type:varchar(64);index"`
 	State           string `json:"state" gorm:"type:varchar(16);index;default:OFFLINE"`
+	// Enabled is the provider's explicit on/off switch for scheduling. A node is
+	// only a scheduling/offer candidate when Enabled is true (in addition to being
+	// online). Default false: a freshly registered node stays out of the market
+	// until its owner lists capabilities, passes their balance checks and turns it
+	// on (PRD N-002 — provider opts in per node).
+	Enabled         bool   `json:"enabled" gorm:"index;default:false"`
 	Region          string `json:"region" gorm:"type:varchar(32)"`
 	Version         string `json:"version" gorm:"type:varchar(32)"`
 	LastSeenAt      int64  `json:"last_seen_at" gorm:"index;default:0"`
@@ -278,10 +286,14 @@ func ListNodeSiteStatuses(nodeId string) ([]NodeSiteStatus, error) {
 	return statuses, err
 }
 
-// EnableCapability lists (or updates) a script version on a node. It requires:
-// the referenced version to be executable, a valid challenge-test window, AND a
-// passing balance check for the script's category (the node proved the target
-// site is usable by reading its balance, not by running a generation).
+// EnableCapability lists (or updates) a script version on a node. It requires
+// the referenced version to be executable and a valid challenge-test window.
+//
+// Listing no longer gates on a passing balance check: a provider lists the
+// script first, then runs the per-capability balance check, and finally turns
+// the node on (SetNodeEnabled) once all its capabilities pass. The category is
+// still denormalized here so the per-capability detect button and the node
+// enable gate know which site to probe.
 //
 // On first listing RemainingQuota is set to 10 as the initial balance estimate;
 // subsequent executions update it from the actual script result. Re-listing an
@@ -295,17 +307,9 @@ func EnableCapability(cap *NodeCapability) error {
 	if !cap.IsTestValid() {
 		return ErrCapabilityTestRequired
 	}
-	// Denormalize the category and gate on its balance check.
+	// Denormalize the category so scheduling and the balance-check gate know the
+	// target site. The balance check itself is deferred to SetNodeEnabled.
 	cap.CategoryId = sv.CategoryId
-	if cap.CategoryId > 0 {
-		ok, err := HasValidBalanceCheck(cap.NodeId, cap.CategoryId)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			return ErrBalanceCheckRequired
-		}
-	}
 	cap.Status = CapabilityStatusActive
 	return DB.Transaction(func(tx *gorm.DB) error {
 		var existing NodeCapability
@@ -445,6 +449,86 @@ func ListNodesByUser(userId int) ([]Node, error) {
 	var nodes []Node
 	err := DB.Where("user_id = ?", userId).Order("last_seen_at desc").Find(&nodes).Error
 	return nodes, err
+}
+
+// ErrNodeEnableBlocked is returned when turning a node on while one or more of
+// its active capabilities has not passed the (unexpired) balance check for its
+// category. The message lists the offending capabilities so the UI can point
+// the provider at what still needs checking.
+type ErrNodeEnableBlocked struct{ Message string }
+
+func (e *ErrNodeEnableBlocked) Error() string { return e.Message }
+
+// ErrNodeNoCapabilities is returned when enabling a node that has no active
+// capability to schedule — turning it on would put nothing on the market.
+var ErrNodeNoCapabilities = errors.New("node has no listed capability to enable")
+
+// SetNodeEnabled flips a node's scheduling switch. Turning it on requires every
+// active capability that targets a site category to have a passing, unexpired
+// balance check (the provider proved each target site is usable). Turning it
+// off is unconditional. Cross-checks ownership.
+func SetNodeEnabled(userId int, nodeId string, enabled bool) error {
+	var node Node
+	if err := DB.Where("id = ? AND user_id = ?", nodeId, userId).First(&node).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrNodeNotFound
+		}
+		return err
+	}
+	if enabled {
+		var caps []NodeCapability
+		if err := DB.Where("node_id = ? AND status = ?", nodeId, CapabilityStatusActive).Find(&caps).Error; err != nil {
+			return err
+		}
+		if len(caps) == 0 {
+			return ErrNodeNoCapabilities
+		}
+		// Collect the distinct categories that still lack a valid balance check.
+		blocked := map[int]bool{}
+		for _, cap := range caps {
+			if cap.CategoryId <= 0 || blocked[cap.CategoryId] {
+				continue
+			}
+			ok, err := HasValidBalanceCheck(nodeId, cap.CategoryId)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				blocked[cap.CategoryId] = true
+			}
+		}
+		if len(blocked) > 0 {
+			ids := make([]int, 0, len(blocked))
+			for id := range blocked {
+				ids = append(ids, id)
+			}
+			names := categoryNames(ids)
+			return &ErrNodeEnableBlocked{
+				Message: "these categories still need a passing balance check before enabling: " + strings.Join(names, ", "),
+			}
+		}
+	}
+	return DB.Model(&Node{}).Where("id = ?", nodeId).Update("enabled", enabled).Error
+}
+
+// categoryNames resolves category ids to display names for error messages,
+// falling back to the numeric id when a name is unavailable.
+func categoryNames(ids []int) []string {
+	var cats []ScriptCategory
+	_ = DB.Where("id IN ?", ids).Find(&cats).Error
+	byId := make(map[int]string, len(cats))
+	for _, cat := range cats {
+		byId[cat.Id] = cat.Name
+	}
+	names := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if name, ok := byId[id]; ok && name != "" {
+			names = append(names, name)
+		} else {
+			names = append(names, "#"+strconv.Itoa(id))
+		}
+	}
+	return names
 }
 
 // ErrNodeStillOnline is returned when deleting a node that is still online.

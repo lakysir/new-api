@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Ban, ChevronDown, Cpu, Layers3, Server, Trash2 } from 'lucide-react'
+import { Ban, ChevronDown, Cpu, Server, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -25,6 +25,7 @@ import { SectionPageLayout } from '@/components/layout'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
 import {
   Table,
   TableBody,
@@ -51,6 +52,7 @@ import {
   removeCapability,
   requestBalanceCheck,
   revokeDevice,
+  setNodeEnabled,
 } from './api'
 import type { NodeBalanceCheck, ProviderGroup, ScriptCategory } from './api'
 import { EarningsSummary } from './earnings-summary'
@@ -158,6 +160,8 @@ export function NodesConsolePage() {
     Record<string, NodeBalanceCheck[]>
   >({})
   const [checking, setChecking] = useState('')
+  // Node id currently being toggled on/off, to disable its switch mid-flight.
+  const [togglingNodeId, setTogglingNodeId] = useState('')
   // Per-(node, script, version) execution stats, keyed "nodeId:scriptId:version".
   const [capStats, setCapStats] = useState<Record<string, CapabilityStat>>({})
   // Bumped on each loadAll() so the provider earnings cards refetch.
@@ -317,20 +321,9 @@ export function NodesConsolePage() {
     }
     const scriptId = Number(f.scriptId)
     const version = Number(f.version)
-    const script = pubScripts.find((item) => item.id === scriptId)
-    if (script?.category_id) {
-      const status = (balanceChecks[nodeId] || []).find(
-        (item) => item.category_id === script.category_id
-      )
-      if (!status?.balance_ok || status.expires_at <= Date.now() / 1000) {
-        toast.error(t('Check the site balance before listing this capability'))
-        document.getElementById(`balance-checks-${nodeId}`)?.scrollIntoView({
-          behavior: 'smooth',
-          block: 'center',
-        })
-        return
-      }
-    }
+    // Listing is unconditional now: the provider lists the script first, runs
+    // the per-capability balance check from the listed row, then enables the
+    // node once all its capabilities pass.
     try {
       const test = await createCapabilityTest(nodeId, scriptId, version)
       await enableCapability(nodeId, scriptId, {
@@ -512,6 +505,41 @@ export function NodesConsolePage() {
     }
   }
 
+  // capabilityBalanceOk reports whether a capability's category balance check is
+  // passing and unexpired. Capabilities with no category (category_id 0) need no
+  // check and are always OK.
+  function capabilityBalanceOk(nodeId: string, categoryId: number): boolean {
+    if (!categoryId) return true
+    const status = (balanceChecks[nodeId] || []).find(
+      (item) => item.category_id === categoryId
+    )
+    return Boolean(status?.balance_ok && status.expires_at > Date.now() / 1000)
+  }
+
+  // nodeCanEnable reports whether every active capability on the node has a
+  // passing balance check (and there is at least one), mirroring the server-side
+  // gate so the switch is only offered when enabling would succeed.
+  function nodeCanEnable(nodeId: string): boolean {
+    const list = (caps[nodeId] ?? []).filter((c) => c.status === 'active')
+    if (list.length === 0) return false
+    return list.every((c) => capabilityBalanceOk(nodeId, c.category_id))
+  }
+
+  async function onToggleEnabled(node: NodeInfo, next: boolean) {
+    setTogglingNodeId(node.id)
+    try {
+      await setNodeEnabled(node.id, next)
+      setNodes((current) =>
+        current.map((n) => (n.id === node.id ? { ...n, enabled: next } : n))
+      )
+      toast.success(next ? t('Node enabled') : t('Node disabled'))
+    } catch (e) {
+      toast.error(String((e as Error).message))
+    } finally {
+      setTogglingNodeId('')
+    }
+  }
+
   async function onRemove(nodeId: string, scriptId: number, version: number) {
     if (
       !window.confirm(
@@ -536,72 +564,12 @@ export function NodesConsolePage() {
     const list = caps[node.id] ?? []
     return (
       <div className='bg-muted/20 space-y-5 border-t p-4 sm:p-5'>
-        <section id={`balance-checks-${node.id}`}>
-          <div className='mb-3 flex items-center gap-2'>
-            <div className='bg-background flex size-7 items-center justify-center rounded-md border'>
-              <Layers3 className='size-4' />
-            </div>
-            <div>
-              <h4 className='text-sm font-medium'>
-                {t('Site balance checks')}
-              </h4>
-              <p className='text-muted-foreground text-xs'>
-                {t('Verify account balance before listing a capability')}
-              </p>
-            </div>
-          </div>
-          <div className='grid gap-2 md:grid-cols-2 xl:grid-cols-3'>
-            {categories.map((category) => {
-              const status = (balanceChecks[node.id] || []).find(
-                (item) => item.category_id === category.id
-              )
-              const valid = Boolean(
-                status?.balance_ok && status.expires_at > Date.now() / 1000
-              )
-              const key = `${node.id}:${category.id}`
-              return (
-                <div
-                  key={category.id}
-                  className='bg-background flex min-w-0 items-center gap-3 rounded-md border p-3'
-                >
-                  <div className='min-w-0 flex-1'>
-                    <div className='truncate text-sm font-medium'>
-                      {category.name}
-                    </div>
-                    <div
-                      className={`text-xs ${valid ? 'text-emerald-600' : 'text-muted-foreground'}`}
-                    >
-                      {valid ? t('Passed') : t('Not checked')}
-                    </div>
-                    {!valid && status?.error_message && (
-                      <div
-                        className='mt-1 truncate text-xs text-red-600'
-                        title={status.error_message}
-                      >
-                        {status.error_message}
-                      </div>
-                    )}
-                  </div>
-                  <Button
-                    size='sm'
-                    variant='outline'
-                    disabled={!category.balance_script_id || checking === key}
-                    onClick={() => onBalanceCheck(node.id, category.id)}
-                  >
-                    {checking === key ? t('Checking...') : t('Check balance')}
-                  </Button>
-                </div>
-              )
-            })}
-          </div>
-        </section>
-
         <section>
           <div className='mb-3'>
             <h4 className='text-sm font-medium'>{t('List capability')}</h4>
             <p className='text-muted-foreground text-xs'>
               {t(
-                'Select a script version and configure its pricing and daily limit'
+                'List the script first, then run its balance check from the row below'
               )}
             </p>
           </div>
@@ -680,6 +648,7 @@ export function NodesConsolePage() {
                   <TableHead>{t('Today')}</TableHead>
                   <TableHead>{t('Success rate')}</TableHead>
                   <TableHead>{t('Revenue')}</TableHead>
+                  <TableHead>{t('Balance check')}</TableHead>
                   <TableHead>{t('Status')}</TableHead>
                   <TableHead className='text-right'>{t('Actions')}</TableHead>
                 </TableRow>
@@ -699,6 +668,16 @@ export function NodesConsolePage() {
                     c.daily_limit > 0
                       ? `${c.daily_used ?? 0}/${c.daily_limit}`
                       : `${c.daily_used ?? 0}/∞`
+                  // Per-capability balance check: probes the script's category.
+                  // Capabilities with no category need no check.
+                  const checkStatus = (balanceChecks[node.id] || []).find(
+                    (item) => item.category_id === c.category_id
+                  )
+                  const checkValid = capabilityBalanceOk(
+                    node.id,
+                    c.category_id
+                  )
+                  const checkKey = `${node.id}:${c.category_id}`
                   return (
                     <TableRow key={c.id}>
                       <TableCell className='min-w-48'>
@@ -712,6 +691,42 @@ export function NodesConsolePage() {
                       <TableCell>{rate}</TableCell>
                       <TableCell>
                         {microsToCurrency(stat?.revenue_micros)}
+                      </TableCell>
+                      <TableCell>
+                        {c.category_id ? (
+                          <div className='flex items-center gap-2'>
+                            <Button
+                              size='sm'
+                              variant='outline'
+                              disabled={checking === checkKey}
+                              onClick={() =>
+                                onBalanceCheck(node.id, c.category_id)
+                              }
+                            >
+                              {checking === checkKey
+                                ? t('Checking...')
+                                : t('Detect')}
+                            </Button>
+                            <span
+                              className={`text-xs ${checkValid ? 'text-emerald-600' : checkStatus && !checkStatus.balance_ok ? 'text-red-600' : 'text-muted-foreground'}`}
+                              title={
+                                !checkValid
+                                  ? checkStatus?.error_message
+                                  : undefined
+                              }
+                            >
+                              {checkValid
+                                ? t('Passed')
+                                : checkStatus && !checkStatus.balance_ok
+                                  ? t('Failed')
+                                  : t('Not checked')}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className='text-muted-foreground text-xs'>
+                            {t('N/A')}
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Badge variant='outline'>{c.status}</Badge>
@@ -734,7 +749,7 @@ export function NodesConsolePage() {
                 {list.length === 0 && (
                   <TableRow>
                     <TableCell
-                      colSpan={9}
+                      colSpan={10}
                       className='text-muted-foreground h-20 text-center'
                     >
                       {t('No capabilities')}
@@ -911,6 +926,48 @@ export function NodesConsolePage() {
                             <Badge variant='outline'>{node.state}</Badge>
                             <span>{formatUnix(node.last_seen_at)}</span>
                           </div>
+                          {/* Scheduling switch: only enabled nodes are dispatched.
+                              Turning on is blocked until every listed capability's
+                              balance check passes (server-enforced). Expand the
+                              node to load its capabilities first. */}
+                          <label
+                            className='flex items-center gap-2 text-xs'
+                            title={
+                              node.enabled
+                                ? t('Enabled: this node can be scheduled')
+                                : !open
+                                  ? t(
+                                      'Open capabilities and pass every balance check to enable'
+                                    )
+                                  : !nodeCanEnable(node.id)
+                                    ? t(
+                                        'All listed capabilities must pass their balance check before enabling'
+                                      )
+                                    : t('Enable this node for scheduling')
+                            }
+                          >
+                            <Switch
+                              size='sm'
+                              checked={node.enabled}
+                              disabled={
+                                togglingNodeId === node.id ||
+                                (!node.enabled &&
+                                  (!open || !nodeCanEnable(node.id)))
+                              }
+                              onCheckedChange={(next) =>
+                                onToggleEnabled(node, next)
+                              }
+                            />
+                            <span
+                              className={
+                                node.enabled
+                                  ? 'text-emerald-600'
+                                  : 'text-muted-foreground'
+                              }
+                            >
+                              {node.enabled ? t('Enabled') : t('Disabled')}
+                            </span>
+                          </label>
                           <div className='flex items-center gap-1'>
                             {!nodeOnline(node) && (
                               <Button

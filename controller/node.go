@@ -245,3 +245,28 @@ func DeleteMyNode(c *gin.Context) {
 	}
 	common.ApiSuccess(c, nil)
 }
+
+type setNodeEnabledRequest struct {
+	Enabled bool `json:"enabled"`
+}
+
+// SetNodeEnabled turns a node's scheduling switch on or off. Turning it on
+// requires every active capability targeting a site category to have a passing,
+// unexpired balance check; the error lists any categories that still need one.
+func SetNodeEnabled(c *gin.Context) {
+	nodeId := c.Param("id")
+	var req setNodeEnabledRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if err := model.SetNodeEnabled(c.GetInt("id"), nodeId, req.Enabled); err != nil {
+		if errors.Is(err, model.ErrNodeNotFound) {
+			common.ApiErrorMsg(c, "node not found")
+			return
+		}
+		common.ApiErrorMsg(c, err.Error())
+		return
+	}
+	common.ApiSuccess(c, gin.H{"node_id": nodeId, "enabled": req.Enabled})
+}

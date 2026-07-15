@@ -226,6 +226,15 @@ export function deleteNode(nodeId: string) {
   return unwrap(api.delete(`/api/nodes/${nodeId}`))
 }
 
+// setNodeEnabled flips a node's scheduling switch. Enabling requires every
+// active capability's category balance check to have passed (server-enforced);
+// the rejection message names the categories that still need checking.
+export function setNodeEnabled(nodeId: string, enabled: boolean) {
+  return unwrap<{ node_id: string; enabled: boolean }>(
+    api.post(`/api/nodes/${nodeId}/enabled`, { enabled })
+  )
+}
+
 export function listNodeCapabilities(nodeId: string) {
   return unwrap<NodeCapability[]>(api.get(`/api/nodes/${nodeId}/capabilities`))
 }

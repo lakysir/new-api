@@ -74,6 +74,8 @@ export type NodeInfo = {
   device_id: string
   user_id: number
   state: string
+  /** Provider's scheduling switch: only enabled nodes are dispatched/offered. */
+  enabled: boolean
   region: string
   version: string
   last_seen_at: number
@@ -84,6 +86,8 @@ export type NodeCapability = {
   node_id: string
   script_id: number
   version: number
+  /** Denormalized target-site category; 0 when the script has no category. */
+  category_id: number
   price_micros: number
   /** Max executions per day; 0 = unlimited. Resets at midnight CST (UTC+8). */
   daily_limit: number
