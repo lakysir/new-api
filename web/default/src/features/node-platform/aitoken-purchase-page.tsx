@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Braces, History, ListTree } from 'lucide-react'
+import { Braces, FileCode, History, ListTree } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -916,6 +916,15 @@ export function AitokenPurchasePage() {
         {t('AiToken P2P Marketplace')}
       </SectionPageLayout.Title>
       <SectionPageLayout.Actions>
+        <Button
+          variant='outline'
+          render={
+            <a href='/aitoken-api-docs' target='_blank' rel='noopener noreferrer' />
+          }
+        >
+          <FileCode className='mr-2 h-4 w-4' aria-hidden='true' />
+          {t('API docs')}
+        </Button>
         <Button variant='outline' onClick={() => setRecordsOpen(true)}>
           <History className='mr-2 h-4 w-4' aria-hidden='true' />
           {t('Task records')}

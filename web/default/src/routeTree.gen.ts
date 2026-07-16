@@ -19,6 +19,7 @@ import { Route as ScriptsIndexRouteImport } from './routes/scripts/index'
 import { Route as RankingsIndexRouteImport } from './routes/rankings/index'
 import { Route as PricingIndexRouteImport } from './routes/pricing/index'
 import { Route as AboutIndexRouteImport } from './routes/about/index'
+import { Route as AitokenApiDocsIndexRouteImport } from './routes/aitoken-api-docs/index'
 import { Route as OauthProviderRouteImport } from './routes/oauth/$provider'
 import { Route as ConsoleTopupRouteImport } from './routes/console/topup'
 import { Route as ConsoleLogRouteImport } from './routes/console/log'
@@ -123,6 +124,11 @@ const PricingIndexRoute = PricingIndexRouteImport.update({
 const AboutIndexRoute = AboutIndexRouteImport.update({
   id: '/about/',
   path: '/about/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AitokenApiDocsIndexRoute = AitokenApiDocsIndexRouteImport.update({
+  id: '/aitoken-api-docs/',
+  path: '/aitoken-api-docs/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OauthProviderRoute = OauthProviderRouteImport.update({
@@ -469,6 +475,7 @@ export interface FileRoutesByFullPath {
   '/console/topup': typeof ConsoleTopupRoute
   '/oauth/$provider': typeof OauthProviderRoute
   '/about/': typeof AboutIndexRoute
+  '/aitoken-api-docs/': typeof AitokenApiDocsIndexRoute
   '/pricing/': typeof PricingIndexRoute
   '/rankings/': typeof RankingsIndexRoute
   '/scripts/': typeof ScriptsIndexRoute
@@ -535,6 +542,7 @@ export interface FileRoutesByTo {
   '/console/topup': typeof ConsoleTopupRoute
   '/oauth/$provider': typeof OauthProviderRoute
   '/about': typeof AboutIndexRoute
+  '/aitoken-api-docs': typeof AitokenApiDocsIndexRoute
   '/pricing': typeof PricingIndexRoute
   '/rankings': typeof RankingsIndexRoute
   '/scripts': typeof ScriptsIndexRoute
@@ -605,6 +613,7 @@ export interface FileRoutesById {
   '/console/topup': typeof ConsoleTopupRoute
   '/oauth/$provider': typeof OauthProviderRoute
   '/about/': typeof AboutIndexRoute
+  '/aitoken-api-docs/': typeof AitokenApiDocsIndexRoute
   '/pricing/': typeof PricingIndexRoute
   '/rankings/': typeof RankingsIndexRoute
   '/scripts/': typeof ScriptsIndexRoute
@@ -674,6 +683,7 @@ export interface FileRouteTypes {
     | '/console/topup'
     | '/oauth/$provider'
     | '/about/'
+    | '/aitoken-api-docs/'
     | '/pricing/'
     | '/rankings/'
     | '/scripts/'
@@ -740,6 +750,7 @@ export interface FileRouteTypes {
     | '/console/topup'
     | '/oauth/$provider'
     | '/about'
+    | '/aitoken-api-docs'
     | '/pricing'
     | '/rankings'
     | '/scripts'
@@ -809,6 +820,7 @@ export interface FileRouteTypes {
     | '/console/topup'
     | '/oauth/$provider'
     | '/about/'
+    | '/aitoken-api-docs/'
     | '/pricing/'
     | '/rankings/'
     | '/scripts/'
@@ -870,6 +882,7 @@ export interface RootRouteChildren {
   ConsoleTopupRoute: typeof ConsoleTopupRoute
   OauthProviderRoute: typeof OauthProviderRoute
   AboutIndexRoute: typeof AboutIndexRoute
+  AitokenApiDocsIndexRoute: typeof AitokenApiDocsIndexRoute
   PricingIndexRoute: typeof PricingIndexRoute
   RankingsIndexRoute: typeof RankingsIndexRoute
   ScriptsIndexRoute: typeof ScriptsIndexRoute
@@ -947,6 +960,13 @@ declare module '@tanstack/react-router' {
       path: '/about'
       fullPath: '/about/'
       preLoaderRoute: typeof AboutIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/aitoken-api-docs/': {
+      id: '/aitoken-api-docs/'
+      path: '/aitoken-api-docs'
+      fullPath: '/aitoken-api-docs/'
+      preLoaderRoute: typeof AitokenApiDocsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/oauth/$provider': {
@@ -1510,6 +1530,7 @@ const rootRouteChildren: RootRouteChildren = {
   ConsoleTopupRoute: ConsoleTopupRoute,
   OauthProviderRoute: OauthProviderRoute,
   AboutIndexRoute: AboutIndexRoute,
+  AitokenApiDocsIndexRoute: AitokenApiDocsIndexRoute,
   PricingIndexRoute: PricingIndexRoute,
   RankingsIndexRoute: RankingsIndexRoute,
   ScriptsIndexRoute: ScriptsIndexRoute,
