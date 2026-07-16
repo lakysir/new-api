@@ -28,6 +28,7 @@ import type {
   NodeInfo,
   Order,
   PriceBreakdown,
+  ProviderTaskAttempt,
   ScriptVersion,
 } from './types'
 
@@ -434,6 +435,14 @@ export function getPlatformEarnings() {
 // Per-(node, script version) execution stats across the caller's nodes.
 export function listProviderCapabilityStats() {
   return unwrap<CapabilityStat[]>(api.get('/api/nodes/capability-stats'))
+}
+
+// Recent per-node execution records (task attempts) across the caller's nodes,
+// newest first. Providers use these to see which tasks succeeded/failed and why.
+export function listMyTaskAttempts(limit = 100, offset = 0) {
+  return unwrap<ProviderTaskAttempt[]>(
+    api.get('/api/nodes/task-attempts', { params: { limit, offset } })
+  )
 }
 
 // rechargeAvailable funds the caller's marketplace available balance by

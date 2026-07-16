@@ -169,3 +169,23 @@ export type CapabilityStat = {
   successes: number
   revenue_micros: number
 }
+
+// ProviderTaskAttempt is one execution record on a provider's node, joined to
+// its order. Params/results are E2EE and never reach the control plane, so this
+// carries only what the server can know: attempt state, failure code, the
+// target-site balance the plugin reported, and timing. Providers use it to
+// debug their nodes' behavior.
+export type ProviderTaskAttempt = {
+  task_id: string
+  order_id: string
+  node_id: string
+  attempt: number
+  state: string
+  error_code?: string
+  script_balance?: number
+  script_id: number
+  version: number
+  input_hash?: string
+  created_at: number
+  updated_at: number
+}

@@ -200,6 +200,22 @@ func ListMyCapabilityStats(c *gin.Context) {
 	common.ApiSuccess(c, stats)
 }
 
+// ListMyTaskAttempts returns the caller's most recent per-node execution
+// records (newest first) so a provider can see which tasks their nodes ran and
+// how they ended (success / failure with error_code). Params/results are E2EE
+// and never stored, so this is the most the control plane can show. Accepts
+// ?limit (default 100, max 500) and ?offset for paging.
+func ListMyTaskAttempts(c *gin.Context) {
+	limit, _ := strconv.Atoi(c.Query("limit"))
+	offset, _ := strconv.Atoi(c.Query("offset"))
+	attempts, err := model.ListProviderTaskAttempts(c.GetInt("id"), limit, offset)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, attempts)
+}
+
 // GetMyProviderGroup returns (creating on first use) the caller's provider
 // group — the logical group all their nodes belong to, named after their
 // username. It also backfills any of the caller's nodes that predate grouping.

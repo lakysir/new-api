@@ -460,6 +460,69 @@ func GetProviderCapabilityStats(userId int) ([]ProviderCapabilityStat, error) {
 	return stats, nil
 }
 
+// ProviderTaskAttempt is one execution record on a provider's node, joined to
+// its order so the provider sees which script/version ran and how it ended. The
+// task params/result are never here — those travel the E2EE data plane and are
+// only hashed on the control plane — so this exposes the most the server can
+// know: the attempt state, failure code, target-site balance the plugin
+// reported, and timing. Providers use it to debug their nodes' behavior.
+type ProviderTaskAttempt struct {
+	TaskId    string `json:"task_id"`
+	OrderId   string `json:"order_id"`
+	NodeId    string `json:"node_id"`
+	Attempt   int    `json:"attempt"`
+	State     string `json:"state"`
+	ErrorCode string `json:"error_code,omitempty"`
+	// ScriptBalance is the target-site account balance the plugin reported on a
+	// successful run; nil when the plugin did not include one.
+	ScriptBalance *int   `json:"script_balance,omitempty"`
+	ScriptId      int    `json:"script_id"`
+	Version       int    `json:"version"`
+	InputHash     string `json:"input_hash,omitempty"`
+	CreatedAt     int64  `json:"created_at"`
+	UpdatedAt     int64  `json:"updated_at"`
+}
+
+// ListProviderTaskAttempts returns the most recent task attempts across every
+// node owned by userId (newest first), joined to their orders for the script
+// version context. limit is clamped to [1,500] (default 100 when <= 0); offset
+// defaults to 0. Only reads existing rows — no p2p/plugin change.
+func ListProviderTaskAttempts(userId, limit, offset int) ([]ProviderTaskAttempt, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 500 {
+		limit = 500
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	var attempts []ProviderTaskAttempt
+	err := DB.Table("task_attempts AS ta").
+		Select(`ta.task_id AS task_id,
+			ta.order_id AS order_id,
+			ta.node_id AS node_id,
+			ta.attempt AS attempt,
+			ta.state AS state,
+			ta.error_code AS error_code,
+			ta.script_balance AS script_balance,
+			o.script_id AS script_id,
+			o.version AS version,
+			o.input_hash AS input_hash,
+			ta.created_at AS created_at,
+			ta.updated_at AS updated_at`).
+		Joins("JOIN orders o ON o.id = ta.order_id").
+		Where("ta.node_id IN (?)", DB.Table("nodes").Select("id").Where("user_id = ?", userId)).
+		Order("ta.id desc").
+		Limit(limit).
+		Offset(offset).
+		Scan(&attempts).Error
+	if err != nil {
+		return nil, err
+	}
+	return attempts, nil
+}
+
 // ListNodesByUser returns all nodes owned by a user, newest heartbeat first.
 func ListNodesByUser(userId int) ([]Node, error) {
 	var nodes []Node

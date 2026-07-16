@@ -5257,6 +5257,14 @@
     "Assign a category and propose your revenue share.": "选择分类并设置你的分成比例。",
     "Target-site category": "目标站点分类",
     "(none)": "(无)",
-    "Your share %": "你的分成 %"
+    "Your share %": "你的分成 %",
+    "Task records": "任务记录",
+    "Your past runs on this device (sent parameters and returned result). Stored locally in this browser only.": "本设备上你过去的任务运行记录（发送的参数与返回的结果）。仅保存在当前浏览器本地。",
+    "Clear records": "清空记录",
+    "Sent parameters": "发送的参数",
+    "Returned result": "返回的结果",
+    "No task records yet": "暂无任务记录",
+    "Recent task executions on your nodes. Parameters and results are end-to-end encrypted and not stored — this shows the outcome and failure reason for debugging.": "你节点上最近的任务执行记录。参数和结果为端到端加密、不做存储——此处展示执行结果与失败原因，用于排查问题。",
+    "{{count}} records": "{{count}} 条记录"
   }
 }

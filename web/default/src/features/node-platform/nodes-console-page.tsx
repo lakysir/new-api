@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Ban, Cpu, Settings2, Trash2 } from 'lucide-react'
+import { Ban, Cpu, History, Settings2, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -54,6 +54,7 @@ import {
   listCategories,
   listMyDevices,
   listMyNodes,
+  listMyTaskAttempts,
   listNodeCapabilities,
   listProviderCapabilityStats,
   removeCapability,
@@ -71,6 +72,7 @@ import type {
   Device,
   NodeCapability,
   NodeInfo,
+  ProviderTaskAttempt,
   ScriptVersion,
 } from './types'
 
@@ -182,6 +184,29 @@ export function NodesConsolePage() {
   // The caller's provider group (all their nodes belong to it). Created on first
   // load from the username; every node defaults into this group.
   const [providerGroup, setProviderGroup] = useState<ProviderGroup | null>(null)
+  // Per-node execution records (task attempts), shown in a dialog so the console
+  // stays uncluttered. Params/results are E2EE and not stored server-side; this
+  // is the most the control plane can show for debugging.
+  const [recordsOpen, setRecordsOpen] = useState(false)
+  const [taskAttempts, setTaskAttempts] = useState<ProviderTaskAttempt[]>([])
+  const [attemptsLoading, setAttemptsLoading] = useState(false)
+
+  async function loadTaskAttempts() {
+    setAttemptsLoading(true)
+    try {
+      const list = await listMyTaskAttempts()
+      setTaskAttempts(Array.isArray(list) ? list : [])
+    } catch (e) {
+      toast.error(String((e as Error).message))
+    } finally {
+      setAttemptsLoading(false)
+    }
+  }
+
+  function openTaskRecords() {
+    setRecordsOpen(true)
+    void loadTaskAttempts()
+  }
 
   const visibleDevices = hideInactive
     ? devices.filter((d) => d.status === 'active')
@@ -808,6 +833,10 @@ export function NodesConsolePage() {
           />
           {t('Hide revoked/offline')}
         </label>
+        <Button variant='outline' onClick={openTaskRecords}>
+          <History className='size-4' />
+          {t('Task records')}
+        </Button>
         <Button variant='outline' onClick={() => loadAll()} disabled={loading}>
           {t('Refresh')}
         </Button>
@@ -1033,6 +1062,100 @@ export function NodesConsolePage() {
                 const node = nodes.find((item) => item.id === capabilityNodeId)
                 return node ? renderCapabilities(node) : null
               })()}
+          </DialogContent>
+        </Dialog>
+
+        {/* Task records: per-node execution attempts (success/failure) across
+            all the caller's nodes. Params/results are E2EE and never stored, so
+            this shows the state, failure reason and target-site balance the
+            control plane does have — enough to debug node behavior. */}
+        <Dialog open={recordsOpen} onOpenChange={setRecordsOpen}>
+          <DialogContent className='max-h-[90vh] overflow-y-auto sm:max-w-[min(1200px,calc(100vw-2rem))]'>
+            <DialogHeader className='pr-8'>
+              <DialogTitle>{t('Task records')}</DialogTitle>
+              <DialogDescription>
+                {t(
+                  'Recent task executions on your nodes. Parameters and results are end-to-end encrypted and not stored — this shows the outcome and failure reason for debugging.'
+                )}
+              </DialogDescription>
+            </DialogHeader>
+            <div className='flex items-center justify-between'>
+              <span className='text-muted-foreground text-xs'>
+                {t('{{count}} records', { count: taskAttempts.length })}
+              </span>
+              <Button
+                size='sm'
+                variant='outline'
+                onClick={loadTaskAttempts}
+                disabled={attemptsLoading}
+              >
+                {attemptsLoading ? t('Loading...') : t('Refresh')}
+              </Button>
+            </div>
+            <div className='overflow-x-auto rounded-md border'>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t('Time')}</TableHead>
+                    <TableHead>{t('Node')}</TableHead>
+                    <TableHead>{t('Script')}</TableHead>
+                    <TableHead>{t('Status')}</TableHead>
+                    <TableHead>{t('Reason')}</TableHead>
+                    <TableHead>{t('Balance')}</TableHead>
+                    <TableHead>{t('Task')}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {taskAttempts.map((a) => {
+                    let stateClass = 'text-muted-foreground'
+                    if (a.state === 'SUCCEEDED') {
+                      stateClass = 'text-emerald-600'
+                    } else if (a.state === 'FAILED' || a.state === 'EXPIRED') {
+                      stateClass = 'text-red-600'
+                    }
+                    return (
+                      <TableRow key={`${a.task_id}:${a.attempt}`}>
+                        <TableCell className='whitespace-nowrap text-xs'>
+                          {formatUnix(a.updated_at || a.created_at)}
+                        </TableCell>
+                        <TableCell className='max-w-[160px] truncate font-mono text-xs'>
+                          {a.node_id}
+                        </TableCell>
+                        <TableCell className='whitespace-nowrap'>
+                          #{a.script_id} v{a.version}
+                        </TableCell>
+                        <TableCell>
+                          <span className={`text-xs font-medium ${stateClass}`}>
+                            {a.state}
+                          </span>
+                        </TableCell>
+                        <TableCell className='text-xs text-red-600'>
+                          {a.error_code || '-'}
+                        </TableCell>
+                        <TableCell className='text-xs'>
+                          {a.script_balance ?? '-'}
+                        </TableCell>
+                        <TableCell className='max-w-[160px] truncate font-mono text-xs'>
+                          {a.task_id}
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                  {taskAttempts.length === 0 && (
+                    <TableRow>
+                      <TableCell
+                        colSpan={7}
+                        className='text-muted-foreground h-20 text-center'
+                      >
+                        {attemptsLoading
+                          ? t('Loading...')
+                          : t('No task records yet')}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           </DialogContent>
         </Dialog>
 

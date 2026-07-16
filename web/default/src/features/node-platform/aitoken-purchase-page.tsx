@@ -16,13 +16,21 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Braces, ListTree } from 'lucide-react'
+import { Braces, History, ListTree } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { SectionPageLayout } from '@/components/layout'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { api, getSelf } from '@/lib/api'
@@ -43,7 +51,7 @@ import {
   type ScriptOffer,
 } from './api'
 import { ClientRelaySession } from './lib/client-relay-session'
-import { displayToMicros, microsToCurrency } from './lib/format'
+import { displayToMicros, formatUnix, microsToCurrency } from './lib/format'
 import type {
   LedgerBalances,
   Order,
@@ -59,6 +67,53 @@ type PublishedScript = {
 }
 type PurchaseDraft = { scriptId: number; version: number; configText: string }
 type ViewMode = 'form' | 'json'
+
+// ClientTaskRecord is a locally-kept log of one purchase run. The sent config
+// and returned result are plaintext that only ever exists in this browser (the
+// control plane sees only hashes under E2EE), so the record lives in
+// localStorage — there is no backend and no p2p change involved. Kept so the
+// buyer can review what they sent and got back.
+type ClientTaskRecord = {
+  orderId: string
+  scriptId: number
+  scriptTitle: string
+  version: number
+  nodeId: string
+  configText: string
+  result: string
+  status: 'SUCCESS' | 'FAILED'
+  error?: string
+  createdAt: number
+}
+
+// Keep the log small so localStorage never grows unbounded.
+const TASK_RECORDS_LIMIT = 50
+
+function getTaskRecordsStorageKey() {
+  const userId = window.localStorage.getItem('uid') ?? 'anonymous'
+  return `aitoken-task-records:${userId}`
+}
+
+function loadTaskRecords(): ClientTaskRecord[] {
+  try {
+    const saved = JSON.parse(
+      window.localStorage.getItem(getTaskRecordsStorageKey()) ?? '[]'
+    ) as unknown
+    return Array.isArray(saved) ? (saved as ClientTaskRecord[]) : []
+  } catch {
+    return []
+  }
+}
+
+// upsertTaskRecord prepends (or replaces by orderId) a record and trims to the
+// cap. Re-running the same order overwrites its earlier entry.
+function upsertTaskRecord(
+  records: ClientTaskRecord[],
+  record: ClientTaskRecord
+): ClientTaskRecord[] {
+  const withoutDup = records.filter((r) => r.orderId !== record.orderId)
+  return [record, ...withoutDup].slice(0, TASK_RECORDS_LIMIT)
+}
 
 const DEFAULT_CONFIG_TEXT = '{\n  "prompt": "a dog"\n}'
 
@@ -299,6 +354,31 @@ export function AitokenPurchasePage() {
   const [walletQuota, setWalletQuota] = useState<number | null>(null)
   const [rechargeAmt, setRechargeAmt] = useState('1')
   const [recharging, setRecharging] = useState(false)
+  // Local task-record log (sent config + returned result per run). Kept in
+  // localStorage since the plaintext never leaves this browser.
+  const [taskRecords, setTaskRecords] = useState<ClientTaskRecord[]>(
+    loadTaskRecords
+  )
+  const [recordsOpen, setRecordsOpen] = useState(false)
+  // orderId of the record whose detail (params/result) is expanded in the dialog.
+  const [expandedRecordId, setExpandedRecordId] = useState<string | null>(null)
+
+  // Persist the task-record log whenever it changes.
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        getTaskRecordsStorageKey(),
+        JSON.stringify(taskRecords)
+      )
+    } catch {
+      // Storage may be unavailable or full; records are best-effort.
+    }
+  }, [taskRecords])
+
+  // addTaskRecord logs one run's outcome (upsert by orderId, newest first).
+  function addTaskRecord(record: ClientTaskRecord) {
+    setTaskRecords((current) => upsertTaskRecord(current, record))
+  }
 
   // selectScript switches the active script and picks a version. When
   // loadParams is true (an explicit user switch) the config editor is reset to
@@ -711,8 +791,22 @@ export function AitokenPurchasePage() {
       setRelayStatus(t('Sending config, waiting for result...'))
       await session.sendConfig(config)
       const result = await Promise.race([session.waitForResult(), failFast])
-      setRelayResult(JSON.stringify(result, null, 2))
+      const resultText = JSON.stringify(result, null, 2)
+      setRelayResult(resultText)
       setRelayStatus(t('Result received'))
+      // Log this run locally (sent config + returned result) for later review.
+      addTaskRecord({
+        orderId: targetOrder.id,
+        scriptId: targetOrder.script_id,
+        scriptTitle:
+          scripts.find((s) => s.id === targetOrder.script_id)?.title ?? '',
+        version: targetOrder.version,
+        nodeId: targetOrder.chosen_node_id,
+        configText,
+        result: resultText,
+        status: 'SUCCESS',
+        createdAt: Math.floor(Date.now() / 1000),
+      })
       // Submit the client receipt (result hash) so the control plane can compare
       // both parties' receipts and settle on a match.
       try {
@@ -745,6 +839,20 @@ export function AitokenPurchasePage() {
       } catch {
         // Preserve the original relay error when the order can no longer be read.
       }
+      // Log the failed run so the buyer can review what they sent and the reason.
+      addTaskRecord({
+        orderId: targetOrder.id,
+        scriptId: targetOrder.script_id,
+        scriptTitle:
+          scripts.find((s) => s.id === targetOrder.script_id)?.title ?? '',
+        version: targetOrder.version,
+        nodeId: targetOrder.chosen_node_id,
+        configText,
+        result: '',
+        status: 'FAILED',
+        error: String((e as Error).message),
+        createdAt: Math.floor(Date.now() / 1000),
+      })
       toast.error(String((e as Error).message))
     } finally {
       cancelled = true
@@ -759,6 +867,13 @@ export function AitokenPurchasePage() {
         {t('AiToken P2P Marketplace')}
       </SectionPageLayout.Title>
       <SectionPageLayout.Actions>
+        <Button variant='outline' onClick={() => setRecordsOpen(true)}>
+          <History className='mr-2 h-4 w-4' aria-hidden='true' />
+          {t('Task records')}
+          {taskRecords.length > 0 && (
+            <Badge variant='secondary'>{taskRecords.length}</Badge>
+          )}
+        </Button>
         <Button variant='outline' onClick={loadBalance}>
           {t('Refresh')}
         </Button>
@@ -1256,6 +1371,118 @@ export function AitokenPurchasePage() {
             </div>
           </div>
         )}
+
+        {/* Task records: a local log of past runs (sent config + returned
+            result). In a dialog so the main page stays uncluttered. */}
+        <Dialog open={recordsOpen} onOpenChange={setRecordsOpen}>
+          <DialogContent className='max-h-[90vh] overflow-y-auto sm:max-w-[min(1000px,calc(100vw-2rem))]'>
+            <DialogHeader className='pr-8'>
+              <DialogTitle>{t('Task records')}</DialogTitle>
+              <DialogDescription>
+                {t(
+                  'Your past runs on this device (sent parameters and returned result). Stored locally in this browser only.'
+                )}
+              </DialogDescription>
+            </DialogHeader>
+            {taskRecords.length > 0 && (
+              <div className='flex justify-end'>
+                <Button
+                  size='sm'
+                  variant='outline'
+                  onClick={() => {
+                    setTaskRecords([])
+                    setExpandedRecordId(null)
+                  }}
+                >
+                  {t('Clear records')}
+                </Button>
+              </div>
+            )}
+            <div className='space-y-2'>
+              {taskRecords.map((record) => {
+                const expanded = expandedRecordId === record.orderId
+                return (
+                  <div
+                    key={record.orderId}
+                    className='rounded-md border text-sm'
+                  >
+                    <button
+                      type='button'
+                      className='hover:bg-muted/40 flex w-full flex-wrap items-center gap-2 px-3 py-2 text-left'
+                      onClick={() =>
+                        setExpandedRecordId(expanded ? null : record.orderId)
+                      }
+                    >
+                      <Badge
+                        variant={
+                          record.status === 'SUCCESS' ? 'secondary' : 'outline'
+                        }
+                        className={
+                          record.status === 'SUCCESS'
+                            ? 'text-emerald-600'
+                            : 'text-red-600'
+                        }
+                      >
+                        {record.status === 'SUCCESS'
+                          ? t('Success')
+                          : t('Failed')}
+                      </Badge>
+                      <span className='font-medium'>
+                        #{record.scriptId}
+                        {record.scriptTitle ? ` ${record.scriptTitle}` : ''} v
+                        {record.version}
+                      </span>
+                      <span className='text-muted-foreground text-xs'>
+                        {formatUnix(record.createdAt)}
+                      </span>
+                      <span className='text-muted-foreground ml-auto font-mono text-xs'>
+                        {record.orderId}
+                      </span>
+                    </button>
+                    {expanded && (
+                      <div className='space-y-3 border-t px-3 py-3'>
+                        {record.nodeId && (
+                          <div className='text-muted-foreground text-xs'>
+                            {t('Provider node')}:{' '}
+                            <span className='font-mono'>{record.nodeId}</span>
+                          </div>
+                        )}
+                        {record.error && (
+                          <div className='text-xs text-red-600'>
+                            {record.error}
+                          </div>
+                        )}
+                        <div>
+                          <div className='mb-1 text-xs font-medium'>
+                            {t('Sent parameters')}
+                          </div>
+                          <pre className='bg-muted/30 max-h-56 overflow-auto rounded-md border p-2 text-xs'>
+                            {record.configText}
+                          </pre>
+                        </div>
+                        {record.result && (
+                          <div>
+                            <div className='mb-1 text-xs font-medium'>
+                              {t('Returned result')}
+                            </div>
+                            <pre className='bg-muted/30 max-h-56 overflow-auto rounded-md border p-2 text-xs'>
+                              {record.result}
+                            </pre>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+              {taskRecords.length === 0 && (
+                <div className='text-muted-foreground py-10 text-center text-sm'>
+                  {t('No task records yet')}
+                </div>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
       </SectionPageLayout.Content>
     </SectionPageLayout>
   )

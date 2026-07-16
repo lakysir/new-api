@@ -354,6 +354,7 @@ func SetApiRouter(router *gin.Engine) {
 			nodeRoute.POST("", controller.RegisterNode)
 			nodeRoute.GET("/mine", controller.ListMyNodes)
 			nodeRoute.GET("/capability-stats", controller.ListMyCapabilityStats)
+			nodeRoute.GET("/task-attempts", controller.ListMyTaskAttempts)
 			// Provider group: the caller's own group (get-or-create) and a name
 			// search used by clients to filter offers by provider.
 			nodeRoute.GET("/provider-group/mine", controller.GetMyProviderGroup)
