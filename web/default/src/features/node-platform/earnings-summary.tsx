@@ -112,12 +112,12 @@ export function EarningsSummary({
           main /wallet quota shown on the wallet page. */}
       <div className='col-span-2 rounded-lg border p-4 md:col-span-1'>
         <div className='text-muted-foreground text-xs'>{balanceLabel}</div>
-        <div className='mt-1 text-lg font-semibold'>
-          {microsToCurrency(data?.balance_micros)}
-        </div>
-        <div className='mt-3 flex items-center gap-2'>
+        <div className='mt-1 flex min-w-0 items-center gap-2'>
+          <div className='mr-auto shrink-0 text-lg font-semibold'>
+            {microsToCurrency(data?.balance_micros)}
+          </div>
           <Input
-            className='h-8 w-24'
+            className='h-8 min-w-0 max-w-24 flex-1'
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             placeholder={microsToDisplay(balanceMicros)}
@@ -125,16 +125,13 @@ export function EarningsSummary({
           />
           <Button
             size='sm'
-            className='h-8'
+            className='h-8 shrink-0'
             disabled={withdrawing || balanceMicros <= 0}
             onClick={onWithdraw}
             title={t('Withdraw to wallet')}
           >
             {withdrawing ? t('Withdrawing...') : t('Withdraw')}
           </Button>
-        </div>
-        <div className='text-muted-foreground mt-2 text-xs'>
-          {t('Withdraw to your wallet balance at a 1:1 rate.')}
         </div>
       </div>
       {(
