@@ -336,6 +336,7 @@ export function AitokenPurchasePage() {
   const versions = availableVersions
     .map((item) => item.version)
     .sort((a, b) => b - a)
+  const selectedScript = scripts.find((s) => s.id === scriptId)
   const [offers, setOffers] = useState<ScriptOffer[]>([])
   const [nodeId, setNodeId] = useState('') // chosen offer; empty when auto
   // Auto mode (default): the platform auto-picks the busiest, highest-success
@@ -1014,6 +1015,18 @@ export function AitokenPurchasePage() {
               {offersLoading ? t('Loading...') : t('View offers')}
             </Button>
           </div>
+
+          {/* Selected script's description: authors document how the script
+              behaves here, including how it maps the consume multiplier to its
+              output (e.g. seconds of video, number of images). */}
+          {selectedScript?.description ? (
+            <div className='bg-muted/30 mt-3 rounded-md border p-3 text-sm whitespace-pre-wrap'>
+              <div className='text-muted-foreground mb-1 text-xs font-medium'>
+                {t('Script description')}
+              </div>
+              {selectedScript.description}
+            </div>
+          ) : null}
 
           {/* Provider-group filter: search a group by name to restrict offers +
               the auto-pick to a single provider. Helps when there are many. */}
