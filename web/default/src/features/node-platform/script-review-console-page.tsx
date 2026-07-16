@@ -78,7 +78,11 @@ type PendingScript = {
   category_id?: number
 }
 
-type DiffLine = { kind: 'same' | 'remove' | 'add'; text: string; number?: number }
+type DiffLine = {
+  kind: 'same' | 'remove' | 'add'
+  text: string
+  number?: number
+}
 type PricingEdit = { author: string; platform: string }
 
 function buildLineDiff(previous = '', next = ''): DiffLine[] {
@@ -133,16 +137,26 @@ function buildLineDiff(previous = '', next = ''): DiffLine[] {
   ]
 }
 
-function ChangedField({ label, previous, next }: { label: string; previous?: string; next?: string }) {
+function ChangedField({
+  label,
+  previous,
+  next,
+}: {
+  label: string
+  previous?: string
+  next?: string
+}) {
   if ((previous || '') === (next || '')) return null
   return (
     <div className='grid gap-2 border-b pb-3 last:border-b-0 sm:grid-cols-[120px_1fr_1fr]'>
       <div className='text-sm font-medium'>{label}</div>
       <div className='rounded-md bg-red-500/10 p-2 text-sm whitespace-pre-wrap'>
-        <span className='mr-2 text-red-600'>-</span>{previous || '-'}
+        <span className='mr-2 text-red-600'>-</span>
+        {previous || '-'}
       </div>
       <div className='rounded-md bg-green-500/10 p-2 text-sm whitespace-pre-wrap'>
-        <span className='mr-2 text-green-700'>+</span>{next || '-'}
+        <span className='mr-2 text-green-700'>+</span>
+        {next || '-'}
       </div>
     </div>
   )
@@ -157,11 +171,15 @@ export function ScriptReviewConsolePage() {
   const [notes, setNotes] = useState<Record<number, string>>({})
   const [preview, setPreview] = useState<PendingScript | null>(null)
   const [previewMode, setPreviewMode] = useState<'changes' | 'code'>('changes')
-  const [publishedVersions, setPublishedVersions] = useState<ScriptVersion[]>([])
+  const [publishedVersions, setPublishedVersions] = useState<ScriptVersion[]>(
+    []
+  )
   const [publishedCategory, setPublishedCategory] = useState('all')
   const [historyScriptId, setHistoryScriptId] = useState(0)
   const [revokeReasons, setRevokeReasons] = useState<Record<number, string>>({})
-  const [pricingEdits, setPricingEdits] = useState<Record<number, PricingEdit>>({})
+  const [pricingEdits, setPricingEdits] = useState<Record<number, PricingEdit>>(
+    {}
+  )
   const [savingVersionId, setSavingVersionId] = useState(0)
   // Operator sets the platform fee (%) per pending script on approval.
   const [platformFees, setPlatformFees] = useState<Record<number, string>>({})
@@ -232,7 +250,12 @@ export function ScriptReviewConsolePage() {
       return
     }
     try {
-      await reviewScript(id, approve, notes[id] || '', approve ? percentToPpm(platformFees[id] || '0') : 0)
+      await reviewScript(
+        id,
+        approve,
+        notes[id] || '',
+        approve ? percentToPpm(platformFees[id] || '0') : 0
+      )
       toast.success(approve ? t('Approved') : t('Rejected'))
       await load()
     } catch (e) {
@@ -256,7 +279,9 @@ export function ScriptReviewConsolePage() {
     try {
       const key = await generatePlatformSigningKey()
       setSigningKey(key)
-      toast.success(rotating ? t('Signing key rotated') : t('Signing key generated'))
+      toast.success(
+        rotating ? t('Signing key rotated') : t('Signing key generated')
+      )
     } catch (e) {
       toast.error(String((e as Error).message))
     } finally {
@@ -318,14 +343,22 @@ export function ScriptReviewConsolePage() {
   }
 
   function pricingValue(version: ScriptVersion) {
-    return pricingEdits[version.id] || {
-      author: ppmToPercent(version.author_share_rate_ppm),
-      platform: ppmToPercent(version.platform_fee_rate_ppm),
-    }
+    return (
+      pricingEdits[version.id] || {
+        author: ppmToPercent(version.author_share_rate_ppm),
+        platform: ppmToPercent(version.platform_fee_rate_ppm),
+      }
+    )
   }
 
-  function setPricingValue(version: ScriptVersion, patch: Partial<PricingEdit>) {
-    setPricingEdits((current) => ({ ...current, [version.id]: { ...pricingValue(version), ...patch } }))
+  function setPricingValue(
+    version: ScriptVersion,
+    patch: Partial<PricingEdit>
+  ) {
+    setPricingEdits((current) => ({
+      ...current,
+      [version.id]: { ...pricingValue(version), ...patch },
+    }))
   }
 
   async function onSavePricing(version: ScriptVersion) {
@@ -350,7 +383,11 @@ export function ScriptReviewConsolePage() {
         platform_fee_rate_ppm: percentToPpm(value.platform),
       })
       toast.success(t('Pricing updated'))
-      setPricingEdits((current) => { const next = { ...current }; delete next[version.id]; return next })
+      setPricingEdits((current) => {
+        const next = { ...current }
+        delete next[version.id]
+        return next
+      })
       await load()
     } catch (e) {
       toast.error(String((e as Error).message))
@@ -360,7 +397,15 @@ export function ScriptReviewConsolePage() {
   }
 
   async function onDeleteVersion(version: ScriptVersion) {
-    if (!window.confirm(t('Delete script #{{scriptId}} v{{version}}?', { scriptId: version.script_id, version: version.version }))) return
+    if (
+      !window.confirm(
+        t('Delete script #{{scriptId}} v{{version}}?', {
+          scriptId: version.script_id,
+          version: version.version,
+        })
+      )
+    )
+      return
     try {
       await deleteScriptVersion(version.script_id, version.version)
       toast.success(t('Version deleted'))
@@ -382,26 +427,36 @@ export function ScriptReviewConsolePage() {
         {/* Platform service-fee revenue (day/week/month/total). Reloads on the
             same refresh action as the rest of the console. */}
         <div className='mb-6'>
-          <div className='mb-2 text-sm font-medium'>{t('Platform earnings')}</div>
+          <div className='mb-2 text-sm font-medium'>
+            {t('Platform earnings')}
+          </div>
           <EarningsSummary role='platform' refreshKey={refreshTick} />
         </div>
 
         {/* Platform signing key: publishing requires a configured key, and the
             plugin execution gate rejects any manifest without a valid signature. */}
         <div className='mb-6 rounded-lg border p-4'>
-          <div className='mb-2 text-sm font-medium'>{t('Script signing key')}</div>
+          <div className='mb-2 text-sm font-medium'>
+            {t('Script signing key')}
+          </div>
           {signingKey?.signing_enabled ? (
             <div className='flex flex-wrap items-center gap-x-6 gap-y-2 text-sm'>
               <div>
                 {t('Status')}:{' '}
-                <span className='font-medium text-green-600'>{t('Enabled')}</span>
+                <span className='font-medium text-green-600'>
+                  {t('Enabled')}
+                </span>
               </div>
               <div>
-                {t('Key ID')}: <span className='font-mono text-xs'>{signingKey.key_id}</span>
+                {t('Key ID')}:{' '}
+                <span className='font-mono text-xs'>{signingKey.key_id}</span>
               </div>
               <div className='flex min-w-0 items-center gap-2'>
                 <span className='shrink-0'>{t('Public key')}:</span>
-                <span className='truncate font-mono text-xs' title={signingKey.public_key}>
+                <span
+                  className='truncate font-mono text-xs'
+                  title={signingKey.public_key}
+                >
                   {signingKey.public_key}
                 </span>
               </div>
@@ -417,16 +472,25 @@ export function ScriptReviewConsolePage() {
           ) : (
             <div className='flex flex-wrap items-center gap-3 text-sm'>
               <span className='text-red-600'>
-                ⚠️ {t('Signing is not configured. Scripts cannot be published or executed until a key is generated.')}
+                ⚠️{' '}
+                {t(
+                  'Signing is not configured. Scripts cannot be published or executed until a key is generated.'
+                )}
               </span>
-              <Button size='sm' disabled={generatingKey} onClick={onGenerateSigningKey}>
+              <Button
+                size='sm'
+                disabled={generatingKey}
+                onClick={onGenerateSigningKey}
+              >
                 {generatingKey ? t('Working...') : t('Generate signing key')}
               </Button>
             </div>
           )}
           {signingKey?.signing_enabled && (
             <p className='text-muted-foreground mt-2 text-xs'>
-              {t('Rotating the key invalidates existing signatures; already-published versions must be re-published to run again.')}
+              {t(
+                'Rotating the key invalidates existing signatures; already-published versions must be re-published to run again.'
+              )}
             </p>
           )}
         </div>
@@ -506,7 +570,10 @@ export function ScriptReviewConsolePage() {
             ))}
             {pending.length === 0 && (
               <TableRow>
-                <TableCell colSpan={9} className='text-muted-foreground text-center'>
+                <TableCell
+                  colSpan={9}
+                  className='text-muted-foreground text-center'
+                >
                   {loading ? t('Loading...') : t('No pending scripts')}
                 </TableCell>
               </TableRow>
@@ -540,7 +607,9 @@ export function ScriptReviewConsolePage() {
                 <TableHead>{t('Name')}</TableHead>
                 <TableHead>{t('Site')}</TableHead>
                 <TableHead>{t('Balance script')}</TableHead>
-                <TableHead>{t('Set balance script (scriptId:version)')}</TableHead>
+                <TableHead>
+                  {t('Set balance script (scriptId:version)')}
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -560,10 +629,16 @@ export function ScriptReviewConsolePage() {
                       placeholder='12:1'
                       value={balScript[cat.id] || ''}
                       onChange={(e) =>
-                        setBalScript((p) => ({ ...p, [cat.id]: e.target.value }))
+                        setBalScript((p) => ({
+                          ...p,
+                          [cat.id]: e.target.value,
+                        }))
                       }
                     />
-                    <Button size='sm' onClick={() => onSetBalanceScript(cat.id)}>
+                    <Button
+                      size='sm'
+                      onClick={() => onSetBalanceScript(cat.id)}
+                    >
                       {t('Set')}
                     </Button>
                   </TableCell>
@@ -571,7 +646,10 @@ export function ScriptReviewConsolePage() {
               ))}
               {categories.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className='text-muted-foreground text-center'>
+                  <TableCell
+                    colSpan={5}
+                    className='text-muted-foreground text-center'
+                  >
                     {t('No categories yet')}
                   </TableCell>
                 </TableRow>
@@ -610,7 +688,7 @@ export function ScriptReviewConsolePage() {
           {previewMode === 'changes' && preview ? (
             <div className='space-y-4'>
               {!preview.previous_code ? (
-                <div className='rounded-md border bg-muted/30 p-3 text-sm'>
+                <div className='bg-muted/30 rounded-md border p-3 text-sm'>
                   {t('Initial version')}
                 </div>
               ) : null}
@@ -648,7 +726,11 @@ export function ScriptReviewConsolePage() {
                         {line.number}
                       </span>
                       <span className='w-6 shrink-0 py-0.5 text-center select-none'>
-                        {line.kind === 'remove' ? '-' : line.kind === 'add' ? '+' : ' '}
+                        {line.kind === 'remove'
+                          ? '-'
+                          : line.kind === 'add'
+                            ? '+'
+                            : ' '}
                       </span>
                       <span className='min-w-0 flex-1 px-2 py-0.5 whitespace-pre'>
                         {line.text || ' '}
@@ -659,7 +741,7 @@ export function ScriptReviewConsolePage() {
               </div>
             </div>
           ) : (
-            <pre className='overflow-auto rounded-lg border bg-muted/40 p-3 font-mono text-xs whitespace-pre-wrap'>
+            <pre className='bg-muted/40 overflow-auto rounded-lg border p-3 font-mono text-xs whitespace-pre-wrap'>
               {preview?.draft_code || ''}
             </pre>
           )}
@@ -671,7 +753,7 @@ export function ScriptReviewConsolePage() {
             <label className='flex items-center gap-2 text-sm'>
               <span>{t('Category')}</span>
               <select
-                className='h-8 rounded-md border bg-background px-2 text-sm'
+                className='bg-background h-8 rounded-md border px-2 text-sm'
                 value={publishedCategory}
                 onChange={(event) => setPublishedCategory(event.target.value)}
               >
@@ -743,7 +825,9 @@ export function ScriptReviewConsolePage() {
                           <Button
                             size='sm'
                             variant='outline'
-                            onClick={() => setHistoryScriptId(version.script_id)}
+                            onClick={() =>
+                              setHistoryScriptId(version.script_id)
+                            }
                           >
                             {t('History')} ({versions.length})
                           </Button>
@@ -796,7 +880,8 @@ export function ScriptReviewConsolePage() {
                 <div>
                   <div>{formatUnix(version.published_at)}</div>
                   <div className='text-muted-foreground text-xs'>
-                    {categoryNames.get(version.category_id) || t('Uncategorized')}
+                    {categoryNames.get(version.category_id) ||
+                      t('Uncategorized')}
                     {' / '}
                     {version.author_username || `#${version.author_id}`}
                   </div>
@@ -808,17 +893,56 @@ export function ScriptReviewConsolePage() {
                 </div>
                 <div className='grid gap-2 sm:grid-cols-2'>
                   <label className='space-y-1'>
-                    <span className='text-muted-foreground text-xs'>{t('Author')} (%)</span>
-                    <Input className='h-8' value={pricingValue(version).author} onChange={(event) => setPricingValue(version, { author: event.target.value })} />
+                    <span className='text-muted-foreground text-xs'>
+                      {t('Author')} (%)
+                    </span>
+                    <Input
+                      className='h-8'
+                      value={pricingValue(version).author}
+                      onChange={(event) =>
+                        setPricingValue(version, { author: event.target.value })
+                      }
+                    />
                   </label>
                   <label className='space-y-1'>
-                    <span className='text-muted-foreground text-xs'>{t('Platform fee')} (%)</span>
-                    <Input className='h-8' value={pricingValue(version).platform} onChange={(event) => setPricingValue(version, { platform: event.target.value })} />
+                    <span className='text-muted-foreground text-xs'>
+                      {t('Platform fee')} (%)
+                    </span>
+                    <Input
+                      className='h-8'
+                      value={pricingValue(version).platform}
+                      onChange={(event) =>
+                        setPricingValue(version, {
+                          platform: event.target.value,
+                        })
+                      }
+                    />
                   </label>
                 </div>
                 <div className='flex flex-wrap justify-end gap-2'>
-                  <Button size='sm' variant='outline' disabled={savingVersionId === version.id} onClick={() => onSavePricing(version)}>{savingVersionId === version.id ? t('Saving...') : t('Save pricing')}</Button>
-                  <Button size='sm' variant='destructive' disabled={version.version === historyVersions[0]?.version} title={version.version === historyVersions[0]?.version ? t('The latest version cannot be deleted') : undefined} onClick={() => onDeleteVersion(version)}>{t('Delete')}</Button>
+                  <Button
+                    size='sm'
+                    variant='outline'
+                    disabled={savingVersionId === version.id}
+                    onClick={() => onSavePricing(version)}
+                  >
+                    {savingVersionId === version.id
+                      ? t('Saving...')
+                      : t('Save pricing')}
+                  </Button>
+                  <Button
+                    size='sm'
+                    variant='destructive'
+                    disabled={version.version === historyVersions[0]?.version}
+                    title={
+                      version.version === historyVersions[0]?.version
+                        ? t('The latest version cannot be deleted')
+                        : undefined
+                    }
+                    onClick={() => onDeleteVersion(version)}
+                  >
+                    {t('Delete')}
+                  </Button>
                 </div>
               </div>
             ))}

@@ -62,10 +62,7 @@ export function useNotifications() {
   const announcementsEnabled = status?.announcements_enabled ?? false
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const announcements: NotificationAnnouncement[] = announcementsEnabled
-    ? ((status?.announcements || []) as NotificationAnnouncement[]).slice(
-        0,
-        20
-      )
+    ? ((status?.announcements || []) as NotificationAnnouncement[]).slice(0, 20)
     : []
 
   // Notification store

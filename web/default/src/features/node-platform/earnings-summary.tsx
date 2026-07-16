@@ -29,7 +29,11 @@ import {
   withdrawEarnings,
   withdrawPlatformEarnings,
 } from './api'
-import { displayToMicros, microsToCurrency, microsToDisplay } from './lib/format'
+import {
+  displayToMicros,
+  microsToCurrency,
+  microsToDisplay,
+} from './lib/format'
 import type { EarningsSummary as EarningsSummaryData } from './types'
 
 // EarningsSummary renders the balance + day/week/month income cards shared by the
@@ -57,7 +61,9 @@ export function EarningsSummary({
 
   const load = useCallback(async () => {
     const res =
-      role === 'platform' ? await getPlatformEarnings() : await getEarnings(role)
+      role === 'platform'
+        ? await getPlatformEarnings()
+        : await getEarnings(role)
     setData(res)
   }, [role])
 
@@ -78,9 +84,7 @@ export function EarningsSummary({
   // Withdraw the marketplace earnings balance into the main /wallet quota (1:1
   // in USD). Blank amount withdraws the full balance.
   async function onWithdraw() {
-    const amountMicros = amount.trim()
-      ? displayToMicros(amount)
-      : balanceMicros
+    const amountMicros = amount.trim() ? displayToMicros(amount) : balanceMicros
     if (amountMicros <= 0) {
       toast.error(t('Enter an amount greater than zero'))
       return
@@ -117,7 +121,7 @@ export function EarningsSummary({
             {microsToCurrency(data?.balance_micros)}
           </div>
           <Input
-            className='h-8 min-w-0 max-w-24 flex-1'
+            className='h-8 max-w-24 min-w-0 flex-1'
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             placeholder={microsToDisplay(balanceMicros)}

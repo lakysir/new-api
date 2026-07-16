@@ -49,7 +49,9 @@ export function submitScriptForReview(
   scriptId: number,
   opts?: { author_share_rate_ppm?: number; category_id?: number }
 ) {
-  return unwrap(api.post(`/api/scripts/mine/${scriptId}/submit-review`, opts ?? {}))
+  return unwrap(
+    api.post(`/api/scripts/mine/${scriptId}/submit-review`, opts ?? {})
+  )
 }
 
 export type ScriptCategory = {
@@ -65,10 +67,16 @@ export function listCategories() {
 }
 
 export function createCategory(name: string, site: string) {
-  return unwrap<ScriptCategory>(api.post('/api/scripts/categories', { name, site }))
+  return unwrap<ScriptCategory>(
+    api.post('/api/scripts/categories', { name, site })
+  )
 }
 
-export function setCategoryBalanceScript(categoryId: number, scriptId: number, version: number) {
+export function setCategoryBalanceScript(
+  categoryId: number,
+  scriptId: number,
+  version: number
+) {
   return unwrap(
     api.post(`/api/scripts/categories/${categoryId}/balance-script`, {
       script_id: scriptId,
@@ -81,7 +89,12 @@ export function setCategoryBalanceScript(categoryId: number, scriptId: number, v
 // probe script; this records the passing window that lets it list capabilities).
 export function reportBalanceCheck(
   nodeId: string,
-  body: { category_id: number; balance_ok: boolean; balance_micros?: number; tier?: string }
+  body: {
+    category_id: number
+    balance_ok: boolean
+    balance_micros?: number
+    tier?: string
+  }
 ) {
   return unwrap(api.post(`/api/nodes/${nodeId}/balance-check`, body))
 }
@@ -98,15 +111,22 @@ export type NodeBalanceCheck = {
 
 export function requestBalanceCheck(nodeId: string, categoryId: number) {
   return unwrap<{ event_id: string; dispatched: boolean }>(
-    api.post(`/api/nodes/${nodeId}/balance-check/request`, { category_id: categoryId })
+    api.post(`/api/nodes/${nodeId}/balance-check/request`, {
+      category_id: categoryId,
+    })
   )
 }
 
 export function listBalanceChecks(nodeId: string) {
-  return unwrap<NodeBalanceCheck[]>(api.get(`/api/nodes/${nodeId}/balance-checks`))
+  return unwrap<NodeBalanceCheck[]>(
+    api.get(`/api/nodes/${nodeId}/balance-checks`)
+  )
 }
 
-export function publishScriptVersion(scriptId: number, pricingTemplateId?: number) {
+export function publishScriptVersion(
+  scriptId: number,
+  pricingTemplateId?: number
+) {
   return unwrap(
     api.post(`/api/scripts/mine/${scriptId}/publish-version`, {
       pricing_template_id: pricingTemplateId ?? 0,
@@ -115,7 +135,9 @@ export function publishScriptVersion(scriptId: number, pricingTemplateId?: numbe
 }
 
 export function listScriptVersions(scriptId: number) {
-  return unwrap<ScriptVersion[]>(api.get(`/api/scripts/mine/${scriptId}/versions`))
+  return unwrap<ScriptVersion[]>(
+    api.get(`/api/scripts/mine/${scriptId}/versions`)
+  )
 }
 
 // Admin: approve/reject a pending draft; revoke a published version.
@@ -144,7 +166,9 @@ export function listPublishedScriptVersions() {
 }
 
 export function listAvailableScriptVersions(scriptId: number) {
-  return unwrap<ScriptVersion[]>(api.get(`/api/scripts/${scriptId}/versions/available`))
+  return unwrap<ScriptVersion[]>(
+    api.get(`/api/scripts/${scriptId}/versions/available`)
+  )
 }
 
 // Operator approves/rejects; on approve sets the platform service fee (ppm).
@@ -170,7 +194,10 @@ export function revokeScriptVersion(
   severity: string
 ) {
   return unwrap(
-    api.post(`/api/scripts/${scriptId}/versions/${version}/revoke`, { reason, severity })
+    api.post(`/api/scripts/${scriptId}/versions/${version}/revoke`, {
+      reason,
+      severity,
+    })
   )
 }
 
@@ -178,8 +205,14 @@ export function deleteScriptVersion(scriptId: number, version: number) {
   return unwrap(api.delete(`/api/scripts/${scriptId}/versions/${version}`))
 }
 
-export function updateScriptVersionPricing(scriptId: number, version: number, body: { author_share_rate_ppm: number; platform_fee_rate_ppm: number }) {
-  return unwrap<ScriptVersion>(api.put(`/api/scripts/${scriptId}/versions/${version}/pricing`, body))
+export function updateScriptVersionPricing(
+  scriptId: number,
+  version: number,
+  body: { author_share_rate_ppm: number; platform_fee_rate_ppm: number }
+) {
+  return unwrap<ScriptVersion>(
+    api.put(`/api/scripts/${scriptId}/versions/${version}/pricing`, body)
+  )
 }
 
 // --- Platform script signing key --------------------------------------------
@@ -239,17 +272,29 @@ export function listNodeCapabilities(nodeId: string) {
   return unwrap<NodeCapability[]>(api.get(`/api/nodes/${nodeId}/capabilities`))
 }
 
-export function removeCapability(nodeId: string, scriptId: number, version: number) {
+export function removeCapability(
+  nodeId: string,
+  scriptId: number,
+  version: number
+) {
   return unwrap(
-    api.delete(`/api/nodes/${nodeId}/capabilities/${scriptId}?version=${version}`)
+    api.delete(
+      `/api/nodes/${nodeId}/capabilities/${scriptId}?version=${version}`
+    )
   )
 }
 
 // createCapabilityTest validates the script version is executable and returns a
 // test window (test_expires_at) required to enable the capability.
-export function createCapabilityTest(nodeId: string, scriptId: number, version: number) {
+export function createCapabilityTest(
+  nodeId: string,
+  scriptId: number,
+  version: number
+) {
   return unwrap<{ test_expires_at: number }>(
-    api.post(`/api/nodes/${nodeId}/capabilities/${scriptId}/test?version=${version}`)
+    api.post(
+      `/api/nodes/${nodeId}/capabilities/${scriptId}/test?version=${version}`
+    )
   )
 }
 
@@ -259,9 +304,16 @@ export function createCapabilityTest(nodeId: string, scriptId: number, version: 
 export function enableCapability(
   nodeId: string,
   scriptId: number,
-  body: { version: number; price_micros: number; daily_limit: number; test_expires_at: number }
+  body: {
+    version: number
+    price_micros: number
+    daily_limit: number
+    test_expires_at: number
+  }
 ) {
-  return unwrap<NodeCapability>(api.put(`/api/nodes/${nodeId}/capabilities/${scriptId}`, body))
+  return unwrap<NodeCapability>(
+    api.put(`/api/nodes/${nodeId}/capabilities/${scriptId}`, body)
+  )
 }
 
 // --- Orders -----------------------------------------------------------------
@@ -294,10 +346,16 @@ export type ProviderGroup = {
   updated_at: number
 }
 
-export function listScriptOffers(scriptId: number, version: number, providerGroupId?: string) {
+export function listScriptOffers(
+  scriptId: number,
+  version: number,
+  providerGroupId?: string
+) {
   const params = new URLSearchParams({ version: String(version) })
   if (providerGroupId) params.set('provider_group_id', providerGroupId)
-  return unwrap<ScriptOffer[]>(api.get(`/api/scripts/${scriptId}/offers?${params.toString()}`))
+  return unwrap<ScriptOffer[]>(
+    api.get(`/api/scripts/${scriptId}/offers?${params.toString()}`)
+  )
 }
 
 // getMyProviderGroup returns (creating on first use) the caller's provider group
@@ -340,7 +398,9 @@ export function createOrder(
   idempotencyKey: string
 ) {
   return unwrap<{ order: Order; created: boolean }>(
-    api.post('/api/orders', body, { headers: { 'Idempotency-Key': idempotencyKey } })
+    api.post('/api/orders', body, {
+      headers: { 'Idempotency-Key': idempotencyKey },
+    })
   )
 }
 
@@ -380,24 +440,43 @@ export function listProviderCapabilityStats() {
 // deducting the equivalent amount (1:1 in USD) from their main /wallet quota.
 // This is a real transfer, not a simulation.
 export function rechargeAvailable(amountMicros: number) {
-  return unwrap<{ transaction_id: number; type: string; quota_deducted: number }>(
-    api.post('/api/ledger/recharge', { amount_micros: amountMicros })
-  )
+  return unwrap<{
+    transaction_id: number
+    type: string
+    quota_deducted: number
+  }>(api.post('/api/ledger/recharge', { amount_micros: amountMicros }))
 }
 
 // withdrawEarnings transfers the caller's payable balance for a role (provider =
 // node earnings, author = script earnings) into their main /wallet quota (1:1 in
 // USD). The inverse of rechargeAvailable — a real transfer, not a simulation.
-export function withdrawEarnings(role: 'provider' | 'author', amountMicros: number) {
-  return unwrap<{ transaction_id: number; type: string; quota_credited: number }>(
-    api.post('/api/ledger/withdraw', { amount_micros: amountMicros }, { params: { role } })
+export function withdrawEarnings(
+  role: 'provider' | 'author',
+  amountMicros: number
+) {
+  return unwrap<{
+    transaction_id: number
+    type: string
+    quota_credited: number
+  }>(
+    api.post(
+      '/api/ledger/withdraw',
+      { amount_micros: amountMicros },
+      { params: { role } }
+    )
   )
 }
 
 // withdrawPlatformEarnings transfers the platform's revenue balance into the
 // calling admin's main /wallet quota (admin only), 1:1 in USD.
 export function withdrawPlatformEarnings(amountMicros: number) {
-  return unwrap<{ transaction_id: number; type: string; quota_credited: number }>(
-    api.post('/api/scripts/platform-earnings/withdraw', { amount_micros: amountMicros })
+  return unwrap<{
+    transaction_id: number
+    type: string
+    quota_credited: number
+  }>(
+    api.post('/api/scripts/platform-earnings/withdraw', {
+      amount_micros: amountMicros,
+    })
   )
 }

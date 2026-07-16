@@ -72,7 +72,9 @@ export function MissingModelsDialog({
     try {
       const result = await getUpstreamModelMetadata(modelName)
       if (!result.success || !result.data) {
-        toast.error(result.message || t('Unable to read upstream model metadata'))
+        toast.error(
+          result.message || t('Unable to read upstream model metadata')
+        )
       } else {
         const metadata = result.data
         model = {

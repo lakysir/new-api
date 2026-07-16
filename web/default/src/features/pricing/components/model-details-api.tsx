@@ -674,16 +674,13 @@ function RateLimitsSection(props: {
     () => getVisibleModelGroups(props.model, props.usableGroup),
     [props.model, props.usableGroup]
   )
-  const limits = useMemo(
-    () => {
-      if (visibleGroups.length === 0) return []
-      return buildRateLimits({
-        ...props.model,
-        enable_groups: visibleGroups,
-      })
-    },
-    [props.model, visibleGroups]
-  )
+  const limits = useMemo(() => {
+    if (visibleGroups.length === 0) return []
+    return buildRateLimits({
+      ...props.model,
+      enable_groups: visibleGroups,
+    })
+  }, [props.model, visibleGroups])
 
   if (limits.length === 0) return null
 
@@ -784,10 +781,7 @@ export function ModelDetailsApi(props: {
       <CodeSamplesSection model={props.model} endpointMap={props.endpointMap} />
       <AuthSection />
       <SupportedParametersSection model={props.model} />
-      <RateLimitsSection
-        model={props.model}
-        usableGroup={props.usableGroup}
-      />
+      <RateLimitsSection model={props.model} usableGroup={props.usableGroup} />
     </div>
   )
 }

@@ -48,7 +48,10 @@ function b64ToBytes(b64: string): Uint8Array {
   return out
 }
 
-export async function generateKeyPair(): Promise<{ privateKey: CryptoKey; publicKeyB64: string }> {
+export async function generateKeyPair(): Promise<{
+  privateKey: CryptoKey
+  publicKeyB64: string
+}> {
   const kp = (await crypto.subtle.generateKey({ name: 'X25519' }, true, [
     'deriveBits',
   ])) as CryptoKeyPair
@@ -63,9 +66,22 @@ function bs(u: Uint8Array): BufferSource {
   return u as unknown as BufferSource
 }
 
-export async function sharedSecret(privateKey: CryptoKey, peerPubB64: string): Promise<Uint8Array> {
-  const peer = await crypto.subtle.importKey('raw', bs(b64ToBytes(peerPubB64)), { name: 'X25519' }, false, [])
-  const bits = await crypto.subtle.deriveBits({ name: 'X25519', public: peer }, privateKey, 256)
+export async function sharedSecret(
+  privateKey: CryptoKey,
+  peerPubB64: string
+): Promise<Uint8Array> {
+  const peer = await crypto.subtle.importKey(
+    'raw',
+    bs(b64ToBytes(peerPubB64)),
+    { name: 'X25519' },
+    false,
+    []
+  )
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'X25519', public: peer },
+    privateKey,
+    256
+  )
   return new Uint8Array(bits)
 }
 
@@ -91,9 +107,16 @@ export async function deriveAesKey(
   ctx: SessionContext,
   direction: string
 ): Promise<CryptoKey> {
-  const base = await crypto.subtle.importKey('raw', bs(secret), 'HKDF', false, ['deriveKey'])
+  const base = await crypto.subtle.importKey('raw', bs(secret), 'HKDF', false, [
+    'deriveKey',
+  ])
   return crypto.subtle.deriveKey(
-    { name: 'HKDF', hash: 'SHA-256', salt: bs(new Uint8Array(0)), info: bs(hkdfInfo(ctx, direction)) },
+    {
+      name: 'HKDF',
+      hash: 'SHA-256',
+      salt: bs(new Uint8Array(0)),
+      info: bs(hkdfInfo(ctx, direction)),
+    },
     base,
     { name: 'AES-GCM', length: 256 },
     false,
@@ -124,7 +147,11 @@ export class Sealer {
     const header = headerFromSeq(seq)
     const ct = new Uint8Array(
       await crypto.subtle.encrypt(
-        { name: 'AES-GCM', iv: bs(nonceFromSeq(seq)), additionalData: bs(header) },
+        {
+          name: 'AES-GCM',
+          iv: bs(nonceFromSeq(seq)),
+          additionalData: bs(header),
+        },
         this.#key,
         bs(plaintext)
       )
@@ -145,11 +172,18 @@ export class Opener {
   async open(frame: Uint8Array): Promise<Uint8Array> {
     if (frame.length < 8 + 16) throw new Error('frame too short')
     const header = frame.slice(0, 8)
-    const seq = new DataView(header.buffer, header.byteOffset, 8).getBigUint64(0, false)
+    const seq = new DataView(header.buffer, header.byteOffset, 8).getBigUint64(
+      0,
+      false
+    )
     if (seq !== this.#nextSeq) throw new Error('aead open failed')
     const pt = new Uint8Array(
       await crypto.subtle.decrypt(
-        { name: 'AES-GCM', iv: bs(nonceFromSeq(seq)), additionalData: bs(header) },
+        {
+          name: 'AES-GCM',
+          iv: bs(nonceFromSeq(seq)),
+          additionalData: bs(header),
+        },
         this.#key,
         bs(frame.slice(8))
       )

@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Ban, ChevronDown, Cpu, Server, Trash2 } from 'lucide-react'
+import { Ban, Cpu, Settings2, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -24,6 +24,13 @@ import { toast } from 'sonner'
 import { SectionPageLayout } from '@/components/layout'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import {
@@ -171,6 +178,7 @@ export function NodesConsolePage() {
     initialDraft.enableForm
   )
   const [openNodeIds, setOpenNodeIds] = useState(initialDraft.openNodeIds)
+  const [capabilityNodeId, setCapabilityNodeId] = useState<string | null>(null)
   // The caller's provider group (all their nodes belong to it). Created on first
   // load from the username; every node defaults into this group.
   const [providerGroup, setProviderGroup] = useState<ProviderGroup | null>(null)
@@ -465,10 +473,7 @@ export function NodesConsolePage() {
   }
 
   function toggleNodeCapabilities(nodeId: string) {
-    if (openNodeIds.includes(nodeId)) {
-      setOpenNodeIds((current) => current.filter((id) => id !== nodeId))
-      return
-    }
+    setCapabilityNodeId(nodeId)
     void loadCaps(nodeId)
   }
 
@@ -525,6 +530,19 @@ export function NodesConsolePage() {
     return list.every((c) => capabilityBalanceOk(nodeId, c.category_id))
   }
 
+  function nodeToggleTitle(node: NodeInfo, capabilitiesLoaded: boolean) {
+    if (node.enabled) return t('Enabled: this node can be scheduled')
+    if (!capabilitiesLoaded) {
+      return t('Open capabilities and pass every balance check to enable')
+    }
+    if (!nodeCanEnable(node.id)) {
+      return t(
+        'All listed capabilities must pass their balance check before enabling'
+      )
+    }
+    return t('Enable this node for scheduling')
+  }
+
   async function onToggleEnabled(node: NodeInfo, next: boolean) {
     setTogglingNodeId(node.id)
     try {
@@ -563,7 +581,7 @@ export function NodesConsolePage() {
   function renderCapabilities(node: NodeInfo) {
     const list = caps[node.id] ?? []
     return (
-      <div className='bg-muted/20 space-y-5 border-t p-4 sm:p-5'>
+      <div className='space-y-5'>
         <section>
           <div className='mb-3'>
             <h4 className='text-sm font-medium'>{t('List capability')}</h4>
@@ -673,10 +691,7 @@ export function NodesConsolePage() {
                   const checkStatus = (balanceChecks[node.id] || []).find(
                     (item) => item.category_id === c.category_id
                   )
-                  const checkValid = capabilityBalanceOk(
-                    node.id,
-                    c.category_id
-                  )
+                  const checkValid = capabilityBalanceOk(node.id, c.category_id)
                   const checkKey = `${node.id}:${c.category_id}`
                   return (
                     <TableRow key={c.id}>
@@ -823,224 +838,186 @@ export function NodesConsolePage() {
             {visibleNodes.length}/{nodes.length} {t('Nodes')}
           </div>
         </div>
-        <div className='space-y-4'>
+        <div className='overflow-hidden rounded-md border'>
           {visibleDevices.map((device) => {
-            const deviceNodes = nodesByDevice[device.id] ?? []
+            const node = nodesByDevice[device.id]?.[0]
+            const capabilitiesLoaded = node
+              ? openNodeIds.includes(node.id)
+              : false
             return (
-              <section
+              <div
                 key={device.id}
-                className='overflow-hidden rounded-lg border'
+                className='hover:bg-muted/20 flex min-h-14 flex-col gap-2 border-b px-3 py-2 last:border-b-0 lg:flex-row lg:items-center lg:gap-4'
               >
-                <div className='bg-muted/30 flex flex-col gap-4 p-4 sm:flex-row sm:items-center'>
-                  <div className='flex min-w-0 flex-1 items-center gap-3'>
-                    <div className='bg-background flex size-10 shrink-0 items-center justify-center rounded-md border'>
-                      <Server className='size-5' />
-                    </div>
-                    <div className='min-w-0'>
-                      <div className='flex flex-wrap items-center gap-2'>
-                        <h3 className='font-medium'>
-                          {device.name || t('Unnamed device')}
-                        </h3>
-                        <Badge
-                          variant={
-                            device.status === 'active' ? 'default' : 'secondary'
-                          }
-                        >
-                          {device.status}
-                        </Badge>
-                      </div>
-                      <div
-                        className='text-muted-foreground mt-1 truncate font-mono text-xs'
-                        title={device.id}
-                      >
-                        {device.id}
-                      </div>
-                    </div>
-                  </div>
-                  <div className='text-muted-foreground flex items-center gap-6 text-xs'>
-                    <div>
-                      <span className='block'>{t('Nodes')}</span>
-                      <strong className='text-foreground text-sm'>
-                        {deviceNodes.length}
-                      </strong>
-                    </div>
-                    <div>
-                      <span className='block'>{t('Last Seen')}</span>
-                      <span className='text-foreground text-sm'>
-                        {formatUnix(device.last_seen_at)}
+                <div className='flex min-w-0 flex-1 items-center gap-2.5'>
+                  <Cpu className='text-muted-foreground size-4 shrink-0' />
+                  <div className='min-w-0 flex-1 lg:max-w-72'>
+                    <div className='flex min-w-0 items-center gap-2'>
+                      <h3 className='truncate text-sm font-medium'>
+                        {device.name || t('Unnamed device')}
+                      </h3>
+                      <span
+                        className={`size-2 shrink-0 rounded-full ${node && nodeOnline(node) ? 'bg-emerald-500' : 'bg-muted-foreground/40'}`}
+                      />
+                      <span className='text-muted-foreground shrink-0 text-xs'>
+                        {node && nodeOnline(node) ? t('Online') : t('Offline')}
                       </span>
                     </div>
+                    <div
+                      className='text-muted-foreground truncate font-mono text-[11px] leading-4'
+                      title={`${device.id}${node ? ` / ${node.id}` : ''}`}
+                    >
+                      {device.id}
+                      {node ? ` / ${node.id}` : ''}
+                    </div>
                   </div>
-                  {device.status === 'active' ? (
+                </div>
+
+                <div className='text-muted-foreground flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs lg:w-[360px] lg:flex-nowrap'>
+                  <Badge variant='outline' className='h-5 max-w-28 truncate'>
+                    {node?.region || t('No region')}
+                  </Badge>
+                  <span className='min-w-0 truncate'>{node?.state || '-'}</span>
+                  <span className='shrink-0'>
+                    {formatUnix(node?.last_seen_at ?? device.last_seen_at)}
+                  </span>
+                </div>
+
+                <div className='flex items-center justify-between gap-2 lg:justify-end'>
+                  {node && (
+                    <label
+                      className='flex items-center gap-1.5 text-xs'
+                      title={nodeToggleTitle(node, capabilitiesLoaded)}
+                    >
+                      <Switch
+                        size='sm'
+                        checked={node.enabled}
+                        disabled={
+                          togglingNodeId === node.id ||
+                          (!node.enabled &&
+                            (!capabilitiesLoaded || !nodeCanEnable(node.id)))
+                        }
+                        onCheckedChange={(next) => onToggleEnabled(node, next)}
+                      />
+                      <span
+                        className={
+                          node.enabled
+                            ? 'text-emerald-600'
+                            : 'text-muted-foreground'
+                        }
+                      >
+                        {node.enabled ? t('Enabled') : t('Disabled')}
+                      </span>
+                    </label>
+                  )}
+                  {node && (
                     <Button
                       size='sm'
                       variant='outline'
+                      onClick={() => toggleNodeCapabilities(node.id)}
+                    >
+                      <Settings2 className='size-4' />
+                      {t('Capabilities')}
+                      {capabilitiesLoaded && (
+                        <Badge variant='secondary'>
+                          {caps[node.id]?.length ?? 0}
+                        </Badge>
+                      )}
+                    </Button>
+                  )}
+                  {!node && (
+                    <span className='text-muted-foreground text-xs'>
+                      {t('No nodes on this device')}
+                    </span>
+                  )}
+                  {node && !nodeOnline(node) && (
+                    <Button
+                      size='icon-sm'
+                      variant='ghost'
+                      title={t('Delete')}
+                      onClick={() => onDeleteNode(node.id)}
+                    >
+                      <Trash2 className='size-4' />
+                    </Button>
+                  )}
+                  {device.status === 'active' ? (
+                    <Button
+                      size='icon-sm'
+                      variant='ghost'
+                      title={t('Revoke')}
                       onClick={() => onRevokeDevice(device.id)}
                     >
                       <Ban className='size-4' />
-                      {t('Revoke')}
                     </Button>
                   ) : (
                     <Button
-                      size='sm'
-                      variant='outline'
+                      size='icon-sm'
+                      variant='ghost'
+                      title={t('Delete')}
                       onClick={() => onDeleteDevice(device.id)}
                     >
                       <Trash2 className='size-4' />
-                      {t('Delete')}
                     </Button>
                   )}
                 </div>
-                <div className='divide-y border-t'>
-                  {deviceNodes.map((node) => {
-                    const open = openNodeIds.includes(node.id)
-                    return (
-                      <div key={node.id}>
-                        <div className='flex flex-col gap-3 p-4 sm:flex-row sm:items-center'>
-                          <div className='flex min-w-0 flex-1 items-center gap-3 sm:pl-3'>
-                            <Cpu className='text-muted-foreground size-5 shrink-0' />
-                            <div className='min-w-0'>
-                              <div className='flex items-center gap-2'>
-                                <span className='text-sm font-medium'>
-                                  {t('Node')}
-                                </span>
-                                <span
-                                  className={`size-2 rounded-full ${nodeOnline(node) ? 'bg-emerald-500' : 'bg-muted-foreground/50'}`}
-                                />
-                                <span className='text-muted-foreground text-xs'>
-                                  {nodeOnline(node)
-                                    ? t('Online')
-                                    : t('Offline')}
-                                </span>
-                              </div>
-                              <div
-                                className='text-muted-foreground truncate font-mono text-xs'
-                                title={node.id}
-                              >
-                                {node.id}
-                              </div>
-                            </div>
-                          </div>
-                          <div className='text-muted-foreground flex flex-wrap items-center gap-x-5 gap-y-1 text-xs'>
-                            <span>{node.region || t('No region')}</span>
-                            <Badge variant='outline'>{node.state}</Badge>
-                            <span>{formatUnix(node.last_seen_at)}</span>
-                          </div>
-                          {/* Scheduling switch: only enabled nodes are dispatched.
-                              Turning on is blocked until every listed capability's
-                              balance check passes (server-enforced). Expand the
-                              node to load its capabilities first. */}
-                          <label
-                            className='flex items-center gap-2 text-xs'
-                            title={
-                              node.enabled
-                                ? t('Enabled: this node can be scheduled')
-                                : !open
-                                  ? t(
-                                      'Open capabilities and pass every balance check to enable'
-                                    )
-                                  : !nodeCanEnable(node.id)
-                                    ? t(
-                                        'All listed capabilities must pass their balance check before enabling'
-                                      )
-                                    : t('Enable this node for scheduling')
-                            }
-                          >
-                            <Switch
-                              size='sm'
-                              checked={node.enabled}
-                              disabled={
-                                togglingNodeId === node.id ||
-                                (!node.enabled &&
-                                  (!open || !nodeCanEnable(node.id)))
-                              }
-                              onCheckedChange={(next) =>
-                                onToggleEnabled(node, next)
-                              }
-                            />
-                            <span
-                              className={
-                                node.enabled
-                                  ? 'text-emerald-600'
-                                  : 'text-muted-foreground'
-                              }
-                            >
-                              {node.enabled ? t('Enabled') : t('Disabled')}
-                            </span>
-                          </label>
-                          <div className='flex items-center gap-1'>
-                            {!nodeOnline(node) && (
-                              <Button
-                                size='icon-sm'
-                                variant='ghost'
-                                title={t('Delete')}
-                                onClick={() => onDeleteNode(node.id)}
-                              >
-                                <Trash2 className='size-4' />
-                              </Button>
-                            )}
-                            <Button
-                              size='sm'
-                              variant={open ? 'secondary' : 'outline'}
-                              aria-expanded={open}
-                              onClick={() => toggleNodeCapabilities(node.id)}
-                            >
-                              {t('Capabilities')}
-                              <Badge variant='secondary'>
-                                {caps[node.id]?.length ?? 0}
-                              </Badge>
-                              <ChevronDown
-                                className={`size-4 transition-transform ${open ? 'rotate-180' : ''}`}
-                              />
-                            </Button>
-                          </div>
-                        </div>
-                        {open && renderCapabilities(node)}
-                      </div>
-                    )
-                  })}
-                  {deviceNodes.length === 0 && (
-                    <div className='text-muted-foreground p-6 text-center text-sm'>
-                      {t('No nodes on this device')}
-                    </div>
-                  )}
-                </div>
-              </section>
+              </div>
             )
           })}
           {ungroupedNodes.map((node) => (
-            <section
+            <div
               key={node.id}
-              className='overflow-hidden rounded-lg border'
+              className='hover:bg-muted/20 flex min-h-14 items-center gap-3 border-b px-3 py-2 last:border-b-0'
             >
-              <div className='flex items-center gap-3 p-4'>
-                <Cpu className='size-5' />
-                <div className='min-w-0 flex-1'>
-                  <div className='text-sm font-medium'>{t('Node')}</div>
-                  <div className='text-muted-foreground truncate font-mono text-xs'>
-                    {node.id}
-                  </div>
-                </div>
-                <Button
-                  size='sm'
-                  variant='outline'
-                  onClick={() => toggleNodeCapabilities(node.id)}
-                >
-                  {t('Capabilities')}
-                  <ChevronDown
-                    className={`size-4 ${openNodeIds.includes(node.id) ? 'rotate-180' : ''}`}
+              <Cpu className='text-muted-foreground size-4 shrink-0' />
+              <div className='min-w-0 flex-1'>
+                <div className='flex items-center gap-2 text-sm font-medium'>
+                  {t('Node')}
+                  <span
+                    className={`size-2 rounded-full ${nodeOnline(node) ? 'bg-emerald-500' : 'bg-muted-foreground/40'}`}
                   />
-                </Button>
+                </div>
+                <div
+                  className='text-muted-foreground truncate font-mono text-[11px]'
+                  title={node.id}
+                >
+                  {node.id}
+                </div>
               </div>
-              {openNodeIds.includes(node.id) && renderCapabilities(node)}
-            </section>
+              <Button
+                size='sm'
+                variant='outline'
+                onClick={() => toggleNodeCapabilities(node.id)}
+              >
+                <Settings2 className='size-4' />
+                {t('Capabilities')}
+              </Button>
+            </div>
           ))}
           {visibleDevices.length === 0 && ungroupedNodes.length === 0 && (
-            <div className='text-muted-foreground rounded-lg border border-dashed p-10 text-center'>
+            <div className='text-muted-foreground p-10 text-center'>
               {loading ? t('Loading...') : t('No devices')}
             </div>
           )}
         </div>
+
+        <Dialog
+          open={Boolean(capabilityNodeId)}
+          onOpenChange={(open) => !open && setCapabilityNodeId(null)}
+        >
+          <DialogContent className='max-h-[90vh] overflow-y-auto sm:max-w-[min(1200px,calc(100vw-2rem))]'>
+            <DialogHeader className='pr-8'>
+              <DialogTitle>{t('Capabilities')}</DialogTitle>
+              <DialogDescription className='truncate font-mono text-xs'>
+                {capabilityNodeId}
+              </DialogDescription>
+            </DialogHeader>
+            {capabilityNodeId &&
+              (() => {
+                const node = nodes.find((item) => item.id === capabilityNodeId)
+                return node ? renderCapabilities(node) : null
+              })()}
+          </DialogContent>
+        </Dialog>
 
         {visibleDevices.length < 0 && (
           <>

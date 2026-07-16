@@ -86,7 +86,8 @@ export class ClientRelaySession {
         resolve()
       }
       socket.onerror = () => reject(new Error('relay connect failed'))
-      socket.onmessage = (ev) => void this.#onFrame(new Uint8Array(ev.data as ArrayBuffer))
+      socket.onmessage = (ev) =>
+        void this.#onFrame(new Uint8Array(ev.data as ArrayBuffer))
     })
   }
 
@@ -96,7 +97,12 @@ export class ClientRelaySession {
       pub: this.#kp!.publicKeyB64,
       device_id: this.#opts.clientDeviceId,
     })
-    this.#socket!.send(tagFrame(TAG_HANDSHAKE, new TextEncoder().encode(hello)) as unknown as ArrayBuffer)
+    this.#socket!.send(
+      tagFrame(
+        TAG_HANDSHAKE,
+        new TextEncoder().encode(hello)
+      ) as unknown as ArrayBuffer
+    )
   }
 
   async #onFrame(frame: Uint8Array) {
@@ -133,8 +139,12 @@ export class ClientRelaySession {
       providerDeviceId: msg.device_id,
     }
     // Client writes c2p, reads p2c.
-    this.#sealer = new Sealer(await deriveAesKey(secret, ctx, DIR_CLIENT_TO_PROVIDER))
-    this.#opener = new Opener(await deriveAesKey(secret, ctx, DIR_PROVIDER_TO_CLIENT))
+    this.#sealer = new Sealer(
+      await deriveAesKey(secret, ctx, DIR_CLIENT_TO_PROVIDER)
+    )
+    this.#opener = new Opener(
+      await deriveAesKey(secret, ctx, DIR_PROVIDER_TO_CLIENT)
+    )
     const pending = this.#pendingDataFrames.splice(0)
     for (const frame of pending) await this.#onData(frame)
     this.#established?.()
@@ -154,14 +164,18 @@ export class ClientRelaySession {
   waitEstablished(timeoutMs = 30000): Promise<void> {
     return Promise.race([
       this.#establishedPromise,
-      new Promise<void>((_, rej) => setTimeout(() => rej(new Error('handshake timeout')), timeoutMs)),
+      new Promise<void>((_, rej) =>
+        setTimeout(() => rej(new Error('handshake timeout')), timeoutMs)
+      ),
     ])
   }
 
   /** Encrypt and send the config to the provider. */
   async sendConfig(config: unknown): Promise<void> {
     if (!this.#sealer) throw new Error('session not established')
-    const frame = await this.#sealer.seal(new TextEncoder().encode(JSON.stringify(config)))
+    const frame = await this.#sealer.seal(
+      new TextEncoder().encode(JSON.stringify(config))
+    )
     this.#socket!.send(tagFrame(TAG_DATA, frame) as unknown as ArrayBuffer)
   }
 
@@ -169,7 +183,9 @@ export class ClientRelaySession {
   waitForResult(timeoutMs = 120000): Promise<unknown> {
     return Promise.race([
       this.#resultPromise,
-      new Promise((_, rej) => setTimeout(() => rej(new Error('result timeout')), timeoutMs)),
+      new Promise((_, rej) =>
+        setTimeout(() => rej(new Error('result timeout')), timeoutMs)
+      ),
     ])
   }
 

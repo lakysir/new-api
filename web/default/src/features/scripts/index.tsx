@@ -210,7 +210,7 @@ function CodePreviewDialog({
       contentHeight='58vh'
     >
       {script?.script_params ? (
-        <div className='mb-3 rounded-lg border bg-muted/30 p-3'>
+        <div className='bg-muted/30 mb-3 rounded-lg border p-3'>
           <div className='text-muted-foreground mb-2 text-xs font-medium'>
             {t('Script Params')}
           </div>
@@ -219,7 +219,7 @@ function CodePreviewDialog({
           </pre>
         </div>
       ) : null}
-      <pre className='overflow-auto rounded-lg border bg-muted/40 p-3 font-mono text-xs whitespace-pre-wrap'>
+      <pre className='bg-muted/40 overflow-auto rounded-lg border p-3 font-mono text-xs whitespace-pre-wrap'>
         {script?.code_preview || ''}
         {script?.preview_truncated ? `\n\n/* ${t('Preview truncated')} */` : ''}
       </pre>
@@ -274,7 +274,9 @@ export function ScriptSquarePage() {
   }
 
   async function openSquarePreview(id: number) {
-    const script = await unwrap<UserScript>(api.get(`/api/scripts/square/${id}`))
+    const script = await unwrap<UserScript>(
+      api.get(`/api/scripts/square/${id}`)
+    )
     setPreviewScript(script)
   }
 
@@ -312,10 +314,12 @@ export function ScriptSquarePage() {
           {scripts.map((script) => (
             <article
               key={script.id}
-              className='flex min-h-48 flex-col gap-4 rounded-lg border bg-card p-4 text-card-foreground shadow-xs'
+              className='bg-card text-card-foreground flex min-h-48 flex-col gap-4 rounded-lg border p-4 shadow-xs'
             >
               <div className='min-w-0 space-y-2'>
-                <div className='text-muted-foreground text-xs'>#{script.id}</div>
+                <div className='text-muted-foreground text-xs'>
+                  #{script.id}
+                </div>
                 <h2 className='truncate text-base font-medium'>
                   {script.title}
                 </h2>
@@ -387,7 +391,9 @@ export function MyScriptsPage() {
   const [submitTarget, setSubmitTarget] = useState<number>(0)
   const [submitCategory, setSubmitCategory] = useState<string>('')
   const [submitShare, setSubmitShare] = useState<string>('3')
-  const [categories, setCategories] = useState<{ id: number; name: string; site: string }[]>([])
+  const [categories, setCategories] = useState<
+    { id: number; name: string; site: string }[]
+  >([])
   // Controls whether the reference example panel is expanded in the editor.
   const [showExample, setShowExample] = useState(false)
 
@@ -480,7 +486,11 @@ export function MyScriptsPage() {
   async function confirmSubmitReview() {
     const id = submitTarget
     const sharePercent = Number(submitShare)
-    if (!Number.isFinite(sharePercent) || sharePercent < 0 || sharePercent > 5) {
+    if (
+      !Number.isFinite(sharePercent) ||
+      sharePercent < 0 ||
+      sharePercent > 5
+    ) {
       toast.error(t('Your share must be between 0% and 5%.'))
       return
     }
@@ -596,86 +606,89 @@ export function MyScriptsPage() {
                   <TableCell>{formatTime(script.updated_at)}</TableCell>
                   <TableCell>
                     <div className='flex min-w-80 flex-wrap justify-end gap-2'>
-                    <Button
-                      type='button'
-                      variant='outline'
-                      size='sm'
-                      onClick={() =>
-                        openMinePreview(script.id).catch((err) =>
-                          toast.error(String(err?.message || err))
-                        )
-                      }
-                    >
-                      {t('View Code')}
-                    </Button>
-                    <Button
-                      type='button'
-                      variant='outline'
-                      size='sm'
-                      onClick={() =>
-                        openMineEditor(script.id).catch((err) =>
-                          toast.error(String(err?.message || err))
-                        )
-                      }
-                    >
-                      {t('Edit')}
-                    </Button>
-                    {script.review_status === 'approved' ? (
                       <Button
                         type='button'
+                        variant='outline'
                         size='sm'
-                        disabled={busyId === script.id}
                         onClick={() =>
-                          publishVersion(script.id).catch((err) =>
+                          openMinePreview(script.id).catch((err) =>
                             toast.error(String(err?.message || err))
                           )
                         }
                       >
-                        {t('Publish version')}
+                        {t('View Code')}
                       </Button>
-                    ) : script.review_status !== 'pending' &&
-                      script.review_status !== 'publishing' ? (
                       <Button
                         type='button'
-                        variant='secondary'
+                        variant='outline'
+                        size='sm'
+                        onClick={() =>
+                          openMineEditor(script.id).catch((err) =>
+                            toast.error(String(err?.message || err))
+                          )
+                        }
+                      >
+                        {t('Edit')}
+                      </Button>
+                      {script.review_status === 'approved' ? (
+                        <Button
+                          type='button'
+                          size='sm'
+                          disabled={busyId === script.id}
+                          onClick={() =>
+                            publishVersion(script.id).catch((err) =>
+                              toast.error(String(err?.message || err))
+                            )
+                          }
+                        >
+                          {t('Publish version')}
+                        </Button>
+                      ) : script.review_status !== 'pending' &&
+                        script.review_status !== 'publishing' ? (
+                        <Button
+                          type='button'
+                          variant='secondary'
+                          size='sm'
+                          disabled={
+                            busyId === script.id ||
+                            !script.has_unpublished_changes
+                          }
+                          onClick={() =>
+                            openSubmitDialog(script.id).catch((err) =>
+                              toast.error(String(err?.message || err))
+                            )
+                          }
+                        >
+                          {t('Submit review')}
+                        </Button>
+                      ) : null}
+                      <Button
+                        type='button'
+                        variant='ghost'
                         size='sm'
                         disabled={
-                          busyId === script.id || !script.has_unpublished_changes
+                          busyId === script.id || !script.latest_version
                         }
                         onClick={() =>
-                          openSubmitDialog(script.id).catch((err) =>
+                          openHistory(script).catch((err) =>
                             toast.error(String(err?.message || err))
                           )
                         }
                       >
-                        {t('Submit review')}
+                        {t('History')}
                       </Button>
-                    ) : null}
-                    <Button
-                      type='button'
-                      variant='ghost'
-                      size='sm'
-                      disabled={busyId === script.id || !script.latest_version}
-                      onClick={() =>
-                        openHistory(script).catch((err) =>
-                          toast.error(String(err?.message || err))
-                        )
-                      }
-                    >
-                      {t('History')}
-                    </Button>
-                    <Button
-                      type='button'
-                      variant='destructive'
-                      size='sm'
-                      onClick={() =>
-                        deleteScript(script.id).catch((err) =>
-                          toast.error(String(err?.message || err))
-                        )
-                      }
-                    >
-                      {t('Delete')}
-                    </Button>
+                      <Button
+                        type='button'
+                        variant='destructive'
+                        size='sm'
+                        onClick={() =>
+                          deleteScript(script.id).catch((err) =>
+                            toast.error(String(err?.message || err))
+                          )
+                        }
+                      >
+                        {t('Delete')}
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -711,7 +724,9 @@ export function MyScriptsPage() {
           }}
           title={
             historyScript
-              ? t('Version history for script #{{id}}', { id: historyScript.id })
+              ? t('Version history for script #{{id}}', {
+                  id: historyScript.id,
+                })
               : ''
           }
           description={historyScript?.title}
@@ -735,7 +750,9 @@ export function MyScriptsPage() {
                   <TableCell className='max-w-64 truncate font-mono text-xs'>
                     {version.code_sha256}
                   </TableCell>
-                  <TableCell>{version.signature ? t('Yes') : t('No')}</TableCell>
+                  <TableCell>
+                    {version.signature ? t('Yes') : t('No')}
+                  </TableCell>
                   <TableCell>{formatUnix(version.published_at)}</TableCell>
                   <TableCell>
                     {version.revoked_at
@@ -799,7 +816,7 @@ export function MyScriptsPage() {
             <div className='rounded-lg border'>
               <button
                 type='button'
-                className='flex w-full items-center justify-between px-3 py-2 text-left text-sm font-medium transition-colors hover:bg-muted/50'
+                className='hover:bg-muted/50 flex w-full items-center justify-between px-3 py-2 text-left text-sm font-medium transition-colors'
                 onClick={() => setShowExample((v) => !v)}
               >
                 <span className='flex items-center gap-2'>
@@ -814,11 +831,11 @@ export function MyScriptsPage() {
               </button>
 
               {showExample && (
-                <div className='border-t px-3 pb-3 pt-2'>
+                <div className='border-t px-3 pt-2 pb-3'>
                   {/* Brief guide */}
                   <p className='text-muted-foreground mb-3 text-xs leading-relaxed'>
                     {t(
-                      'The sandbox exposes params (your Script Params object) and context.apiKey. Your script must return { output, balance } — balance updates the node\'s remaining display after each run.'
+                      "The sandbox exposes params (your Script Params object) and context.apiKey. Your script must return { output, balance } — balance updates the node's remaining display after each run."
                     )}
                   </p>
 
@@ -844,7 +861,7 @@ export function MyScriptsPage() {
                           {t('Load params')}
                         </Button>
                       </div>
-                      <pre className='overflow-auto rounded-md bg-muted/40 p-2 font-mono text-xs leading-relaxed'>
+                      <pre className='bg-muted/40 overflow-auto rounded-md p-2 font-mono text-xs leading-relaxed'>
                         {EXAMPLE_PARAMS}
                       </pre>
                     </div>
@@ -869,7 +886,7 @@ export function MyScriptsPage() {
                           {t('Load code')}
                         </Button>
                       </div>
-                      <pre className='overflow-auto rounded-md bg-muted/40 p-2 font-mono text-xs leading-relaxed'>
+                      <pre className='bg-muted/40 overflow-auto rounded-md p-2 font-mono text-xs leading-relaxed'>
                         {EXAMPLE_CODE}
                       </pre>
                     </div>
@@ -920,7 +937,9 @@ export function MyScriptsPage() {
             <div>
               <div className='text-muted-foreground mb-1 text-xs'>
                 {t('Script code')}
-                <span className='ml-1 font-normal opacity-70'>(JavaScript)</span>
+                <span className='ml-1 font-normal opacity-70'>
+                  (JavaScript)
+                </span>
               </div>
               <Textarea
                 value={editing.draft_code}
@@ -949,7 +968,9 @@ export function MyScriptsPage() {
         >
           <div className='space-y-3'>
             <div>
-              <label className='mb-1 block text-sm'>{t('Target-site category')}</label>
+              <label className='mb-1 block text-sm'>
+                {t('Target-site category')}
+              </label>
               <select
                 className='h-9 w-full rounded-md border px-2 text-sm'
                 value={submitCategory}

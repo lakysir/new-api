@@ -24,8 +24,8 @@ import { SectionPageLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { formatQuotaWithCurrency } from '@/lib/currency'
 import { api, getSelf } from '@/lib/api'
+import { formatQuotaWithCurrency } from '@/lib/currency'
 
 import {
   createOrder,
@@ -43,9 +43,19 @@ import {
 } from './api'
 import { ClientRelaySession } from './lib/client-relay-session'
 import { displayToMicros, microsToCurrency } from './lib/format'
-import type { LedgerBalances, Order, PriceBreakdown, ScriptVersion } from './types'
+import type {
+  LedgerBalances,
+  Order,
+  PriceBreakdown,
+  ScriptVersion,
+} from './types'
 
-type PublishedScript = { id: number; title: string; description?: string; latest_version?: number }
+type PublishedScript = {
+  id: number
+  title: string
+  description?: string
+  latest_version?: number
+}
 type PurchaseDraft = { scriptId: number; version: number; configText: string }
 
 const DEFAULT_CONFIG_TEXT = '{\n  "prompt": "a dog"\n}'
@@ -75,11 +85,22 @@ function getDraftStorageKey() {
 
 function loadPurchaseDraft(): PurchaseDraft {
   try {
-    const saved = JSON.parse(window.localStorage.getItem(getDraftStorageKey()) ?? '{}') as Partial<PurchaseDraft>
+    const saved = JSON.parse(
+      window.localStorage.getItem(getDraftStorageKey()) ?? '{}'
+    ) as Partial<PurchaseDraft>
     return {
-      scriptId: Number.isInteger(saved.scriptId) && (saved.scriptId ?? 0) > 0 ? saved.scriptId! : 0,
-      version: Number.isInteger(saved.version) && (saved.version ?? 0) > 0 ? saved.version! : 1,
-      configText: typeof saved.configText === 'string' ? saved.configText : DEFAULT_CONFIG_TEXT,
+      scriptId:
+        Number.isInteger(saved.scriptId) && (saved.scriptId ?? 0) > 0
+          ? saved.scriptId!
+          : 0,
+      version:
+        Number.isInteger(saved.version) && (saved.version ?? 0) > 0
+          ? saved.version!
+          : 1,
+      configText:
+        typeof saved.configText === 'string'
+          ? saved.configText
+          : DEFAULT_CONFIG_TEXT,
     }
   } catch {
     return { scriptId: 0, version: 1, configText: DEFAULT_CONFIG_TEXT }
@@ -117,10 +138,15 @@ function describeOrderError(code: string | undefined): string {
 // sha256Hex hashes the config text so only the input_hash crosses the control
 // plane (the plaintext config travels the E2EE data plane at execution time).
 async function sha256Hex(text: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(text)
+  )
   return (
     'sha256:' +
-    [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
+    [...new Uint8Array(digest)]
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('')
   )
 }
 
@@ -131,8 +157,12 @@ export function AitokenPurchasePage() {
   const [scripts, setScripts] = useState<PublishedScript[]>([])
   const [scriptId, setScriptId] = useState(initialDraft.scriptId)
   const [version, setVersion] = useState(initialDraft.version)
-  const [availableVersions, setAvailableVersions] = useState<ScriptVersion[]>([])
-  const versions = availableVersions.map((item) => item.version).sort((a, b) => b - a)
+  const [availableVersions, setAvailableVersions] = useState<ScriptVersion[]>(
+    []
+  )
+  const versions = availableVersions
+    .map((item) => item.version)
+    .sort((a, b) => b - a)
   const [offers, setOffers] = useState<ScriptOffer[]>([])
   const [nodeId, setNodeId] = useState('') // chosen offer; empty when auto
   // Auto mode (default): the platform auto-picks the busiest, highest-success
@@ -187,13 +217,17 @@ export function AitokenPurchasePage() {
       const values = available.map((item) => item.version).sort((a, b) => b - a)
       setAvailableVersions(available)
       const selectedVersion =
-        (preferredVersion && values.includes(preferredVersion) ? preferredVersion : undefined) ??
+        (preferredVersion && values.includes(preferredVersion)
+          ? preferredVersion
+          : undefined) ??
         values[0] ??
         fallbackVersion ??
         1
       setVersion(selectedVersion)
       if (loadParams) {
-        const selected = available.find((item) => item.version === selectedVersion)
+        const selected = available.find(
+          (item) => item.version === selectedVersion
+        )
         setConfigText(configTextFromParams(selected?.script_params))
       }
       await loadOffersFor(value, selectedVersion)
@@ -210,7 +244,11 @@ export function AitokenPurchasePage() {
     setOffersLoading(true)
     setOffersPage(0)
     try {
-      const loaded = await listScriptOffers(selectedScriptId, selectedVersion, groupId || undefined)
+      const loaded = await listScriptOffers(
+        selectedScriptId,
+        selectedVersion,
+        groupId || undefined
+      )
       setOffers(loaded)
       // Default to Auto: let the platform pick the best idle provider. Price the
       // group as a whole so the client still sees a representative quote.
@@ -226,7 +264,8 @@ export function AitokenPurchasePage() {
       } catch {
         setQuote(null)
       }
-      if (loaded.length === 0) toast.info(t('No provider offers yet for this version'))
+      if (loaded.length === 0)
+        toast.info(t('No provider offers yet for this version'))
     } finally {
       setOffersLoading(false)
     }
@@ -234,7 +273,10 @@ export function AitokenPurchasePage() {
 
   async function loadBalance() {
     try {
-      const [balances, self] = await Promise.all([getLedgerBalances(), getSelf()])
+      const [balances, self] = await Promise.all([
+        getLedgerBalances(),
+        getSelf(),
+      ])
       setBal(balances)
       // getSelf returns the standard API envelope; the wallet quota lives on data.
       const quota = self?.data?.quota
@@ -284,7 +326,12 @@ export function AitokenPurchasePage() {
       if (savedScript) {
         // Restore the saved draft config as-is; don't overwrite it with the
         // version's default params on page load.
-        await selectScript(initialDraft.scriptId, initialDraft.version, savedScript.latest_version, false)
+        await selectScript(
+          initialDraft.scriptId,
+          initialDraft.version,
+          savedScript.latest_version,
+          false
+        )
       } else if (initialDraft.scriptId) {
         setScriptId(0)
       }
@@ -302,7 +349,11 @@ export function AitokenPurchasePage() {
     try {
       window.localStorage.setItem(
         getDraftStorageKey(),
-        JSON.stringify({ scriptId, version, configText } satisfies PurchaseDraft)
+        JSON.stringify({
+          scriptId,
+          version,
+          configText,
+        } satisfies PurchaseDraft)
       )
     } catch {
       // Storage may be unavailable or full; the page remains usable without persistence.
@@ -342,7 +393,11 @@ export function AitokenPurchasePage() {
 
   async function onQuoteForNode(selectedNodeId: string) {
     try {
-      const priced = await quoteOrder({ script_id: scriptId, version, node_id: selectedNodeId })
+      const priced = await quoteOrder({
+        script_id: scriptId,
+        version,
+        node_id: selectedNodeId,
+      })
       setQuote(priced.breakdown)
     } catch (e) {
       setQuote(null)
@@ -423,14 +478,18 @@ export function AitokenPurchasePage() {
           script_id: scriptId,
           version,
           node_id: autoSelect ? undefined : nodeId || undefined,
-          provider_group_id: autoSelect ? groupFilterId || undefined : undefined,
+          provider_group_id: autoSelect
+            ? groupFilterId || undefined
+            : undefined,
           input_hash: inputHash,
         },
         key
       )
       setOrder(o)
       if (o.state === 'REFUNDED') {
-        toast.error(t('Provider rejected the task; reserved funds were refunded'))
+        toast.error(
+          t('Provider rejected the task; reserved funds were refunded')
+        )
         await loadBalance()
         return
       }
@@ -565,7 +624,9 @@ export function AitokenPurchasePage() {
 
   return (
     <SectionPageLayout>
-      <SectionPageLayout.Title>{t('AiToken P2P Marketplace')}</SectionPageLayout.Title>
+      <SectionPageLayout.Title>
+        {t('AiToken P2P Marketplace')}
+      </SectionPageLayout.Title>
       <SectionPageLayout.Actions>
         <Button variant='outline' onClick={loadBalance}>
           {t('Refresh')}
@@ -577,7 +638,9 @@ export function AitokenPurchasePage() {
           <div className='rounded-lg border p-3'>
             <div className='flex flex-wrap items-end justify-between gap-3'>
               <div>
-                <div className='text-muted-foreground text-xs'>{t('Available')}</div>
+                <div className='text-muted-foreground text-xs'>
+                  {t('Available')}
+                </div>
                 <div className='mt-1 text-lg font-semibold'>
                   {microsToCurrency(bal?.client_available)}
                 </div>
@@ -589,14 +652,20 @@ export function AitokenPurchasePage() {
                   onChange={(e) => setRechargeAmt(e.target.value)}
                   aria-label={t('Recharge amount')}
                 />
-                <Button className='h-9' onClick={onRecharge} disabled={recharging}>
+                <Button
+                  className='h-9'
+                  onClick={onRecharge}
+                  disabled={recharging}
+                >
                   {recharging ? t('Recharging...') : t('Recharge')}
                 </Button>
               </div>
             </div>
             <div className='text-muted-foreground mt-2 text-xs'>
               {t('Recharge available balance')} · {t('Wallet balance')}:{' '}
-              {walletQuota != null ? formatQuotaWithCurrency(walletQuota) : '--'}
+              {walletQuota != null
+                ? formatQuotaWithCurrency(walletQuota)
+                : '--'}
             </div>
           </div>
           <div className='rounded-lg border p-3'>
@@ -609,7 +678,9 @@ export function AitokenPurchasePage() {
 
         {/* Script + version + offers */}
         <div className='rounded-lg border p-4'>
-          <div className='mb-2 text-sm font-medium'>{t('Choose script & provider')}</div>
+          <div className='mb-2 text-sm font-medium'>
+            {t('Choose script & provider')}
+          </div>
           <div className='flex flex-wrap items-center gap-2'>
             <select
               className='h-9 min-w-[220px] rounded-md border px-2 text-sm'
@@ -634,14 +705,24 @@ export function AitokenPurchasePage() {
                 setAutoSelect(true)
                 setOffersPage(0)
                 setQuote(null)
-                const selected = availableVersions.find((item) => item.version === selectedVersion)
+                const selected = availableVersions.find(
+                  (item) => item.version === selectedVersion
+                )
                 setConfigText(configTextFromParams(selected?.script_params))
                 if (scriptId) void loadOffersFor(scriptId, selectedVersion)
               }}
             >
-              {versions.map((item) => <option key={item} value={item}>v{item}</option>)}
+              {versions.map((item) => (
+                <option key={item} value={item}>
+                  v{item}
+                </option>
+              ))}
             </select>
-            <Button variant='outline' onClick={loadOffers} disabled={offersLoading}>
+            <Button
+              variant='outline'
+              onClick={loadOffers}
+              disabled={offersLoading}
+            >
               {offersLoading ? t('Loading...') : t('View offers')}
             </Button>
           </div>
@@ -665,12 +746,19 @@ export function AitokenPurchasePage() {
                   }
                 }}
               />
-              <Button variant='outline' className='h-9' onClick={onSearchGroups} disabled={groupSearching}>
+              <Button
+                variant='outline'
+                className='h-9'
+                onClick={onSearchGroups}
+                disabled={groupSearching}
+              >
                 {groupSearching ? t('Searching...') : t('Search')}
               </Button>
               {groupFilterId && (
                 <span className='flex items-center gap-1 text-xs'>
-                  <span className='text-muted-foreground'>{t('Filtered')}:</span>
+                  <span className='text-muted-foreground'>
+                    {t('Filtered')}:
+                  </span>
                   <span className='font-medium'>{groupFilterName}</span>
                   <Button
                     size='sm'
@@ -689,11 +777,13 @@ export function AitokenPurchasePage() {
                   <button
                     key={g.id}
                     type='button'
-                    className='flex items-center gap-2 rounded px-2 py-1 text-left text-sm hover:bg-muted/50'
+                    className='hover:bg-muted/50 flex items-center gap-2 rounded px-2 py-1 text-left text-sm'
                     onClick={() => void applyGroupFilter(g.id, g.name)}
                   >
                     <span className='font-medium'>{g.name}</span>
-                    <span className='font-mono text-xs text-muted-foreground'>{g.id}</span>
+                    <span className='text-muted-foreground font-mono text-xs'>
+                      {g.id}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -702,12 +792,19 @@ export function AitokenPurchasePage() {
 
           <div className='mt-3'>
             <div className='text-muted-foreground mb-2 text-xs'>
-              {t('Provider offers (Auto picks the best idle provider, or choose one)')}
+              {t(
+                'Provider offers (Auto picks the best idle provider, or choose one)'
+              )}
             </div>
             {/* Auto is the default: platform picks the busiest, highest-success
                 idle provider (within the group filter, if set). */}
             <label className='flex items-center gap-2 rounded-md border p-2 text-sm'>
-              <input type='radio' name='offer' checked={autoSelect} onChange={selectAuto} />
+              <input
+                type='radio'
+                name='offer'
+                checked={autoSelect}
+                onChange={selectAuto}
+              />
               <span className='font-medium'>{t('Auto (recommended)')}</span>
               <span className='text-muted-foreground text-xs'>
                 {groupFilterId
@@ -719,7 +816,10 @@ export function AitokenPurchasePage() {
             {offers.length > 0 && (
               <div className='mt-2 flex flex-col gap-1'>
                 {offers
-                  .slice(offersPage * OFFERS_PAGE_SIZE, offersPage * OFFERS_PAGE_SIZE + OFFERS_PAGE_SIZE)
+                  .slice(
+                    offersPage * OFFERS_PAGE_SIZE,
+                    offersPage * OFFERS_PAGE_SIZE + OFFERS_PAGE_SIZE
+                  )
                   .map((o) => {
                     const rate =
                       o.executions > 0
@@ -742,16 +842,18 @@ export function AitokenPurchasePage() {
                         />
                         <span className='font-mono text-xs'>{o.node_id}</span>
                         {o.provider_group_name && (
-                          <span className='rounded bg-muted px-1.5 py-0.5 text-xs'>
+                          <span className='bg-muted rounded px-1.5 py-0.5 text-xs'>
                             {o.provider_group_name}
                           </span>
                         )}
                         {o.provider_group_id && (
-                          <span className='font-mono text-xs text-muted-foreground'>
+                          <span className='text-muted-foreground font-mono text-xs'>
                             {o.provider_group_id}
                           </span>
                         )}
-                        <span className='font-semibold'>{microsToCurrency(o.price_micros)}</span>
+                        <span className='font-semibold'>
+                          {microsToCurrency(o.price_micros)}
+                        </span>
                         <span>{statusLabel}</span>
                         <span className='text-muted-foreground text-xs'>
                           {t('Success rate')}: {rate}
@@ -761,12 +863,19 @@ export function AitokenPurchasePage() {
                         </span>
                         {!o.available && (
                           <span className='text-xs text-red-600'>
-                            {o.unavailable_reason === 'QUOTA_EXHAUSTED' && t('Quota exhausted')}
-                            {o.unavailable_reason === 'NODE_OFFLINE' && t('Node offline')}
-                            {o.unavailable_reason === 'NODE_DISABLED' && t('Provider disabled this node')}
-                            {o.unavailable_reason === 'NODE_BUSY' && t('Provider is busy')}
-                            {o.unavailable_reason === 'CAPABILITY_TEST_EXPIRED' && t('Capability test expired')}
-                            {o.unavailable_reason === 'BALANCE_CHECK_EXPIRED' && t('Balance check expired')}
+                            {o.unavailable_reason === 'QUOTA_EXHAUSTED' &&
+                              t('Quota exhausted')}
+                            {o.unavailable_reason === 'NODE_OFFLINE' &&
+                              t('Node offline')}
+                            {o.unavailable_reason === 'NODE_DISABLED' &&
+                              t('Provider disabled this node')}
+                            {o.unavailable_reason === 'NODE_BUSY' &&
+                              t('Provider is busy')}
+                            {o.unavailable_reason ===
+                              'CAPABILITY_TEST_EXPIRED' &&
+                              t('Capability test expired')}
+                            {o.unavailable_reason === 'BALANCE_CHECK_EXPIRED' &&
+                              t('Balance check expired')}
                           </span>
                         )}
                       </label>
@@ -791,12 +900,15 @@ export function AitokenPurchasePage() {
                     {t('Previous')}
                   </Button>
                   <span>
-                    {offersPage + 1} / {Math.ceil(offers.length / OFFERS_PAGE_SIZE)}
+                    {offersPage + 1} /{' '}
+                    {Math.ceil(offers.length / OFFERS_PAGE_SIZE)}
                   </span>
                   <Button
                     size='sm'
                     variant='outline'
-                    disabled={(offersPage + 1) * OFFERS_PAGE_SIZE >= offers.length}
+                    disabled={
+                      (offersPage + 1) * OFFERS_PAGE_SIZE >= offers.length
+                    }
                     onClick={() => setOffersPage((p) => p + 1)}
                   >
                     {t('Next')}
@@ -809,7 +921,9 @@ export function AitokenPurchasePage() {
 
         {/* Config params */}
         <div className='mt-4 rounded-lg border p-4'>
-          <div className='mb-2 text-sm font-medium'>{t('Task parameters (config JSON)')}</div>
+          <div className='mb-2 text-sm font-medium'>
+            {t('Task parameters (config JSON)')}
+          </div>
           <Textarea
             className='min-h-[140px] font-mono text-xs'
             value={configText}
@@ -827,7 +941,15 @@ export function AitokenPurchasePage() {
           <Button variant='outline' onClick={onQuote}>
             {t('Get quote')}
           </Button>
-          <Button onClick={onPurchase} disabled={busy || running || !quote || quote.MaxCustomerMicros > (bal?.client_available ?? 0)}>
+          <Button
+            onClick={onPurchase}
+            disabled={
+              busy ||
+              running ||
+              !quote ||
+              quote.MaxCustomerMicros > (bal?.client_available ?? 0)
+            }
+          >
             {busy || running ? t('Running...') : t('Purchase and run')}
           </Button>
         </div>
@@ -836,10 +958,18 @@ export function AitokenPurchasePage() {
           <div className='mt-3 rounded-lg border p-4 text-sm'>
             <div className='mb-1 font-medium'>{t('Price breakdown')}</div>
             <div className='grid grid-cols-2 gap-x-6 gap-y-1 md:grid-cols-3'>
-              <div>{t('Provider')}: {microsToCurrency(quote.ProviderMicros)}</div>
-              <div>{t('Author')}: {microsToCurrency(quote.AuthorMicros)}</div>
-              <div>{t('Platform fee')}: {microsToCurrency(quote.PlatformFeeMicros)}</div>
-              <div>{t('Risk reserve')}: {microsToCurrency(quote.RiskReserveMicros)}</div>
+              <div>
+                {t('Provider')}: {microsToCurrency(quote.ProviderMicros)}
+              </div>
+              <div>
+                {t('Author')}: {microsToCurrency(quote.AuthorMicros)}
+              </div>
+              <div>
+                {t('Platform fee')}: {microsToCurrency(quote.PlatformFeeMicros)}
+              </div>
+              <div>
+                {t('Risk reserve')}: {microsToCurrency(quote.RiskReserveMicros)}
+              </div>
               <div className='font-semibold'>
                 {t('Total')}: {microsToCurrency(quote.MaxCustomerMicros)}
               </div>
@@ -862,29 +992,48 @@ export function AitokenPurchasePage() {
             </div>
             {order.chosen_node_id && (
               <div className='mt-1 text-xs'>
-                {t('Provider node')}: <span className='font-mono'>{order.chosen_node_id}</span>
+                {t('Provider node')}:{' '}
+                <span className='font-mono'>{order.chosen_node_id}</span>
               </div>
             )}
-            {['FUNDS_RESERVED', 'MATCHING', 'OFFERED'].includes(order.state) && (
-              <Button className='mt-2' size='sm' variant='outline' onClick={onCancel}>
+            {['FUNDS_RESERVED', 'MATCHING', 'OFFERED'].includes(
+              order.state
+            ) && (
+              <Button
+                className='mt-2'
+                size='sm'
+                variant='outline'
+                onClick={onCancel}
+              >
                 {t('Cancel order')}
               </Button>
             )}
 
             {/* Dashboard sessions authenticate the E2EE relay automatically. */}
             <div className='mt-3 border-t pt-3'>
-              <div className='mb-2 text-sm font-medium'>{t('Run task (send config over encrypted relay)')}</div>
+              <div className='mb-2 text-sm font-medium'>
+                {t('Run task (send config over encrypted relay)')}
+              </div>
               <div className='flex flex-wrap items-center gap-2'>
                 <Button
                   onClick={() => void runViaRelay()}
-                  disabled={running || !['OFFERED', 'RESERVED', 'DATA_READY', 'RUNNING'].includes(order.state)}
+                  disabled={
+                    running ||
+                    !['OFFERED', 'RESERVED', 'DATA_READY', 'RUNNING'].includes(
+                      order.state
+                    )
+                  }
                 >
                   {running ? t('Running...') : t('Send & run')}
                 </Button>
-                {relayStatus && <span className='text-muted-foreground text-xs'>{relayStatus}</span>}
+                {relayStatus && (
+                  <span className='text-muted-foreground text-xs'>
+                    {relayStatus}
+                  </span>
+                )}
               </div>
               {relayResult && (
-                <pre className='mt-2 max-h-64 overflow-auto rounded-md border bg-muted/30 p-2 text-xs'>
+                <pre className='bg-muted/30 mt-2 max-h-64 overflow-auto rounded-md border p-2 text-xs'>
                   {relayResult}
                 </pre>
               )}

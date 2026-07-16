@@ -3,6 +3,7 @@ import { Check, MailCheck, X } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+
 import { SectionPageLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+
 import { listInvoices, markInvoiceSent, reviewInvoice } from './api'
 import type { InvoiceApplication } from './types'
 
@@ -145,7 +147,7 @@ export function AdminInvoices() {
                     <td className='p-3'>
                       {t(statuses[item.status])}
                       {item.reject_reason && (
-                        <span className='block text-destructive'>
+                        <span className='text-destructive block'>
                           {item.reject_reason}
                         </span>
                       )}
@@ -193,7 +195,7 @@ export function AdminInvoices() {
           </div>
           {rejecting && (
             <div className='fixed inset-0 z-50 grid place-items-center bg-black/40 p-4'>
-              <div className='w-full max-w-md rounded-md bg-background p-5 shadow-xl'>
+              <div className='bg-background w-full max-w-md rounded-md p-5 shadow-xl'>
                 <h2 className='font-semibold'>
                   {t('Reject invoice application')}
                 </h2>

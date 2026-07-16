@@ -3,6 +3,7 @@ import { FileText, Settings2, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -14,6 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+
 import {
   createInvoice,
   cancelInvoice,
@@ -93,7 +95,7 @@ export function InvoicePanel() {
     }
   }
   return (
-    <section className='rounded-md border bg-card p-4 sm:p-5'>
+    <section className='bg-card rounded-md border p-4 sm:p-5'>
       <div className='mb-4 flex flex-wrap items-start justify-between gap-3'>
         <div>
           <h2 className='flex items-center gap-2 font-semibold'>
@@ -230,7 +232,7 @@ export function InvoicePanel() {
                     {t(statusLabels[item.status])}
                   </p>
                   {item.reject_reason && (
-                    <p className='mt-1 text-destructive'>
+                    <p className='text-destructive mt-1'>
                       {t('Reason')}: {item.reject_reason}
                     </p>
                   )}

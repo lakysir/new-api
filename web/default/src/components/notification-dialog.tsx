@@ -67,9 +67,7 @@ export function NotificationDialog({
       contentClassName='border-primary/20 shadow-2xl shadow-primary/10 sm:max-w-2xl'
       contentHeight='auto'
       bodyClassName='space-y-4'
-      footer={
-        <Button onClick={() => onOpenChange(false)}>{t('Close')}</Button>
-      }
+      footer={<Button onClick={() => onOpenChange(false)}>{t('Close')}</Button>}
     >
       <Tabs
         value={activeTab}

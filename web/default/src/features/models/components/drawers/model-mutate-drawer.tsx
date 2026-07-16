@@ -423,9 +423,9 @@ export function ModelMutateDrawer({
       setAdvancedOpen(
         Boolean(
           currentRow?.cache_ratio ||
-            currentRow?.image_ratio ||
-            currentRow?.audio_ratio ||
-            currentRow?.audio_completion_ratio
+          currentRow?.image_ratio ||
+          currentRow?.audio_ratio ||
+          currentRow?.audio_completion_ratio
         )
       )
       form.reset({
