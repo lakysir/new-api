@@ -1043,69 +1043,6 @@ export function AitokenPurchasePage() {
             </div>
           ) : null}
 
-          {/* Provider-group filter: search a group by name to restrict offers +
-              the auto-pick to a single provider. Helps when there are many. */}
-          <div className='mt-3 rounded-md border p-3'>
-            <div className='text-muted-foreground mb-1 text-xs'>
-              {t('Filter by provider group (optional)')}
-            </div>
-            <div className='flex flex-wrap items-center gap-2'>
-              <Input
-                className='h-9 w-56'
-                placeholder={t('Search group name')}
-                value={groupQuery}
-                onChange={(e) => setGroupQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    void onSearchGroups()
-                  }
-                }}
-              />
-              <Button
-                variant='outline'
-                className='h-9'
-                onClick={onSearchGroups}
-                disabled={groupSearching}
-              >
-                {groupSearching ? t('Searching...') : t('Search')}
-              </Button>
-              {groupFilterId && (
-                <span className='flex items-center gap-1 text-xs'>
-                  <span className='text-muted-foreground'>
-                    {t('Filtered')}:
-                  </span>
-                  <span className='font-medium'>{groupFilterName}</span>
-                  <Button
-                    size='sm'
-                    variant='ghost'
-                    className='h-6 px-2'
-                    onClick={() => void applyGroupFilter('', '')}
-                  >
-                    {t('Clear')}
-                  </Button>
-                </span>
-              )}
-            </div>
-            {groupResults.length > 0 && (
-              <div className='mt-2 flex flex-col gap-1'>
-                {groupResults.map((g) => (
-                  <button
-                    key={g.id}
-                    type='button'
-                    className='hover:bg-muted/50 flex items-center gap-2 rounded px-2 py-1 text-left text-sm'
-                    onClick={() => void applyGroupFilter(g.id, g.name)}
-                  >
-                    <span className='font-medium'>{g.name}</span>
-                    <span className='text-muted-foreground font-mono text-xs'>
-                      {g.id}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
           <div className='mt-3'>
             <div className='text-muted-foreground mb-2 text-xs'>
               {t(
@@ -1114,23 +1051,81 @@ export function AitokenPurchasePage() {
             </div>
             {/* Auto is the default: platform picks the busiest, highest-success
                 idle provider (within the group filter, if set). */}
-            <label className='flex items-center gap-2 rounded-md border p-2 text-sm'>
-              <input
-                type='radio'
-                name='offer'
-                checked={autoSelect}
-                onChange={selectAuto}
-              />
-              <span className='font-medium'>{t('Auto (recommended)')}</span>
-              <span className='text-muted-foreground text-xs'>
-                {groupFilterId
-                  ? t('Auto-picks the best idle provider in this group')
-                  : t('Auto-picks the best idle provider')}
-              </span>
-            </label>
+            <div className='relative flex h-11 min-w-0 items-center gap-2 rounded-md border px-2 text-sm'>
+              <label className='flex min-w-0 items-center gap-2'>
+                <input
+                  type='radio'
+                  name='offer'
+                  checked={autoSelect}
+                  onChange={selectAuto}
+                />
+                <span className='shrink-0 font-medium'>
+                  {t('Auto (recommended)')}
+                </span>
+                <span className='text-muted-foreground hidden truncate text-xs md:inline'>
+                  {groupFilterId
+                    ? t('Auto-picks the best idle provider in this group')
+                    : t('Auto-picks the best idle provider')}
+                </span>
+              </label>
+              <div className='relative ml-auto flex min-w-0 items-center gap-2'>
+                <Input
+                  className='h-8 w-40 sm:w-56'
+                  placeholder={t('Search group name')}
+                  value={groupQuery}
+                  onChange={(e) => setGroupQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      void onSearchGroups()
+                    }
+                  }}
+                />
+                <Button
+                  type='button'
+                  variant='outline'
+                  size='sm'
+                  className='h-8'
+                  onClick={onSearchGroups}
+                  disabled={groupSearching}
+                >
+                  {groupSearching ? t('Searching...') : t('Search')}
+                </Button>
+                {groupFilterId && (
+                  <span className='flex max-w-36 items-center gap-1 text-xs'>
+                    <span className='truncate font-medium'>
+                      {groupFilterName}
+                    </span>
+                    <Button
+                      type='button'
+                      size='sm'
+                      variant='ghost'
+                      className='h-7 px-2'
+                      onClick={() => void applyGroupFilter('', '')}
+                    >
+                      {t('Clear')}
+                    </Button>
+                  </span>
+                )}
+                {groupResults.length > 0 && (
+                  <div className='bg-popover absolute top-full right-0 z-20 mt-1 flex w-72 flex-col gap-1 rounded-md border p-1 shadow-md'>
+                    {groupResults.map((g) => (
+                      <button
+                        key={g.id}
+                        type='button'
+                        className='hover:bg-muted/50 rounded px-2 py-1 text-left text-sm'
+                        onClick={() => void applyGroupFilter(g.id, g.name)}
+                      >
+                        <span className='font-medium'>{g.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
 
             {offers.length > 0 && (
-              <div className='mt-2 flex flex-col gap-1'>
+              <div className='mt-2 grid grid-cols-1 gap-1 lg:grid-cols-2'>
                 {offers
                   .slice(
                     offersPage * OFFERS_PAGE_SIZE,
@@ -1160,11 +1155,6 @@ export function AitokenPurchasePage() {
                         {o.provider_group_name && (
                           <span className='bg-muted rounded px-1.5 py-0.5 text-xs'>
                             {o.provider_group_name}
-                          </span>
-                        )}
-                        {o.provider_group_id && (
-                          <span className='text-muted-foreground font-mono text-xs'>
-                            {o.provider_group_id}
                           </span>
                         )}
                         <span className='font-semibold'>
