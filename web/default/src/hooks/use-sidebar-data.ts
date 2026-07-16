@@ -87,11 +87,6 @@ export function useSidebarData(): SidebarData {
             icon: Key,
           },
           {
-            title: t('My Scripts'),
-            url: '/my-scripts',
-            icon: ScrollText,
-          },
-          {
             title: t('AiToken P2P Marketplace'),
             url: '/buy-aitoken',
             icon: Wallet,

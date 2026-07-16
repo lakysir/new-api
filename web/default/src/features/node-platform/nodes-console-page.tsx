@@ -16,7 +16,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Ban, Cpu, History, Settings2, Trash2 } from 'lucide-react'
+import {
+  Ban,
+  Cpu,
+  ExternalLink,
+  History,
+  Settings2,
+  Trash2,
+} from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -825,6 +832,15 @@ export function NodesConsolePage() {
     <SectionPageLayout>
       <SectionPageLayout.Title>{t('Devices & Nodes')}</SectionPageLayout.Title>
       <SectionPageLayout.Actions>
+        <Button
+          variant='outline'
+          render={
+            <a href='/my-scripts' target='_blank' rel='noopener noreferrer' />
+          }
+        >
+          {t('My Scripts')}
+          <ExternalLink className='size-4' />
+        </Button>
         <label className='text-muted-foreground mr-3 flex items-center gap-1 text-sm'>
           <input
             type='checkbox'
