@@ -464,7 +464,13 @@ export function AitokenPurchasePage() {
         groupId || undefined,
         multiplier
       )
-      setOffers(loaded)
+      // Surface the caller's own nodes first (for testing their own scripts),
+      // keeping the backend's cheapest-first order within each group. Stable
+      // sort: owned nodes float up without disturbing relative price order.
+      const sorted = [...loaded].sort(
+        (a, b) => Number(b.owned) - Number(a.owned)
+      )
+      setOffers(sorted)
       // Default to Auto: let the platform pick the best idle provider. Price the
       // group as a whole so the client still sees a representative quote.
       setAutoSelect(true)
