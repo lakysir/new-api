@@ -4,6 +4,9 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // seedIdleNode creates an online, IDLE node for lease tests.
@@ -88,6 +91,23 @@ func TestReleaseLeaseIdempotent(t *testing.T) {
 	if err := ReleaseLease(lease.Id, "done-again"); err != nil {
 		t.Fatalf("double release must be a no-op success, got %v", err)
 	}
+}
+
+func TestIdleHeartbeatDoesNotOverwriteBusyLease(t *testing.T) {
+	node := seedIdleNode(t, "node_busy_heartbeat")
+	lease, _, err := ReserveNode("tsk_heartbeat", "ord_heartbeat", node.Id, 1, time.Minute)
+	require.NoError(t, err)
+
+	require.NoError(t, TouchNodePresence(node.Id, NodeStateIdle))
+	busyNode, err := GetNode(node.Id)
+	require.NoError(t, err)
+	assert.Equal(t, NodeStateBusy, busyNode.State)
+
+	require.NoError(t, ReleaseLease(lease.Id, "done"))
+	require.NoError(t, TouchNodePresence(node.Id, NodeStateIdle))
+	idleNode, err := GetNode(node.Id)
+	require.NoError(t, err)
+	assert.Equal(t, NodeStateIdle, idleNode.State)
 }
 
 func TestExpireStaleLeases(t *testing.T) {

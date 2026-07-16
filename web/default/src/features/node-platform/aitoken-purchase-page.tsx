@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { Braces, ListTree } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -57,6 +58,7 @@ type PublishedScript = {
   latest_version?: number
 }
 type PurchaseDraft = { scriptId: number; version: number; configText: string }
+type ViewMode = 'form' | 'json'
 
 const DEFAULT_CONFIG_TEXT = '{\n  "prompt": "a dog"\n}'
 
@@ -83,6 +85,104 @@ function getDraftStorageKey() {
   return `aitoken-purchase-draft:${userId}`
 }
 
+function getViewModeStorageKey(view: 'parameters' | 'result') {
+  const userId = window.localStorage.getItem('uid') ?? 'anonymous'
+  return `aitoken-purchase-${view}-view:${userId}`
+}
+
+function loadViewMode(view: 'parameters' | 'result'): ViewMode {
+  try {
+    return window.localStorage.getItem(getViewModeStorageKey(view)) === 'json'
+      ? 'json'
+      : 'form'
+  } catch {
+    return 'form'
+  }
+}
+
+function updateJsonValue(
+  source: unknown,
+  path: (string | number)[],
+  value: unknown
+): unknown {
+  if (path.length === 0) return value
+  const [key, ...rest] = path
+  const container = Array.isArray(source)
+    ? [...source]
+    : { ...(source as Record<string, unknown>) }
+  container[key as never] = updateJsonValue(
+    (source as Record<string | number, unknown>)?.[key],
+    rest,
+    value
+  ) as never
+  return container
+}
+
+type JsonFormProps = {
+  value: unknown
+  onChange?: (path: (string | number)[], value: unknown) => void
+  path?: (string | number)[]
+}
+
+function JsonForm(props: JsonFormProps) {
+  const path = props.path ?? []
+  if (props.value !== null && typeof props.value === 'object') {
+    const entries = Array.isArray(props.value)
+      ? props.value.map((value, index) => [index, value] as const)
+      : Object.entries(props.value)
+    return (
+      <div className='space-y-3'>
+        {entries.map(([key, value]) => (
+          <div
+            key={String(key)}
+            className='grid gap-1.5 md:grid-cols-[minmax(140px,0.35fr)_1fr] md:gap-4'
+          >
+            <div className='text-muted-foreground pt-2 text-sm break-words'>
+              {Array.isArray(props.value) ? `#${Number(key) + 1}` : key}
+            </div>
+            <JsonForm
+              value={value}
+              path={[...path, key]}
+              onChange={props.onChange}
+            />
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  if (!props.onChange) {
+    return (
+      <div className='bg-muted/30 min-h-10 rounded-md border px-3 py-2 text-sm break-words'>
+        {props.value === null ? 'null' : String(props.value)}
+      </div>
+    )
+  }
+  if (typeof props.value === 'boolean') {
+    return (
+      <input
+        type='checkbox'
+        className='mt-2 h-4 w-4'
+        checked={props.value}
+        onChange={(event) => props.onChange?.(path, event.target.checked)}
+      />
+    )
+  }
+  return (
+    <Input
+      type={typeof props.value === 'number' ? 'number' : 'text'}
+      value={props.value === null ? '' : String(props.value)}
+      onChange={(event) => {
+        let value: string | number = event.target.value
+        if (typeof props.value === 'number') {
+          value = event.target.value === '' ? 0 : event.target.valueAsNumber
+        }
+        props.onChange?.(path, value)
+      }}
+    />
+  )
+}
+
 function loadPurchaseDraft(): PurchaseDraft {
   try {
     const saved = JSON.parse(
@@ -91,11 +191,11 @@ function loadPurchaseDraft(): PurchaseDraft {
     return {
       scriptId:
         Number.isInteger(saved.scriptId) && (saved.scriptId ?? 0) > 0
-          ? saved.scriptId!
+          ? (saved.scriptId ?? 0)
           : 0,
       version:
         Number.isInteger(saved.version) && (saved.version ?? 0) > 0
-          ? saved.version!
+          ? (saved.version ?? 1)
           : 1,
       configText:
         typeof saved.configText === 'string'
@@ -109,7 +209,12 @@ function loadPurchaseDraft(): PurchaseDraft {
 
 // Terminal order states that mean execution will never produce a result, so the
 // client should stop waiting on the relay and report the reason.
-const TERMINAL_FAILURE_STATES = ['FAILED', 'REFUNDED', 'TIMED_OUT', 'CANCELLED']
+const TERMINAL_FAILURE_STATES = new Set([
+  'FAILED',
+  'REFUNDED',
+  'TIMED_OUT',
+  'CANCELLED',
+])
 
 // describeOrderError maps a provider/gate error_code to a readable reason. Falls
 // back to the raw code (or a generic message) for anything not enumerated.
@@ -142,12 +247,10 @@ async function sha256Hex(text: string): Promise<string> {
     'SHA-256',
     new TextEncoder().encode(text)
   )
-  return (
-    'sha256:' +
-    [...new Uint8Array(digest)]
-      .map((b) => b.toString(16).padStart(2, '0'))
-      .join('')
-  )
+  const hash = [...new Uint8Array(digest)]
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+  return `sha256:${hash}`
 }
 
 export function AitokenPurchasePage() {
@@ -179,6 +282,12 @@ export function AitokenPurchasePage() {
   // Zero-based page index into the offers list.
   const [offersPage, setOffersPage] = useState(0)
   const [configText, setConfigText] = useState(initialDraft.configText)
+  const [parametersView, setParametersView] = useState<ViewMode>(() =>
+    loadViewMode('parameters')
+  )
+  const [resultView, setResultView] = useState<ViewMode>(() =>
+    loadViewMode('result')
+  )
   const [quote, setQuote] = useState<PriceBreakdown | null>(null)
   const [order, setOrder] = useState<Order | null>(null)
   const [busy, setBusy] = useState(false)
@@ -264,8 +373,9 @@ export function AitokenPurchasePage() {
       } catch {
         setQuote(null)
       }
-      if (loaded.length === 0)
+      if (loaded.length === 0) {
         toast.info(t('No provider offers yet for this version'))
+      }
     } finally {
       setOffersLoading(false)
     }
@@ -340,9 +450,11 @@ export function AitokenPurchasePage() {
     }
   }
 
+  // The initial bootstrap intentionally runs once; its functions use the initial draft.
   useEffect(() => {
     loadBalance()
     loadScripts()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -359,6 +471,25 @@ export function AitokenPurchasePage() {
       // Storage may be unavailable or full; the page remains usable without persistence.
     }
   }, [scriptId, version, configText])
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        getViewModeStorageKey('parameters'),
+        parametersView
+      )
+    } catch {
+      // View preferences are optional when browser storage is unavailable.
+    }
+  }, [parametersView])
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(getViewModeStorageKey('result'), resultView)
+    } catch {
+      // View preferences are optional when browser storage is unavailable.
+    }
+  }, [resultView])
 
   async function loadOffers() {
     if (!scriptId) {
@@ -562,7 +693,7 @@ export function AitokenPurchasePage() {
           try {
             const latest = await getOrder(targetOrder.id)
             setOrder(latest)
-            if (TERMINAL_FAILURE_STATES.includes(latest.state)) {
+            if (TERMINAL_FAILURE_STATES.has(latest.state)) {
               reject(new Error(describeOrderError(latest.last_error)))
               return
             }
@@ -608,7 +739,7 @@ export function AitokenPurchasePage() {
           setOrder(await cancelOrder(targetOrder.id))
           await loadBalance()
           toast.error(t('Task was not accepted; reserved funds were refunded'))
-        } else if (TERMINAL_FAILURE_STATES.includes(latest.state)) {
+        } else if (TERMINAL_FAILURE_STATES.has(latest.state)) {
           await loadBalance()
         }
       } catch {
@@ -921,14 +1052,66 @@ export function AitokenPurchasePage() {
 
         {/* Config params */}
         <div className='mt-4 rounded-lg border p-4'>
-          <div className='mb-2 text-sm font-medium'>
-            {t('Task parameters (config JSON)')}
+          <div className='mb-3 flex flex-wrap items-center justify-between gap-2'>
+            <div className='text-sm font-medium'>{t('Parameters')}</div>
+            <div
+              className='flex gap-1'
+              role='group'
+              aria-label={t('Parameters')}
+            >
+              <Button
+                type='button'
+                size='sm'
+                variant={parametersView === 'form' ? 'secondary' : 'ghost'}
+                onClick={() => setParametersView('form')}
+              >
+                <ListTree className='mr-2 h-4 w-4' aria-hidden='true' />
+                {t('Visual Mode')}
+              </Button>
+              <Button
+                type='button'
+                size='sm'
+                variant={parametersView === 'json' ? 'secondary' : 'ghost'}
+                onClick={() => setParametersView('json')}
+              >
+                <Braces className='mr-2 h-4 w-4' aria-hidden='true' />
+                JSON
+              </Button>
+            </div>
           </div>
-          <Textarea
-            className='min-h-[140px] font-mono text-xs'
-            value={configText}
-            onChange={(e) => setConfigText(e.target.value)}
-          />
+          {parametersView === 'json' ? (
+            <Textarea
+              className='min-h-[140px] font-mono text-xs'
+              value={configText}
+              onChange={(e) => setConfigText(e.target.value)}
+            />
+          ) : (
+            (() => {
+              try {
+                const config = JSON.parse(configText) as unknown
+                return (
+                  <JsonForm
+                    value={config}
+                    onChange={(path, value) =>
+                      setConfigText(
+                        JSON.stringify(
+                          updateJsonValue(config, path, value),
+                          null,
+                          2
+                        )
+                      )
+                    }
+                  />
+                )
+              } catch {
+                return (
+                  <div className='text-destructive rounded-md border p-3 text-sm'>
+                    {t('Invalid JSON')}
+                  </div>
+                )
+              }
+            })()
+          )}
           <div className='text-muted-foreground mt-1 text-xs'>
             {t(
               'Only the hash of these parameters crosses the control plane; the plaintext travels the encrypted data plane to the provider.'
@@ -1033,9 +1216,42 @@ export function AitokenPurchasePage() {
                 )}
               </div>
               {relayResult && (
-                <pre className='bg-muted/30 mt-2 max-h-64 overflow-auto rounded-md border p-2 text-xs'>
-                  {relayResult}
-                </pre>
+                <div className='mt-3 border-t pt-3'>
+                  <div className='mb-3 flex items-center justify-between gap-2'>
+                    <div className='font-medium'>{t('Result')}</div>
+                    <div
+                      className='flex gap-1'
+                      role='group'
+                      aria-label={t('Result')}
+                    >
+                      <Button
+                        type='button'
+                        size='sm'
+                        variant={resultView === 'form' ? 'secondary' : 'ghost'}
+                        onClick={() => setResultView('form')}
+                      >
+                        <ListTree className='mr-2 h-4 w-4' aria-hidden='true' />
+                        {t('Visual Mode')}
+                      </Button>
+                      <Button
+                        type='button'
+                        size='sm'
+                        variant={resultView === 'json' ? 'secondary' : 'ghost'}
+                        onClick={() => setResultView('json')}
+                      >
+                        <Braces className='mr-2 h-4 w-4' aria-hidden='true' />
+                        JSON
+                      </Button>
+                    </div>
+                  </div>
+                  {resultView === 'json' ? (
+                    <pre className='bg-muted/30 max-h-64 overflow-auto rounded-md border p-2 text-xs'>
+                      {relayResult}
+                    </pre>
+                  ) : (
+                    <JsonForm value={JSON.parse(relayResult) as unknown} />
+                  )}
+                </div>
               )}
             </div>
           </div>

@@ -60,8 +60,10 @@ import {
   requestBalanceCheck,
   revokeDevice,
   setNodeEnabled,
+  type NodeBalanceCheck,
+  type ProviderGroup,
+  type ScriptCategory,
 } from './api'
-import type { NodeBalanceCheck, ProviderGroup, ScriptCategory } from './api'
 import { EarningsSummary } from './earnings-summary'
 import { displayToMicros, formatUnix, microsToCurrency } from './lib/format'
 import type {
@@ -119,9 +121,7 @@ function loadNodesConsoleDraft(): NodesConsoleDraft {
               version: typeof form.version === 'string' ? form.version : '',
               price: typeof form.price === 'string' ? form.price : '',
               dailyLimit:
-                typeof (form as any).dailyLimit === 'string'
-                  ? (form as any).dailyLimit
-                  : '0',
+                typeof form.dailyLimit === 'string' ? form.dailyLimit : '0',
             },
           ] as const,
         ]
@@ -292,13 +292,14 @@ export function NodesConsolePage() {
           Object.entries(restoredForms).map(([nodeId, form]) => {
             if (!form.scriptId) return [nodeId, form]
             const versions = restoredVersions[Number(form.scriptId)] ?? []
-            const version = versions.some(
-              (item) => String(item.version) === form.version
-            )
-              ? form.version
-              : versions[0]
-                ? String(versions[0].version)
-                : ''
+            let version = ''
+            if (
+              versions.some((item) => String(item.version) === form.version)
+            ) {
+              version = form.version
+            } else if (versions[0]) {
+              version = String(versions[0].version)
+            }
             return [nodeId, { ...form, version }]
           })
         )
@@ -386,6 +387,17 @@ export function NodesConsolePage() {
 
   useEffect(() => {
     loadAll(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    const refreshNodes = () => {
+      void listMyNodes()
+        .then((list) => setNodes(Array.isArray(list) ? list : []))
+        .catch(() => {})
+    }
+    const timer = window.setInterval(refreshNodes, 3000)
+    return () => window.clearInterval(timer)
   }, [])
 
   useEffect(() => {
@@ -693,6 +705,15 @@ export function NodesConsolePage() {
                   )
                   const checkValid = capabilityBalanceOk(node.id, c.category_id)
                   const checkKey = `${node.id}:${c.category_id}`
+                  let checkClassName = 'text-muted-foreground'
+                  let checkLabel = t('Not checked')
+                  if (checkValid) {
+                    checkClassName = 'text-emerald-600'
+                    checkLabel = t('Passed')
+                  } else if (checkStatus && !checkStatus.balance_ok) {
+                    checkClassName = 'text-red-600'
+                    checkLabel = t('Failed')
+                  }
                   return (
                     <TableRow key={c.id}>
                       <TableCell className='min-w-48'>
@@ -723,18 +744,14 @@ export function NodesConsolePage() {
                                 : t('Detect')}
                             </Button>
                             <span
-                              className={`text-xs ${checkValid ? 'text-emerald-600' : checkStatus && !checkStatus.balance_ok ? 'text-red-600' : 'text-muted-foreground'}`}
+                              className={`text-xs ${checkClassName}`}
                               title={
                                 !checkValid
                                   ? checkStatus?.error_message
                                   : undefined
                               }
                             >
-                              {checkValid
-                                ? t('Passed')
-                                : checkStatus && !checkStatus.balance_ok
-                                  ? t('Failed')
-                                  : t('Not checked')}
+                              {checkLabel}
                             </span>
                           </div>
                         ) : (

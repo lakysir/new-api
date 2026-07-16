@@ -227,17 +227,33 @@ func TouchNodePresence(nodeId, state string) error {
 			return ErrNodeDeviceRevoked
 		}
 	}
-	res := DB.Model(&Node{}).Where("id = ?", nodeId).Updates(map[string]any{
-		"last_seen_at": time.Now().Unix(),
-		"state":        state,
+	return DB.Transaction(func(tx *gorm.DB) error {
+		var lockedNode Node
+		if err := tx.Set("gorm:query_option", forUpdateOption()).Where("id = ?", nodeId).First(&lockedNode).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrNodeNotFound
+			}
+			return err
+		}
+
+		var activeLeaseCount int64
+		if err := tx.Model(&Lease{}).
+			Where("node_id = ? AND active = ?", nodeId, true).
+			Count(&activeLeaseCount).Error; err != nil {
+			return err
+		}
+		// The active lease is the scheduling fact source. A plugin may still
+		// report IDLE while executing, but it must not overwrite BUSY until the
+		// lease has been released.
+		if activeLeaseCount > 0 {
+			state = NodeStateBusy
+		}
+
+		return tx.Model(&Node{}).Where("id = ?", nodeId).Updates(map[string]any{
+			"last_seen_at": time.Now().Unix(),
+			"state":        state,
+		}).Error
 	})
-	if res.Error != nil {
-		return res.Error
-	}
-	if res.RowsAffected == 0 {
-		return ErrNodeNotFound
-	}
-	return nil
 }
 
 // ErrBalanceCheckRequired is returned when a node has no valid balance-probe
