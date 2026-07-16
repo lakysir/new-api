@@ -41,6 +41,12 @@ type ScriptOffer struct {
 	Successes         int64  `json:"successes"`
 	Available         bool   `json:"available"`
 	UnavailableReason string `json:"unavailable_reason,omitempty"`
+	// Enabled is the provider's scheduling switch for the node. Owned is true
+	// when the offer's node belongs to the viewer. A disabled node is only listed
+	// to its owner (so they can test it); for everyone else disabled nodes are
+	// filtered out entirely.
+	Enabled bool `json:"enabled"`
+	Owned   bool `json:"owned"`
 }
 
 // ListOffersForScript returns all active, tested offers for a script version
@@ -51,7 +57,10 @@ type ScriptOffer struct {
 // consumeMultiplier is the buyer's units-of-work coefficient (min 1): a node's
 // remaining balance must be strictly greater than it for the offer to be
 // available, since one execution consumes that many units on the target site.
-func ListOffersForScript(scriptId, version int, providerGroupId string, consumeMultiplier int64) ([]ScriptOffer, error) {
+// viewerUserId is the requesting user: their own disabled nodes are listed (and
+// selectable, so they can test their nodes end-to-end), while disabled nodes
+// owned by anyone else are filtered out.
+func ListOffersForScript(scriptId, version int, providerGroupId string, consumeMultiplier int64, viewerUserId int) ([]ScriptOffer, error) {
 	if consumeMultiplier < 1 {
 		consumeMultiplier = 1
 	}
@@ -59,6 +68,7 @@ func ListOffersForScript(scriptId, version int, providerGroupId string, consumeM
 	now := time.Now().Unix()
 	type row struct {
 		NodeId            string
+		UserId            int
 		ProviderGroupId   string
 		ProviderGroupName string
 		PriceMicros       int64
@@ -76,15 +86,17 @@ func ListOffersForScript(scriptId, version int, providerGroupId string, consumeM
 	var rows []row
 	// Return all listed capabilities so clients can distinguish "no offer" from
 	// an offer that is temporarily offline, out of quota or needs re-validation.
+	// Disabled nodes are hidden from everyone except their owner.
 	q := DB.Table("node_capabilities AS cap").
 		Select(`cap.node_id, cap.price_micros, cap.remaining_quota, cap.test_expires_at, cap.category_id,
-			n.last_seen_at, n.state, n.success_count, n.failure_count, n.provider_group_id, n.enabled,
+			n.user_id, n.last_seen_at, n.state, n.success_count, n.failure_count, n.provider_group_id, n.enabled,
 			pg.name AS provider_group_name, s.balance_ok, s.expires_at AS balance_expires_at`).
 		Joins("JOIN nodes n ON n.id = cap.node_id").
 		Joins("LEFT JOIN provider_groups pg ON pg.id = n.provider_group_id").
 		Joins("LEFT JOIN node_site_status s ON s.node_id = cap.node_id AND s.category_id = cap.category_id").
 		Where("cap.script_id = ? AND cap.version = ?", scriptId, version).
-		Where("cap.status = ?", CapabilityStatusActive)
+		Where("cap.status = ?", CapabilityStatusActive).
+		Where("n.enabled = ? OR n.user_id = ?", true, viewerUserId)
 	if providerGroupId != "" {
 		q = q.Where("n.provider_group_id = ?", providerGroupId)
 	}
@@ -101,15 +113,19 @@ func ListOffersForScript(scriptId, version int, providerGroupId string, consumeM
 		// units of work; > (not >=) so a node with exactly the coefficient is not
 		// drained to zero mid-execution.
 		balanceEnough := int64(r.RemainingQuota) > consumeMultiplier
-		// A busy node is online but cannot take a new task (single-task-per-node).
-		// A disabled node is never a candidate even when online and validated: the
-		// provider must explicitly turn it on.
-		available := r.Enabled && online && !busy && balanceEnough && testValid && balanceValid
+		owned := r.UserId == viewerUserId
+		// A disabled node is normally not a candidate; the owner may still select
+		// their own disabled node to test it end-to-end (others' disabled nodes are
+		// already filtered out by the query), so the enabled gate is waived when
+		// the node is the viewer's. A busy node is online but cannot take a new
+		// task (single-task-per-node).
+		enabledOrOwned := r.Enabled || owned
+		available := enabledOrOwned && online && !busy && balanceEnough && testValid && balanceValid
 		reason := ""
-		if !online {
-			reason = "NODE_OFFLINE"
-		} else if !r.Enabled {
+		if !enabledOrOwned {
 			reason = "NODE_DISABLED"
+		} else if !online {
+			reason = "NODE_OFFLINE"
 		} else if busy {
 			reason = "NODE_BUSY"
 		} else if r.RemainingQuota <= 0 {
@@ -133,6 +149,8 @@ func ListOffersForScript(scriptId, version int, providerGroupId string, consumeM
 			Executions:        r.SuccessCount + r.FailureCount,
 			Successes:         r.SuccessCount,
 			Available:         available,
+			Enabled:           r.Enabled,
+			Owned:             owned,
 			UnavailableReason: reason,
 		})
 	}
@@ -162,7 +180,11 @@ func GetCapabilityPrice(nodeId string, scriptId, version int) (int64, bool, erro
 // consumeMultiplier (min 1) is the run's units of work: a node's remaining
 // balance must be strictly greater than it to be eligible (mirrors
 // ListOffersForScript's INSUFFICIENT_NODE_BALANCE gate).
-func ScheduleCandidates(scriptId, version int, maxPriceMicros int64, limit int, providerGroupId string, consumeMultiplier int64) ([]CandidateNode, error) {
+// clientUserId + chosenNodeId let a provider test their own node: when the
+// client explicitly chose a node they own, that specific node is eligible even
+// if disabled. Auto-pick (chosenNodeId == "") still requires n.enabled = true,
+// so a disabled node is never auto-selected for someone else.
+func ScheduleCandidates(scriptId, version int, maxPriceMicros int64, limit int, providerGroupId string, consumeMultiplier int64, clientUserId int, chosenNodeId string) ([]CandidateNode, error) {
 	if consumeMultiplier < 1 {
 		consumeMultiplier = 1
 	}
@@ -190,10 +212,16 @@ func ScheduleCandidates(scriptId, version int, maxPriceMicros int64, limit int, 
 		Where("cap.remaining_quota > ?", consumeMultiplier).
 		Where("cap.price_micros <= ?", maxPriceMicros).
 		Where("n.state = ?", NodeStateIdle).
-		Where("n.enabled = ?", true).
 		Where("n.last_seen_at >= ?", cutoff).
 		// Node must have a valid balance check for the category (or no category).
 		Where("cap.category_id = 0 OR (s.balance_ok = ? AND s.expires_at > ?)", true, now)
+	// Enabled nodes are always eligible; a disabled node is eligible only when the
+	// client explicitly chose that exact node and owns it (self-test path).
+	if chosenNodeId != "" {
+		q = q.Where("n.enabled = ? OR (n.id = ? AND n.user_id = ?)", true, chosenNodeId, clientUserId)
+	} else {
+		q = q.Where("n.enabled = ?", true)
+	}
 	if providerGroupId != "" {
 		q = q.Where("n.provider_group_id = ?", providerGroupId)
 	}

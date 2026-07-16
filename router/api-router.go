@@ -259,7 +259,10 @@ func SetApiRouter(router *gin.Engine) {
 			// verify market-script signatures — no secret exposed).
 			scriptRoute.GET("/platform-key", controller.GetPlatformScriptKey)
 			// Provider offers for a script version (price + online + quota).
-			scriptRoute.GET("/:id/offers", controller.ListScriptOffers)
+			// TryUserAuth (optional): populates the caller id when logged in so a
+			// provider sees their own disabled nodes, without rejecting anonymous
+			// browsing of public offers.
+			scriptRoute.GET("/:id/offers", middleware.TryUserAuth(), controller.ListScriptOffers)
 			// Target-site categories (public list; operator create/config).
 			scriptRoute.GET("/categories", controller.ListCategories)
 

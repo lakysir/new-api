@@ -335,6 +335,11 @@ export type ScriptOffer = {
   successes: number
   available: boolean
   unavailable_reason?: string
+  /** The provider's scheduling switch for this node. */
+  enabled: boolean
+  /** True when this node belongs to the requesting user. A disabled node is only
+   *  ever returned to its owner, so they can test it end-to-end. */
+  owned: boolean
 }
 
 // A provider group is the logical group a provider's nodes belong to (one per

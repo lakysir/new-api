@@ -48,7 +48,7 @@ func seedNodeWithCapability(t *testing.T, nodeId string, userId, scriptId, versi
 	t.Helper()
 	if err := model.DB.Create(&model.Node{
 		Id: nodeId, DeviceId: "d-" + nodeId, UserId: userId,
-		State: model.NodeStateIdle, LastSeenAt: time.Now().Unix(),
+		State: model.NodeStateIdle, Enabled: true, LastSeenAt: time.Now().Unix(),
 	}).Error; err != nil {
 		t.Fatal(err)
 	}

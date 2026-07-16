@@ -340,7 +340,7 @@ func TestListOffersAndCapabilityPrice(t *testing.T) {
 	seedIdleNodeCap(t, "off_node_a", 900, scriptId, v.Version, 500000)
 	seedIdleNodeCap(t, "off_node_b", 901, scriptId, v.Version, 300000)
 
-	offers, err := ListOffersForScript(scriptId, v.Version, "", 1)
+	offers, err := ListOffersForScript(scriptId, v.Version, "", 1, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -358,10 +358,70 @@ func TestListOffersAndCapabilityPrice(t *testing.T) {
 	}
 }
 
-// seedIdleNodeCap creates an online idle node + an active tested capability.
+func TestOffersShowOwnDisabledNodeHideOthers(t *testing.T) {
+	scriptId := 7150
+	v := seedApprovedVersion(t, scriptId)
+	const owner, stranger = 5100, 5101
+	// Two online, tested, idle nodes but with the scheduling switch OFF.
+	seedIdleNodeCap(t, "dis_mine", owner, scriptId, v.Version, 100000)
+	seedIdleNodeCap(t, "dis_other", stranger, scriptId, v.Version, 100000)
+	if err := DB.Model(&Node{}).Where("id IN ?", []string{"dis_mine", "dis_other"}).Update("enabled", false).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	// The owner sees only their own disabled node, and it is selectable so they
+	// can test it end-to-end.
+	offers, err := ListOffersForScript(scriptId, v.Version, "", 1, owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(offers) != 1 || offers[0].NodeId != "dis_mine" {
+		t.Fatalf("owner should see only their disabled node, got %+v", offers)
+	}
+	if !offers[0].Owned || offers[0].Enabled || !offers[0].Available {
+		t.Fatalf("owner's disabled node must be owned, not enabled, but available: %+v", offers[0])
+	}
+
+	// A stranger sees neither disabled node.
+	strangerOffers, err := ListOffersForScript(scriptId, v.Version, "", 1, 9999)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(strangerOffers) != 0 {
+		t.Fatalf("stranger must not see others' disabled nodes, got %+v", strangerOffers)
+	}
+
+	// Auto-pick never selects a disabled node, even the owner's.
+	auto, err := ScheduleCandidates(scriptId, v.Version, 200000, 10, "", 1, owner, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(auto) != 0 {
+		t.Fatalf("auto-pick must exclude disabled nodes, got %+v", auto)
+	}
+	// But the owner explicitly choosing their own disabled node makes it eligible.
+	chosen, err := ScheduleCandidates(scriptId, v.Version, 200000, 10, "", 1, owner, "dis_mine")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(chosen) != 1 || chosen[0].NodeId != "dis_mine" {
+		t.Fatalf("owner-chosen disabled node should be eligible, got %+v", chosen)
+	}
+	// A non-owner choosing that same node gets nothing (not their node).
+	notOwner, err := ScheduleCandidates(scriptId, v.Version, 200000, 10, "", 1, stranger, "dis_mine")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(notOwner) != 0 {
+		t.Fatalf("non-owner must not schedule someone else's disabled node, got %+v", notOwner)
+	}
+}
+
+// seedIdleNodeCap creates an online idle, enabled node + an active tested
+// capability — i.e. a fully listable offer.
 func seedIdleNodeCap(t *testing.T, nodeId string, userId, scriptId, version int, priceMicros int64) {
 	t.Helper()
-	if err := DB.Create(&Node{Id: nodeId, DeviceId: "d-" + nodeId, UserId: userId, State: NodeStateIdle, LastSeenAt: nowPlus(0)}).Error; err != nil {
+	if err := DB.Create(&Node{Id: nodeId, DeviceId: "d-" + nodeId, UserId: userId, State: NodeStateIdle, Enabled: true, LastSeenAt: nowPlus(0)}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := DB.Create(&NodeCapability{
@@ -396,7 +456,7 @@ func TestScheduleRanksBySuccessRate(t *testing.T) {
 		_ = RecordTaskOutcome("sr_low", false)
 	}
 
-	cands, err := ScheduleCandidates(scriptId, v.Version, 200000, 10, "", 1)
+	cands, err := ScheduleCandidates(scriptId, v.Version, 200000, 10, "", 1, 0, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -423,7 +483,7 @@ func TestBusyNodeExcludedSoLowSuccessCanRun(t *testing.T) {
 	if err := DB.Model(&Node{}).Where("id = ?", "busy_high").Update("state", NodeStateBusy).Error; err != nil {
 		t.Fatal(err)
 	}
-	cands, _ := ScheduleCandidates(scriptId, v.Version, 200000, 10, "", 1)
+	cands, _ := ScheduleCandidates(scriptId, v.Version, 200000, 10, "", 1, 0, "")
 	if len(cands) != 1 || cands[0].NodeId != "idle_low" {
 		t.Fatalf("busy high-success node must be excluded, leaving idle_low; got %+v", cands)
 	}
@@ -435,7 +495,7 @@ func TestEnableCapabilityRequiresBalanceCheck(t *testing.T) {
 	if err := CreateScriptVersion(sv); err != nil {
 		t.Fatal(err)
 	}
-	if err := DB.Create(&Node{Id: "bc_node", DeviceId: "d", UserId: 1, State: NodeStateIdle, LastSeenAt: nowPlus(0)}).Error; err != nil {
+	if err := DB.Create(&Node{Id: "bc_node", DeviceId: "d", UserId: 1, State: NodeStateIdle, Enabled: true, LastSeenAt: nowPlus(0)}).Error; err != nil {
 		t.Fatal(err)
 	}
 	cap := &NodeCapability{
@@ -453,7 +513,7 @@ func TestEnableCapabilityRequiresBalanceCheck(t *testing.T) {
 	if err := EnableCapability(cap); err != nil {
 		t.Fatalf("enable should succeed after balance check: %v", err)
 	}
-	cands, _ := ScheduleCandidates(scriptId, sv.Version, 200000, 10, "", 1)
+	cands, _ := ScheduleCandidates(scriptId, sv.Version, 200000, 10, "", 1, 0, "")
 	if len(cands) != 1 || cands[0].NodeId != "bc_node" {
 		t.Fatalf("balance-checked node should be schedulable, got %+v", cands)
 	}

@@ -80,7 +80,7 @@ func Dispatch(orderId string, attempt int) (*Result, error) {
 		return nil, ErrOrderNotMatchable
 	}
 
-	candidates, err := model.ScheduleCandidates(o.ScriptId, o.Version, o.MaxAmountMicros, 10, o.ProviderGroupId, o.ConsumeMultiplier)
+	candidates, err := model.ScheduleCandidates(o.ScriptId, o.Version, o.MaxAmountMicros, 10, o.ProviderGroupId, o.ConsumeMultiplier, o.ClientId, o.ChosenNodeId)
 	if err != nil {
 		return nil, err
 	}

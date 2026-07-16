@@ -1156,6 +1156,13 @@ export function AitokenPurchasePage() {
                           {microsToCurrency(o.price_micros)}
                         </span>
                         <span>{statusLabel}</span>
+                        {/* Own disabled node: shown only to its owner and kept
+                            selectable so they can test their node end-to-end. */}
+                        {o.owned && !o.enabled && (
+                          <span className='rounded bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-700'>
+                            {t('Your node (disabled) — selectable for testing')}
+                          </span>
+                        )}
                         <span className='text-muted-foreground text-xs'>
                           {t('Success rate')}: {rate}
                         </span>

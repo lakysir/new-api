@@ -32,7 +32,9 @@ func ListScriptOffers(c *gin.Context) {
 	// Optional consume_multiplier: a node's remaining balance must exceed it for
 	// the offer to be available, mirroring the auto-select balance gate.
 	consumeMultiplier, _ := strconv.ParseInt(c.Query("consume_multiplier"), 10, 64)
-	offers, err := model.ListOffersForScript(scriptId, version, providerGroupId, normalizeConsumeMultiplier(consumeMultiplier))
+	// The viewer sees their own disabled nodes (to test them); others' disabled
+	// nodes are hidden.
+	offers, err := model.ListOffersForScript(scriptId, version, providerGroupId, normalizeConsumeMultiplier(consumeMultiplier), c.GetInt("id"))
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -74,6 +76,7 @@ func QuoteOrder(c *gin.Context) {
 		ProviderGroupId: req.ProviderGroupId,
 		RelayGB:         req.RelayGB, StorageGBHours: req.StorageGBHours,
 		ConsumeMultiplier: normalizeConsumeMultiplier(req.ConsumeMultiplier),
+		ClientId:          c.GetInt("id"),
 	})
 	if err != nil {
 		common.ApiErrorMsg(c, err.Error())

@@ -26,6 +26,9 @@ type QuoteRequest struct {
 	// ConsumeMultiplier scales the execution cost (units of work). Defaults to 1
 	// when zero; the pricing layer clamps values < 1 up to 1.
 	ConsumeMultiplier int64
+	// ClientId is the requesting user, so a provider can quote/select their own
+	// disabled node (self-test). Zero means "no owner context" (public offers).
+	ClientId int
 }
 
 // Quote is the itemized price returned to the client before ordering.
@@ -63,7 +66,7 @@ func resolveTemplate(scriptId, version int) (*model.PricingTemplate, error) {
 // - if NodeId is set, use that node's capability price (client picked an offer);
 // - else use the cheapest online offer for the script version.
 // Returns the price and the chosen node id (empty if none available).
-func resolveProviderPrice(scriptId, version int, nodeId, providerGroupId string, consumeMultiplier int64) (int64, string, error) {
+func resolveProviderPrice(scriptId, version int, nodeId, providerGroupId string, consumeMultiplier int64, viewerUserId int) (int64, string, error) {
 	if nodeId != "" {
 		price, ok, err := model.GetCapabilityPrice(nodeId, scriptId, version)
 		if err != nil {
@@ -74,7 +77,7 @@ func resolveProviderPrice(scriptId, version int, nodeId, providerGroupId string,
 		}
 		return price, nodeId, nil
 	}
-	offers, err := model.ListOffersForScript(scriptId, version, providerGroupId, consumeMultiplier)
+	offers, err := model.ListOffersForScript(scriptId, version, providerGroupId, consumeMultiplier, viewerUserId)
 	if err != nil {
 		return 0, "", err
 	}
@@ -114,7 +117,7 @@ func GetQuote(req QuoteRequest) (*Quote, error) {
 	if err != nil {
 		return nil, err
 	}
-	providerMicros, chosenNode, err := resolveProviderPrice(req.ScriptId, req.Version, req.NodeId, req.ProviderGroupId, normalizeMultiplier(req.ConsumeMultiplier))
+	providerMicros, chosenNode, err := resolveProviderPrice(req.ScriptId, req.Version, req.NodeId, req.ProviderGroupId, normalizeMultiplier(req.ConsumeMultiplier), req.ClientId)
 	if err != nil {
 		return nil, err
 	}
@@ -154,6 +157,7 @@ func Create(req CreateRequest) (*model.Order, bool, error) {
 		ProviderGroupId: req.ProviderGroupId,
 		RelayGB:         req.RelayGB, StorageGBHours: req.StorageGBHours,
 		ConsumeMultiplier: multiplier,
+		ClientId:          req.ClientId,
 	})
 	if err != nil {
 		return nil, false, err
