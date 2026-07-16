@@ -29,7 +29,10 @@ func ListScriptOffers(c *gin.Context) {
 	}
 	// Optional provider_group_id filter: restrict offers to a single provider.
 	providerGroupId := c.Query("provider_group_id")
-	offers, err := model.ListOffersForScript(scriptId, version, providerGroupId)
+	// Optional consume_multiplier: a node's remaining balance must exceed it for
+	// the offer to be available, mirroring the auto-select balance gate.
+	consumeMultiplier, _ := strconv.ParseInt(c.Query("consume_multiplier"), 10, 64)
+	offers, err := model.ListOffersForScript(scriptId, version, providerGroupId, normalizeConsumeMultiplier(consumeMultiplier))
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -37,13 +40,24 @@ func ListScriptOffers(c *gin.Context) {
 	common.ApiSuccess(c, offers)
 }
 
+// normalizeConsumeMultiplier floors the buyer-supplied units-of-work coefficient
+// at 1 so an omitted or invalid value never under-charges or disables the
+// node-balance gate.
+func normalizeConsumeMultiplier(m int64) int64 {
+	if m < 1 {
+		return 1
+	}
+	return m
+}
+
 type quoteRequest struct {
-	ScriptId        int     `json:"script_id"`
-	Version         int     `json:"version"`
-	NodeId          string  `json:"node_id"`           // optional: chosen provider offer
-	ProviderGroupId string  `json:"provider_group_id"` // optional: restrict auto-pick to a group
-	RelayGB         float64 `json:"relay_gb"`
-	StorageGBHours  float64 `json:"storage_gb_hours"`
+	ScriptId          int     `json:"script_id"`
+	Version           int     `json:"version"`
+	NodeId            string  `json:"node_id"`           // optional: chosen provider offer
+	ProviderGroupId   string  `json:"provider_group_id"` // optional: restrict auto-pick to a group
+	RelayGB           float64 `json:"relay_gb"`
+	StorageGBHours    float64 `json:"storage_gb_hours"`
+	ConsumeMultiplier int64   `json:"consume_multiplier"` // units of work; min 1
 }
 
 // QuoteOrder returns an itemized price breakdown for a script version using the
@@ -59,6 +73,7 @@ func QuoteOrder(c *gin.Context) {
 		ScriptId: req.ScriptId, Version: req.Version, NodeId: req.NodeId,
 		ProviderGroupId: req.ProviderGroupId,
 		RelayGB:         req.RelayGB, StorageGBHours: req.StorageGBHours,
+		ConsumeMultiplier: normalizeConsumeMultiplier(req.ConsumeMultiplier),
 	})
 	if err != nil {
 		common.ApiErrorMsg(c, err.Error())
@@ -68,13 +83,14 @@ func QuoteOrder(c *gin.Context) {
 }
 
 type createOrderRequest struct {
-	ScriptId        int     `json:"script_id"`
-	Version         int     `json:"version"`
-	NodeId          string  `json:"node_id"`           // optional: chosen provider offer
-	ProviderGroupId string  `json:"provider_group_id"` // optional: restrict auto-pick to a group
-	InputHash       string  `json:"input_hash"`
-	RelayGB         float64 `json:"relay_gb"`
-	StorageGBHours  float64 `json:"storage_gb_hours"`
+	ScriptId          int     `json:"script_id"`
+	Version           int     `json:"version"`
+	NodeId            string  `json:"node_id"`           // optional: chosen provider offer
+	ProviderGroupId   string  `json:"provider_group_id"` // optional: restrict auto-pick to a group
+	InputHash         string  `json:"input_hash"`
+	RelayGB           float64 `json:"relay_gb"`
+	StorageGBHours    float64 `json:"storage_gb_hours"`
+	ConsumeMultiplier int64   `json:"consume_multiplier"` // units of work; min 1
 }
 
 // CreateOrder creates an idempotent order. The Idempotency-Key header dedupes
@@ -97,10 +113,11 @@ func CreateOrder(c *gin.Context) {
 		Version:         req.Version,
 		NodeId:          req.NodeId,
 		ProviderGroupId: req.ProviderGroupId,
-		InputHash:       req.InputHash,
-		IdempotencyKey:  idempotencyKey,
-		RelayGB:         req.RelayGB,
-		StorageGBHours:  req.StorageGBHours,
+		InputHash:         req.InputHash,
+		IdempotencyKey:    idempotencyKey,
+		RelayGB:           req.RelayGB,
+		StorageGBHours:    req.StorageGBHours,
+		ConsumeMultiplier: normalizeConsumeMultiplier(req.ConsumeMultiplier),
 	})
 	if err != nil {
 		if errors.Is(err, order.ErrScriptNotExecutable) {

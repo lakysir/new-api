@@ -350,10 +350,15 @@ export type ProviderGroup = {
 export function listScriptOffers(
   scriptId: number,
   version: number,
-  providerGroupId?: string
+  providerGroupId?: string,
+  consumeMultiplier?: number
 ) {
   const params = new URLSearchParams({ version: String(version) })
   if (providerGroupId) params.set('provider_group_id', providerGroupId)
+  // A node's remaining balance must exceed the coefficient to be offered.
+  if (consumeMultiplier && consumeMultiplier > 1) {
+    params.set('consume_multiplier', String(consumeMultiplier))
+  }
   return unwrap<ScriptOffer[]>(
     api.get(`/api/scripts/${scriptId}/offers?${params.toString()}`)
   )
@@ -380,6 +385,7 @@ export function quoteOrder(body: {
   provider_group_id?: string
   relay_gb?: number
   storage_gb_hours?: number
+  consume_multiplier?: number
 }) {
   return unwrap<{ breakdown: PriceBreakdown; chosen_node_id: string }>(
     api.post('/api/orders/quote', body)
@@ -395,6 +401,7 @@ export function createOrder(
     input_hash: string
     relay_gb?: number
     storage_gb_hours?: number
+    consume_multiplier?: number
   },
   idempotencyKey: string
 ) {

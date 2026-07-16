@@ -48,7 +48,13 @@ type ScriptOffer struct {
 // execution cost" catalog (architecture §13.2). When providerGroupId is
 // non-empty the result is restricted to nodes in that group so a client can
 // filter by provider.
-func ListOffersForScript(scriptId, version int, providerGroupId string) ([]ScriptOffer, error) {
+// consumeMultiplier is the buyer's units-of-work coefficient (min 1): a node's
+// remaining balance must be strictly greater than it for the offer to be
+// available, since one execution consumes that many units on the target site.
+func ListOffersForScript(scriptId, version int, providerGroupId string, consumeMultiplier int64) ([]ScriptOffer, error) {
+	if consumeMultiplier < 1 {
+		consumeMultiplier = 1
+	}
 	cutoff := time.Now().Add(-NodePresenceTimeout).Unix()
 	now := time.Now().Unix()
 	type row struct {
@@ -91,10 +97,14 @@ func ListOffersForScript(scriptId, version int, providerGroupId string) ([]Scrip
 		busy := online && r.State == NodeStateBusy
 		testValid := r.TestExpiresAt > now
 		balanceValid := r.CategoryId == 0 || (r.BalanceOk && r.BalanceExpiresAt > now)
+		// The node must hold enough target-site balance to consume this run's
+		// units of work; > (not >=) so a node with exactly the coefficient is not
+		// drained to zero mid-execution.
+		balanceEnough := int64(r.RemainingQuota) > consumeMultiplier
 		// A busy node is online but cannot take a new task (single-task-per-node).
 		// A disabled node is never a candidate even when online and validated: the
 		// provider must explicitly turn it on.
-		available := r.Enabled && online && !busy && r.RemainingQuota > 0 && testValid && balanceValid
+		available := r.Enabled && online && !busy && balanceEnough && testValid && balanceValid
 		reason := ""
 		if !online {
 			reason = "NODE_OFFLINE"
@@ -104,6 +114,8 @@ func ListOffersForScript(scriptId, version int, providerGroupId string) ([]Scrip
 			reason = "NODE_BUSY"
 		} else if r.RemainingQuota <= 0 {
 			reason = "QUOTA_EXHAUSTED"
+		} else if !balanceEnough {
+			reason = "INSUFFICIENT_NODE_BALANCE"
 		} else if !testValid {
 			reason = "CAPABILITY_TEST_EXPIRED"
 		} else if !balanceValid {
@@ -147,7 +159,13 @@ func GetCapabilityPrice(nodeId string, scriptId, version int) (int64, bool, erro
 // providerGroupId (optional) restricts candidates to a single provider group so
 // the client can auto-pick within a chosen group (offer filtering); empty means
 // all groups.
-func ScheduleCandidates(scriptId, version int, maxPriceMicros int64, limit int, providerGroupId string) ([]CandidateNode, error) {
+// consumeMultiplier (min 1) is the run's units of work: a node's remaining
+// balance must be strictly greater than it to be eligible (mirrors
+// ListOffersForScript's INSUFFICIENT_NODE_BALANCE gate).
+func ScheduleCandidates(scriptId, version int, maxPriceMicros int64, limit int, providerGroupId string, consumeMultiplier int64) ([]CandidateNode, error) {
+	if consumeMultiplier < 1 {
+		consumeMultiplier = 1
+	}
 	cutoff := time.Now().Add(-NodePresenceTimeout).Unix()
 
 	type row struct {
@@ -169,7 +187,7 @@ func ScheduleCandidates(scriptId, version int, maxPriceMicros int64, limit int, 
 		Where("cap.script_id = ? AND cap.version = ?", scriptId, version).
 		Where("cap.status = ?", CapabilityStatusActive).
 		Where("cap.test_expires_at > ?", now).
-		Where("cap.remaining_quota > 0").
+		Where("cap.remaining_quota > ?", consumeMultiplier).
 		Where("cap.price_micros <= ?", maxPriceMicros).
 		Where("n.state = ?", NodeStateIdle).
 		Where("n.enabled = ?", true).

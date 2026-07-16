@@ -65,7 +65,12 @@ type PublishedScript = {
   description?: string
   latest_version?: number
 }
-type PurchaseDraft = { scriptId: number; version: number; configText: string }
+type PurchaseDraft = {
+  scriptId: number
+  version: number
+  configText: string
+  consumeMultiplier: number
+}
 type ViewMode = 'form' | 'json'
 
 // ClientTaskRecord is a locally-kept log of one purchase run. The sent config
@@ -256,9 +261,19 @@ function loadPurchaseDraft(): PurchaseDraft {
         typeof saved.configText === 'string'
           ? saved.configText
           : DEFAULT_CONFIG_TEXT,
+      consumeMultiplier:
+        Number.isInteger(saved.consumeMultiplier) &&
+        (saved.consumeMultiplier ?? 0) >= 1
+          ? (saved.consumeMultiplier ?? 1)
+          : 1,
     }
   } catch {
-    return { scriptId: 0, version: 1, configText: DEFAULT_CONFIG_TEXT }
+    return {
+      scriptId: 0,
+      version: 1,
+      configText: DEFAULT_CONFIG_TEXT,
+      consumeMultiplier: 1,
+    }
   }
 }
 
@@ -337,6 +352,12 @@ export function AitokenPurchasePage() {
   // Zero-based page index into the offers list.
   const [offersPage, setOffersPage] = useState(0)
   const [configText, setConfigText] = useState(initialDraft.configText)
+  // Units-of-work coefficient (min 1). The fee is base × this value; the script
+  // decides what it means (e.g. seconds of video, number of images). It travels
+  // the control plane so the backend prices it and gates provider balance.
+  const [consumeMultiplier, setConsumeMultiplier] = useState(
+    initialDraft.consumeMultiplier
+  )
   const [parametersView, setParametersView] = useState<ViewMode>(() =>
     loadViewMode('parameters')
   )
@@ -428,7 +449,10 @@ export function AitokenPurchasePage() {
   async function loadOffersFor(
     selectedScriptId: number,
     selectedVersion: number,
-    groupId = groupFilterId
+    groupId = groupFilterId,
+    // Explicit override so a just-changed multiplier is used before its state
+    // update commits (setState is async within the same handler tick).
+    multiplier = consumeMultiplier
   ) {
     setOffersLoading(true)
     setOffersPage(0)
@@ -436,7 +460,8 @@ export function AitokenPurchasePage() {
       const loaded = await listScriptOffers(
         selectedScriptId,
         selectedVersion,
-        groupId || undefined
+        groupId || undefined,
+        multiplier
       )
       setOffers(loaded)
       // Default to Auto: let the platform pick the best idle provider. Price the
@@ -448,6 +473,7 @@ export function AitokenPurchasePage() {
           script_id: selectedScriptId,
           version: selectedVersion,
           provider_group_id: groupId || undefined,
+          consume_multiplier: multiplier,
         })
         setQuote(priced.breakdown)
       } catch {
@@ -545,12 +571,13 @@ export function AitokenPurchasePage() {
           scriptId,
           version,
           configText,
+          consumeMultiplier,
         } satisfies PurchaseDraft)
       )
     } catch {
       // Storage may be unavailable or full; the page remains usable without persistence.
     }
-  }, [scriptId, version, configText])
+  }, [scriptId, version, configText, consumeMultiplier])
 
   useEffect(() => {
     try {
@@ -583,6 +610,17 @@ export function AitokenPurchasePage() {
     }
   }
 
+  // onMultiplierChange floors the coefficient at 1 and reloads offers so the
+  // provider-balance gate (remaining balance must exceed the coefficient) and
+  // the quote both reflect the new units of work.
+  function onMultiplierChange(raw: string) {
+    const parsed = Math.floor(Number(raw))
+    const next = Number.isFinite(parsed) && parsed >= 1 ? parsed : 1
+    setConsumeMultiplier(next)
+    setQuote(null)
+    if (scriptId) void loadOffersFor(scriptId, version, groupFilterId, next)
+  }
+
   async function onQuote() {
     if (!scriptId) {
       toast.error(t('Select a script first'))
@@ -594,6 +632,7 @@ export function AitokenPurchasePage() {
         version,
         node_id: autoSelect ? undefined : nodeId || undefined,
         provider_group_id: autoSelect ? groupFilterId || undefined : undefined,
+        consume_multiplier: consumeMultiplier,
       })
       setQuote(q.breakdown)
       if (!autoSelect && q.chosen_node_id) setNodeId(q.chosen_node_id)
@@ -608,6 +647,7 @@ export function AitokenPurchasePage() {
         script_id: scriptId,
         version,
         node_id: selectedNodeId,
+        consume_multiplier: consumeMultiplier,
       })
       setQuote(priced.breakdown)
     } catch (e) {
@@ -626,6 +666,7 @@ export function AitokenPurchasePage() {
         script_id: scriptId,
         version,
         provider_group_id: groupFilterId || undefined,
+        consume_multiplier: consumeMultiplier,
       })
         .then((priced) => setQuote(priced.breakdown))
         .catch(() => setQuote(null))
@@ -693,6 +734,7 @@ export function AitokenPurchasePage() {
             ? groupFilterId || undefined
             : undefined,
           input_hash: inputHash,
+          consume_multiplier: consumeMultiplier,
         },
         key
       )
@@ -1122,6 +1164,9 @@ export function AitokenPurchasePage() {
                               t('Capability test expired')}
                             {o.unavailable_reason === 'BALANCE_CHECK_EXPIRED' &&
                               t('Balance check expired')}
+                            {o.unavailable_reason ===
+                              'INSUFFICIENT_NODE_BALANCE' &&
+                              t('Insufficient node balance for this amount')}
                           </span>
                         )}
                       </label>
@@ -1162,6 +1207,33 @@ export function AitokenPurchasePage() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+
+        {/* Consume multiplier: units of work for one execution (min 1). Scales
+            the fee (base × coefficient) and is sent to the provider so the
+            script can act on it (e.g. seconds of video, number of images). */}
+        <div className='mt-4 rounded-lg border p-4'>
+          <div className='flex flex-wrap items-center justify-between gap-3'>
+            <div>
+              <div className='text-sm font-medium'>
+                {t('Consume multiplier')}
+              </div>
+              <div className='text-muted-foreground mt-1 text-xs'>
+                {t(
+                  'Units of work for one run (min 1). The fee is the base price times this value; the script decides what it means (e.g. seconds of video, number of images).'
+                )}
+              </div>
+            </div>
+            <Input
+              className='h-9 w-24'
+              type='number'
+              min={1}
+              step={1}
+              value={consumeMultiplier}
+              onChange={(e) => onMultiplierChange(e.target.value)}
+              aria-label={t('Consume multiplier')}
+            />
           </div>
         </div>
 

@@ -340,7 +340,7 @@ func TestListOffersAndCapabilityPrice(t *testing.T) {
 	seedIdleNodeCap(t, "off_node_a", 900, scriptId, v.Version, 500000)
 	seedIdleNodeCap(t, "off_node_b", 901, scriptId, v.Version, 300000)
 
-	offers, err := ListOffersForScript(scriptId, v.Version, "")
+	offers, err := ListOffersForScript(scriptId, v.Version, "", 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -396,7 +396,7 @@ func TestScheduleRanksBySuccessRate(t *testing.T) {
 		_ = RecordTaskOutcome("sr_low", false)
 	}
 
-	cands, err := ScheduleCandidates(scriptId, v.Version, 200000, 10, "")
+	cands, err := ScheduleCandidates(scriptId, v.Version, 200000, 10, "", 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -423,7 +423,7 @@ func TestBusyNodeExcludedSoLowSuccessCanRun(t *testing.T) {
 	if err := DB.Model(&Node{}).Where("id = ?", "busy_high").Update("state", NodeStateBusy).Error; err != nil {
 		t.Fatal(err)
 	}
-	cands, _ := ScheduleCandidates(scriptId, v.Version, 200000, 10, "")
+	cands, _ := ScheduleCandidates(scriptId, v.Version, 200000, 10, "", 1)
 	if len(cands) != 1 || cands[0].NodeId != "idle_low" {
 		t.Fatalf("busy high-success node must be excluded, leaving idle_low; got %+v", cands)
 	}
@@ -453,7 +453,7 @@ func TestEnableCapabilityRequiresBalanceCheck(t *testing.T) {
 	if err := EnableCapability(cap); err != nil {
 		t.Fatalf("enable should succeed after balance check: %v", err)
 	}
-	cands, _ := ScheduleCandidates(scriptId, sv.Version, 200000, 10, "")
+	cands, _ := ScheduleCandidates(scriptId, sv.Version, 200000, 10, "", 1)
 	if len(cands) != 1 || cands[0].NodeId != "bc_node" {
 		t.Fatalf("balance-checked node should be schedulable, got %+v", cands)
 	}

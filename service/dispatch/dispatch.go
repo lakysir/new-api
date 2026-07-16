@@ -49,6 +49,11 @@ type taskOfferPayload struct {
 	LeaseExpiresAt  int64  `json:"lease_expires_at"`
 	MaxDurationSecs int    `json:"max_duration_seconds"`
 	TargetSite      string `json:"target_site,omitempty"`
+	// ConsumeMultiplier is the buyer's units-of-work coefficient (min 1). It is
+	// authoritative (set from the paid order, not the E2EE config) so the plugin
+	// merges it into the config the script reads; the script decides what it
+	// means (e.g. seconds of video, number of images).
+	ConsumeMultiplier int64 `json:"consume_multiplier"`
 }
 
 // Dispatch matches order to the best candidate node and reserves it. attempt is
@@ -75,7 +80,7 @@ func Dispatch(orderId string, attempt int) (*Result, error) {
 		return nil, ErrOrderNotMatchable
 	}
 
-	candidates, err := model.ScheduleCandidates(o.ScriptId, o.Version, o.MaxAmountMicros, 10, o.ProviderGroupId)
+	candidates, err := model.ScheduleCandidates(o.ScriptId, o.Version, o.MaxAmountMicros, 10, o.ProviderGroupId, o.ConsumeMultiplier)
 	if err != nil {
 		return nil, err
 	}
@@ -119,11 +124,15 @@ func Dispatch(orderId string, attempt int) (*Result, error) {
 				return rerr
 			}
 			leaseExpires := time.Now().Add(DefaultLeaseTTL).Unix()
+			multiplier := o.ConsumeMultiplier
+			if multiplier < 1 {
+				multiplier = 1
+			}
 			payload, _ := json.Marshal(taskOfferPayload{
 				TaskId: taskId, Attempt: attempt, OrderId: orderId,
 				ScriptId: o.ScriptId, ScriptVersion: o.Version, InputHash: o.InputHash,
 				OfferedMicros: best.PriceMicros, LeaseExpiresAt: leaseExpires, MaxDurationSecs: 180,
-				TargetSite: targetSite,
+				TargetSite: targetSite, ConsumeMultiplier: multiplier,
 			})
 			ev, eerr := model.EnqueueOutboxTx(tx, "task.offer", taskId, string(payload))
 			if eerr != nil {

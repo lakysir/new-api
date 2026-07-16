@@ -31,6 +31,37 @@ func TestComputeBreakdownSumEqualsMax(t *testing.T) {
 	}
 }
 
+func TestConsumeMultiplierScalesBidAndComponents(t *testing.T) {
+	// Multiplier 3 scales the provider bid and every component derived from it,
+	// so the whole breakdown is 3x the single-unit case and stays balanced.
+	b, err := Compute(100000, baseTemplate(), Estimate{ConsumeMultiplier: 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b.SumComponents() != b.MaxCustomerMicros {
+		t.Fatalf("components %d must equal max %d", b.SumComponents(), b.MaxCustomerMicros)
+	}
+	// provider 300000 + author 9000 + platform 24000 + risk 3000 = 336000 (3x 112000).
+	if b.MaxCustomerMicros != 336000 {
+		t.Fatalf("expected 336000, got %d", b.MaxCustomerMicros)
+	}
+	if b.ProviderMicros != 300000 || b.AuthorMicros != 9000 || b.PlatformFeeMicros != 24000 || b.RiskReserveMicros != 3000 {
+		t.Fatalf("unexpected scaled breakdown: %+v", b)
+	}
+}
+
+func TestConsumeMultiplierFlooredAtOne(t *testing.T) {
+	// A zero/negative multiplier (e.g. an omitted field) must behave like 1, not
+	// zero out the charge.
+	base, _ := Compute(100000, baseTemplate(), Estimate{})
+	for _, m := range []int64{0, -5} {
+		b, _ := Compute(100000, baseTemplate(), Estimate{ConsumeMultiplier: m})
+		if b.MaxCustomerMicros != base.MaxCustomerMicros {
+			t.Fatalf("multiplier %d must act as 1: got %d, want %d", m, b.MaxCustomerMicros, base.MaxCustomerMicros)
+		}
+	}
+}
+
 func TestPlatformFeeMinimumApplies(t *testing.T) {
 	tpl := baseTemplate()
 	tpl.PlatformFeeMinMicros = 5000

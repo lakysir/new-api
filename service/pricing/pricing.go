@@ -49,6 +49,12 @@ type Template struct {
 type Estimate struct {
 	RelayGB        float64 // estimated relay traffic
 	StorageGBHours float64 // estimated temporary storage
+	// ConsumeMultiplier scales the provider bid (and therefore the author share,
+	// platform fee and risk reserve derived from it) so a single execution can
+	// cost N units of work — e.g. seconds of video or number of images the buyer
+	// requests. Defaults to 1 (a value < 1 is clamped to 1); relay/storage fees
+	// are usage-based and are not scaled by it.
+	ConsumeMultiplier int64
 }
 
 // Breakdown is the itemized result. All fields are micro-USD. MaxCustomerMicros
@@ -108,6 +114,16 @@ func Compute(bidMicros int64, t Template, est Estimate) (Breakdown, error) {
 	if err := t.validate(); err != nil {
 		return Breakdown{}, err
 	}
+
+	// The consume multiplier scales the units of work in one execution. Clamp to
+	// a floor of 1 so a missing/invalid value never under-charges, then apply it
+	// to the provider bid; author/platform/risk are derived off the scaled bid so
+	// every component and MaxCustomerMicros scale together and stay balanced.
+	multiplier := est.ConsumeMultiplier
+	if multiplier < 1 {
+		multiplier = 1
+	}
+	bidMicros *= multiplier
 
 	provider := bidMicros
 	author := applyRate(bidMicros, t.AuthorShareRatePPM)

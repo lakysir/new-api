@@ -23,6 +23,9 @@ type QuoteRequest struct {
 	ProviderGroupId string // optional: restrict auto-pick to a provider group
 	RelayGB         float64
 	StorageGBHours  float64
+	// ConsumeMultiplier scales the execution cost (units of work). Defaults to 1
+	// when zero; the pricing layer clamps values < 1 up to 1.
+	ConsumeMultiplier int64
 }
 
 // Quote is the itemized price returned to the client before ordering.
@@ -60,7 +63,7 @@ func resolveTemplate(scriptId, version int) (*model.PricingTemplate, error) {
 // - if NodeId is set, use that node's capability price (client picked an offer);
 // - else use the cheapest online offer for the script version.
 // Returns the price and the chosen node id (empty if none available).
-func resolveProviderPrice(scriptId, version int, nodeId, providerGroupId string) (int64, string, error) {
+func resolveProviderPrice(scriptId, version int, nodeId, providerGroupId string, consumeMultiplier int64) (int64, string, error) {
 	if nodeId != "" {
 		price, ok, err := model.GetCapabilityPrice(nodeId, scriptId, version)
 		if err != nil {
@@ -71,7 +74,7 @@ func resolveProviderPrice(scriptId, version int, nodeId, providerGroupId string)
 		}
 		return price, nodeId, nil
 	}
-	offers, err := model.ListOffersForScript(scriptId, version, providerGroupId)
+	offers, err := model.ListOffersForScript(scriptId, version, providerGroupId, consumeMultiplier)
 	if err != nil {
 		return 0, "", err
 	}
@@ -94,6 +97,15 @@ func resolveProviderPrice(scriptId, version int, nodeId, providerGroupId string)
 // ErrNoOffer is returned when no active provider offer exists for a version.
 var ErrNoOffer = errors.New("no provider offer available for this script version")
 
+// normalizeMultiplier floors the consume multiplier at 1 so a zero/negative
+// value (e.g. an omitted field) never under-charges or disables the balance gate.
+func normalizeMultiplier(m int64) int64 {
+	if m < 1 {
+		return 1
+	}
+	return m
+}
+
 // GetQuote computes a price breakdown using the real provider price (chosen
 // offer or cheapest). The client never sets the provider's cut — only which
 // offer / a max price.
@@ -102,12 +114,13 @@ func GetQuote(req QuoteRequest) (*Quote, error) {
 	if err != nil {
 		return nil, err
 	}
-	providerMicros, chosenNode, err := resolveProviderPrice(req.ScriptId, req.Version, req.NodeId, req.ProviderGroupId)
+	providerMicros, chosenNode, err := resolveProviderPrice(req.ScriptId, req.Version, req.NodeId, req.ProviderGroupId, normalizeMultiplier(req.ConsumeMultiplier))
 	if err != nil {
 		return nil, err
 	}
 	bd, err := pricing.Compute(providerMicros, tpl.ToPricingTemplate(), pricing.Estimate{
 		RelayGB: req.RelayGB, StorageGBHours: req.StorageGBHours,
+		ConsumeMultiplier: normalizeMultiplier(req.ConsumeMultiplier),
 	})
 	if err != nil {
 		return nil, err
@@ -127,16 +140,20 @@ type CreateRequest struct {
 	IdempotencyKey  string
 	RelayGB         float64
 	StorageGBHours  float64
+	// ConsumeMultiplier scales the execution cost (units of work). Defaults to 1.
+	ConsumeMultiplier int64
 }
 
 // Create makes an idempotent order: it prices the bid, snapshots the breakdown
 // and inserts the order atomically. Re-submitting the same idempotency key
 // returns the existing order without reserving funds again (T-002).
 func Create(req CreateRequest) (*model.Order, bool, error) {
+	multiplier := normalizeMultiplier(req.ConsumeMultiplier)
 	quote, err := GetQuote(QuoteRequest{
 		ScriptId: req.ScriptId, Version: req.Version, NodeId: req.NodeId,
 		ProviderGroupId: req.ProviderGroupId,
 		RelayGB:         req.RelayGB, StorageGBHours: req.StorageGBHours,
+		ConsumeMultiplier: multiplier,
 	})
 	if err != nil {
 		return nil, false, err
@@ -144,16 +161,17 @@ func Create(req CreateRequest) (*model.Order, bool, error) {
 	bd := quote.Breakdown
 
 	o := &model.Order{
-		Id:              model.NewOrderId(),
-		ClientId:        req.ClientId,
-		ScriptId:        req.ScriptId,
-		Version:         req.Version,
-		State:           model.OrderCreated,
-		InputHash:       req.InputHash,
-		IdempotencyKey:  req.IdempotencyKey,
-		ChosenNodeId:    quote.ChosenNodeId,
-		ProviderGroupId: req.ProviderGroupId,
-		MaxAmountMicros: bd.MaxCustomerMicros,
+		Id:                model.NewOrderId(),
+		ClientId:          req.ClientId,
+		ScriptId:          req.ScriptId,
+		Version:           req.Version,
+		State:             model.OrderCreated,
+		InputHash:         req.InputHash,
+		IdempotencyKey:    req.IdempotencyKey,
+		ChosenNodeId:      quote.ChosenNodeId,
+		ProviderGroupId:   req.ProviderGroupId,
+		MaxAmountMicros:   bd.MaxCustomerMicros,
+		ConsumeMultiplier: multiplier,
 	}
 	snap := &model.OrderPriceSnapshot{
 		Currency:                 bd.Currency,
