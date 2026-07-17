@@ -113,6 +113,29 @@ func UnpublishScriptModel(c *gin.Context) {
 	common.ApiSuccess(c, nil)
 }
 
+// GetScriptModelDoc returns the caller-facing API documentation for a bridged
+// model (parameter/result schemas, defaults, consume-multiplier semantics).
+// Public: it exposes only the script's declared schemas and metadata — no code,
+// no signature, no operator identity — so it can back the model-square doc entry
+// for end users. Returns 404 when the model is not a marketplace bridge model.
+func GetScriptModelDoc(c *gin.Context) {
+	modelName := strings.TrimSpace(c.Param("model_name"))
+	if modelName == "" {
+		common.ApiErrorMsg(c, "model_name is required")
+		return
+	}
+	doc, err := model.GetScriptModelDoc(modelName)
+	if err != nil {
+		if errors.Is(err, model.ErrModelBindingNotFound) {
+			common.ApiErrorMsg(c, "not a marketplace model")
+			return
+		}
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, doc)
+}
+
 // ListScriptModelBindings returns all marketplace model bindings so the console
 // can show which published scripts are listed as models.
 func ListScriptModelBindings(c *gin.Context) {

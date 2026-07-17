@@ -75,6 +75,20 @@ Key tests:
 - `service/dataplane/vector_test.go` — cross-language vector (already present).
 - `model/script_model_binding_test.go` — binding CRUD + uniqueness.
 
+## Per-model API docs (model square)
+
+Each bridged model has different inputs (the script's `script_params` JSON
+Schema), so a generic sample is useless. A public endpoint serves per-model
+docs and the model-square detail drawer renders them:
+
+- `GET /api/scripts/model-doc/:model_name` (public) → title, description,
+  task_type, `script_params`/`result_schema` schemas, operator `param_template`,
+  consume-multiplier and timeout. No secrets (no code/signature/operator id).
+- Frontend `features/pricing/components/marketplace-model-doc.tsx` renders inside
+  the model-details **API tab**: a parameter table parsed from the schema, the
+  async submit→poll flow, and concrete `/v1/videos` cURL samples with the model's
+  real fields. Self-hides for non-marketplace models.
+
 ## Files
 
 - `model/script_model_binding.go` — binding table + channel provisioning.

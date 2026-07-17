@@ -191,3 +191,50 @@ func UnpublishScriptModel(modelName string) error {
 	}
 	return syncMarketplaceChannelModels()
 }
+
+// ScriptModelDoc is the public, caller-facing documentation for one bridged
+// model: what it is, the parameter/result JSON Schemas the script declares, the
+// operator's param template (defaults merged under the request), and the
+// consume-multiplier semantics. It carries no secrets (no code, no signature).
+type ScriptModelDoc struct {
+	ModelName         string `json:"model_name"`
+	ScriptId          int    `json:"script_id"`
+	Version           int    `json:"version"`
+	Title             string `json:"title"`
+	Description       string `json:"description"`
+	TaskType          string `json:"task_type"`
+	ScriptParams      string `json:"script_params"`  // params JSON Schema
+	ResultSchema      string `json:"result_schema"`  // result JSON Schema
+	ParamTemplate     string `json:"param_template"` // operator defaults (JSON)
+	ConsumeMultiplier int64  `json:"consume_multiplier"`
+	TimeoutSeconds    int    `json:"timeout_seconds"`
+}
+
+// GetScriptModelDoc assembles the caller-facing documentation for a bridged
+// model name by joining its binding to the fixed script version. Returns
+// ErrModelBindingNotFound when the name is not a marketplace model.
+func GetScriptModelDoc(modelName string) (*ScriptModelDoc, error) {
+	binding, err := GetBindingByModelName(modelName)
+	if err != nil {
+		return nil, err
+	}
+	// Use GetScriptVersion (not the executable variant) so docs stay visible
+	// even if the version was later revoked — the model may still be listed.
+	sv, err := GetScriptVersion(binding.ScriptId, binding.Version)
+	if err != nil {
+		return nil, err
+	}
+	return &ScriptModelDoc{
+		ModelName:         binding.ModelName,
+		ScriptId:          binding.ScriptId,
+		Version:           binding.Version,
+		Title:             sv.Title,
+		Description:       sv.Description,
+		TaskType:          sv.TaskType,
+		ScriptParams:      sv.ScriptParams,
+		ResultSchema:      sv.ResultSchema,
+		ParamTemplate:     binding.ParamTemplate,
+		ConsumeMultiplier: binding.ConsumeMultiplier,
+		TimeoutSeconds:    sv.TimeoutSeconds,
+	}, nil
+}

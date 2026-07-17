@@ -26,6 +26,7 @@ For commercial licensing, please contact support@quantumnous.com
 import {
   DIR_CLIENT_TO_PROVIDER,
   DIR_PROVIDER_TO_CLIENT,
+  MAX_PLAINTEXT_BYTES,
   Opener,
   Sealer,
   deriveAesKey,
@@ -173,9 +174,15 @@ export class ClientRelaySession {
   /** Encrypt and send the config to the provider. */
   async sendConfig(config: unknown): Promise<void> {
     if (!this.#sealer) throw new Error('session not established')
-    const frame = await this.#sealer.seal(
-      new TextEncoder().encode(JSON.stringify(config))
-    )
+    const plaintext = new TextEncoder().encode(JSON.stringify(config))
+    // Reject oversized params before sealing: the relay caps each frame, so a
+    // huge payload (e.g. an inline base64 image) would be dropped mid-stream.
+    if (plaintext.length > MAX_PLAINTEXT_BYTES) {
+      throw new Error(
+        `Parameters are too large (${plaintext.length} bytes). The limit is ${MAX_PLAINTEXT_BYTES} bytes; pass a URL instead of inline data.`
+      )
+    }
+    const frame = await this.#sealer.seal(plaintext)
     this.#socket!.send(tagFrame(TAG_DATA, frame) as unknown as ArrayBuffer)
   }
 

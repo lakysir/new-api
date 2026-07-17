@@ -29,3 +29,43 @@ export async function getPricing(): Promise<PricingData> {
   const res = await api.get('/api/pricing')
   return res.data
 }
+
+// ----------------------------------------------------------------------------
+// Marketplace bridge model docs
+// ----------------------------------------------------------------------------
+
+// A bridged marketplace model's caller-facing API documentation: the script's
+// declared parameter/result JSON Schemas, the operator's default template, and
+// consume-multiplier semantics. Absent for non-bridge models.
+export type MarketplaceModelDoc = {
+  model_name: string
+  script_id: number
+  version: number
+  title: string
+  description: string
+  task_type: string
+  script_params: string
+  result_schema: string
+  param_template: string
+  consume_multiplier: number
+  timeout_seconds: number
+}
+
+// getMarketplaceModelDoc fetches per-model bridge docs. Resolves to null when
+// the model is not a marketplace bridge model (or on any error), so callers can
+// simply skip rendering the bridge doc section.
+export async function getMarketplaceModelDoc(
+  modelName: string
+): Promise<MarketplaceModelDoc | null> {
+  try {
+    const res = await api.get(
+      `/api/scripts/model-doc/${encodeURIComponent(modelName)}`
+    )
+    if (res.data?.success && res.data?.data) {
+      return res.data.data as MarketplaceModelDoc
+    }
+    return null
+  } catch {
+    return null
+  }
+}

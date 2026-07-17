@@ -265,6 +265,9 @@ func SetApiRouter(router *gin.Engine) {
 			scriptRoute.GET("/:id/offers", middleware.TryUserAuth(), controller.ListScriptOffers)
 			// Target-site categories (public list; operator create/config).
 			scriptRoute.GET("/categories", controller.ListCategories)
+			// Public: caller-facing API doc for a bridged model (schemas +
+			// defaults, no secrets). Backs the model-square doc entry.
+			scriptRoute.GET("/model-doc/:model_name", controller.GetScriptModelDoc)
 
 			scriptUserRoute := scriptRoute.Group("/")
 			scriptUserRoute.Use(middleware.UserAuth())

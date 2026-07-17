@@ -19,6 +19,24 @@ const (
 // ErrPeerNotConnected is returned when the other side hasn't joined yet.
 var ErrPeerNotConnected = errors.New("relay peer not connected")
 
+const (
+	// MaxPlaintextBytes caps the plaintext (config or result) a single relay
+	// frame may carry, in either direction. Even though the relay only forwards
+	// opaque ciphertext, every frame still crosses the operator's bandwidth and
+	// memory, so an unbounded payload (e.g. a base64-encoded image stuffed into
+	// the config, or a huge inline result) would let a client or provider
+	// saturate the relay. 2 MiB is generous for real config/result JSON: video
+	// scripts return a URL, not inline media. Callers should reject oversized
+	// plaintext before sealing so the peer sees a clear error.
+	MaxPlaintextBytes = 2 * 1024 * 1024
+	// MaxFrameBytes is the wire-frame ceiling the relay enforces on each socket.
+	// It is MaxPlaintextBytes plus headroom for the AEAD framing overhead
+	// (1-byte tag + 8-byte sequence header + 16-byte GCM tag) so a full-size
+	// legitimate payload still fits, while anything materially larger is dropped
+	// by the WebSocket read limit (which sends a close frame and ends the read).
+	MaxFrameBytes = MaxPlaintextBytes + 1024
+)
+
 // Conn is the minimal write surface a relayed connection must provide. The WSS
 // handler adapts *websocket.Conn; tests use a fake.
 type Conn interface {

@@ -48,6 +48,7 @@ import {
 } from '../lib/mock-stats'
 import { getVisibleModelGroups, replaceModelInPath } from '../lib/model-helpers'
 import type { PricingModel } from '../types'
+import { MarketplaceModelDoc } from './marketplace-model-doc'
 
 // ---------------------------------------------------------------------------
 // Code-sample registry
@@ -778,6 +779,10 @@ export function ModelDetailsApi(props: {
 }) {
   return (
     <div className='space-y-6'>
+      {/* Bridged marketplace models declare their own params; this renders the
+          script's real schema + async /v1/videos samples above the generic
+          sections, and self-hides for non-marketplace models. */}
+      <MarketplaceModelDoc modelName={props.model.model_name || ''} />
       <CodeSamplesSection model={props.model} endpointMap={props.endpointMap} />
       <AuthSection />
       <SupportedParametersSection model={props.model} />

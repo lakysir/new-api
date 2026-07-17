@@ -110,7 +110,11 @@ func HandleDataPlaneRelay(c *gin.Context) {
 		_ = conn.Close()
 	}()
 
-	conn.SetReadLimit(8 * 1024 * 1024) // allow large result/file frames
+	// Cap each frame at the shared data-plane limit. This is the authoritative
+	// bandwidth guard: E2EE hides the content but the ciphertext still crosses
+	// the relay, so an oversized config/result frame is dropped here (gorilla
+	// sends a close frame and ends the read) regardless of what the client does.
+	conn.SetReadLimit(relayhub.MaxFrameBytes)
 
 	// Keepalive: an idle relay (provider busy executing, no frames flowing) must
 	// not be dropped by a proxy idle timeout before the result is delivered. Ping

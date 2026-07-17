@@ -28,6 +28,12 @@ export const PROTOCOL_VERSION = '1.0'
 export const DIR_CLIENT_TO_PROVIDER = 'c2p'
 export const DIR_PROVIDER_TO_CLIENT = 'p2c'
 
+// MAX_PLAINTEXT_BYTES caps the config plaintext a single frame may carry, and
+// must match relayhub.MaxPlaintextBytes on the server. E2EE ciphertext still
+// crosses the operator's relay, so oversized params (e.g. an inline base64
+// image) are rejected before sealing — the relay would drop the frame anyway.
+export const MAX_PLAINTEXT_BYTES = 2 * 1024 * 1024
+
 export interface SessionContext {
   taskId: string
   attempt: number

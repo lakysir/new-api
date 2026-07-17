@@ -266,6 +266,13 @@ func runClientSessionOn(hub *relayhub.Hub, orderID string, attempt, clientID int
 		return nil, ErrHandshakeTimeout
 	}
 
+	// Reject oversized config before sealing: the relay would drop the frame
+	// mid-stream anyway (MaxFrameBytes read limit), so fail fast with a clear
+	// reason the adaptor can surface on the task.
+	if len(config) > relayhub.MaxPlaintextBytes {
+		return nil, fmt.Errorf("config payload %d bytes exceeds %d byte limit", len(config), relayhub.MaxPlaintextBytes)
+	}
+
 	// Encrypt and send the config to the provider.
 	s.mu.Lock()
 	frame := s.sealer.Seal(config)
