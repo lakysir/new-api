@@ -35,6 +35,26 @@ func modelPriceNotConfiguredError(modelName string, userId int) error {
 // https://docs.claude.com/en/docs/build-with-claude/prompt-caching#1-hour-cache-duration
 const claudeCacheCreation1hMultiplier = 6 / 3.75
 
+// chargeQuantityHeader lets a caller bill several units in a single request.
+// Used by the browser extension's per-task charging (fpbrowser-use): one
+// /v1/chat/completions call with X-Charge-Quantity: k deducts k units instead
+// of 1. The value is applied as an OtherRatio (multiplies the final settled
+// quota) and to the pre-consumed quota so reservation matches settlement.
+const chargeQuantityHeader = "X-Charge-Quantity"
+
+// chargeQuantity returns the integer quantity coefficient from the request
+// header, clamped to >= 1. Absent/invalid/<=1 header => 1 (no change).
+func chargeQuantity(c *gin.Context) int {
+	if c == nil {
+		return 1
+	}
+	q := common.String2Int(c.GetHeader(chargeQuantityHeader))
+	if q < 1 {
+		return 1
+	}
+	return q
+}
+
 // HandleGroupRatio checks for "auto_group" in the context and updates the group ratio and relayInfo.UsingGroup if present
 func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) types.GroupRatioInfo {
 	groupRatioInfo := types.GroupRatioInfo{
@@ -156,6 +176,14 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 		QuotaToPreConsume:    preConsumedQuota,
 	}
 
+	// Apply the charge-quantity coefficient: bills k units in one request. The
+	// OtherRatio scales the settled quota (see service/text_quota.go); scale the
+	// pre-consumed quota too so reservation and settlement stay in sync.
+	if q := chargeQuantity(c); q > 1 && !freeModel {
+		priceData.AddOtherRatio("charge_quantity", float64(q))
+		priceData.QuotaToPreConsume = preConsumedQuota * q
+	}
+
 	if common.DebugEnabled {
 		logger.LogDebug(c, "model_price_helper result: %s", priceData.ToSetting())
 	}
@@ -221,6 +249,14 @@ func ModelPriceHelperPerCall(c *gin.Context, info *relaycommon.RelayInfo) (types
 		Quota:          quota,
 		GroupRatioInfo: groupRatioInfo,
 	}
+
+	// Charge-quantity coefficient (per-call/Task path): the Task settlement in
+	// relay_task.go multiplies Quota by every OtherRatio, so add the coefficient
+	// as an OtherRatio only — do NOT also pre-multiply Quota, or it double-counts.
+	if q := chargeQuantity(c); q > 1 && !freeModel {
+		priceData.AddOtherRatio("charge_quantity", float64(q))
+	}
+
 	return priceData, nil
 }
 
