@@ -41,12 +41,16 @@ import {
   listCategories,
   listPendingScripts,
   listPublishedScriptVersions,
+  listScriptModelBindings,
+  publishScriptAsModel,
   reviewScript,
   revokeScriptVersion,
   setCategoryBalanceScript,
+  unpublishScriptModel,
   updateScriptVersionPricing,
   type PlatformSigningKey,
   type ScriptCategory,
+  type ScriptModelBinding,
 } from './api'
 import { EarningsSummary } from './earnings-summary'
 import { formatUnix } from './lib/format'
@@ -191,10 +195,34 @@ export function ScriptReviewConsolePage() {
   // Platform signing key status. Signing is mandatory for publishing.
   const [signingKey, setSigningKey] = useState<PlatformSigningKey | null>(null)
   const [generatingKey, setGeneratingKey] = useState(false)
+  // Marketplace model bindings: published scripts listed as callable new-api
+  // models. Keyed for lookup by script id (a script has at most one binding in
+  // the MVP — the latest published version it was listed under).
+  const [modelBindings, setModelBindings] = useState<ScriptModelBinding[]>([])
+  // Draft model name per script id, typed before clicking "List as model".
+  const [modelNameDrafts, setModelNameDrafts] = useState<
+    Record<number, string>
+  >({})
+  const [publishingScriptId, setPublishingScriptId] = useState(0)
 
   const categoryNames = useMemo(
     () => new Map(categories.map((category) => [category.id, category.name])),
     [categories]
+  )
+  // Script ids designated as a category's balance-probe script. These read a
+  // site's balance without generating, so they can never be listed as models.
+  const balanceScriptIds = useMemo(
+    () =>
+      new Set(
+        categories.map((category) => category.balance_script_id).filter(Boolean)
+      ),
+    [categories]
+  )
+  // Model binding per script id for quick "already listed as model" lookup.
+  const bindingByScriptId = useMemo(
+    () =>
+      new Map(modelBindings.map((binding) => [binding.script_id, binding])),
+    [modelBindings]
   )
   const publishedGroups = useMemo(() => {
     const groups = new Map<number, ScriptVersion[]>()
@@ -222,16 +250,19 @@ export function ScriptReviewConsolePage() {
   async function load() {
     setLoading(true)
     try {
-      const [pendingScripts, versions, cats, key] = await Promise.all([
-        listPendingScripts(),
-        listPublishedScriptVersions(),
-        listCategories(),
-        getPlatformSigningKey(),
-      ])
+      const [pendingScripts, versions, cats, key, bindings] =
+        await Promise.all([
+          listPendingScripts(),
+          listPublishedScriptVersions(),
+          listCategories(),
+          getPlatformSigningKey(),
+          listScriptModelBindings(),
+        ])
       setPending(pendingScripts)
       setPublishedVersions(versions)
       setCategories(cats)
       setSigningKey(key)
+      setModelBindings(bindings)
       setRefreshTick((n) => n + 1)
     } catch (e) {
       toast.error(String((e as Error).message))
@@ -409,6 +440,52 @@ export function ScriptReviewConsolePage() {
     try {
       await deleteScriptVersion(version.script_id, version.version)
       toast.success(t('Version deleted'))
+      await load()
+    } catch (e) {
+      toast.error(String((e as Error).message))
+    }
+  }
+
+  // onPublishModel lists a published script version as a callable new-api
+  // model. The model name must be unique; orders run under the operator's
+  // marketplace balance. Uses the version shown in the row (latest published).
+  async function onPublishModel(version: ScriptVersion) {
+    const modelName = (modelNameDrafts[version.script_id] || '').trim()
+    if (!modelName) {
+      toast.error(t('Enter a model name first'))
+      return
+    }
+    setPublishingScriptId(version.script_id)
+    try {
+      await publishScriptAsModel(version.script_id, version.version, {
+        model_name: modelName,
+      })
+      toast.success(t('Listed on the model square'))
+      setModelNameDrafts((current) => {
+        const next = { ...current }
+        delete next[version.script_id]
+        return next
+      })
+      await load()
+    } catch (e) {
+      toast.error(String((e as Error).message))
+    } finally {
+      setPublishingScriptId(0)
+    }
+  }
+
+  async function onUnpublishModel(binding: ScriptModelBinding) {
+    if (
+      !window.confirm(
+        t('Remove model {{model}} from the model square?', {
+          model: binding.model_name,
+        })
+      )
+    )
+      return
+    try {
+      await unpublishScriptModel(binding.model_name)
+      toast.success(t('Removed from the model square'))
       await load()
     } catch (e) {
       toast.error(String((e as Error).message))
@@ -776,6 +853,7 @@ export function ScriptReviewConsolePage() {
                   <TableHead>{t('Author')}</TableHead>
                   <TableHead>{t('Published')}</TableHead>
                   <TableHead>{t('Status')}</TableHead>
+                  <TableHead>{t('Model square')}</TableHead>
                   <TableHead>{t('Reason')}</TableHead>
                   <TableHead className='text-right'>{t('Actions')}</TableHead>
                 </TableRow>
@@ -802,6 +880,67 @@ export function ScriptReviewConsolePage() {
                       <TableCell>{formatUnix(version.published_at)}</TableCell>
                       <TableCell>
                         {version.revoked_at ? t('Revoked') : t('Published')}
+                      </TableCell>
+                      {/* Model-square listing: set a unique model name and list
+                          the script as a callable new-api model. Balance-probe
+                          scripts are excluded (they only read site balance). */}
+                      <TableCell>
+                        {balanceScriptIds.has(version.script_id) ? (
+                          <span className='text-muted-foreground text-xs'>
+                            {t('Balance script')}
+                          </span>
+                        ) : bindingByScriptId.has(version.script_id) ? (
+                          <div className='flex flex-col gap-1'>
+                            <span className='font-mono text-xs'>
+                              {
+                                bindingByScriptId.get(version.script_id)
+                                  ?.model_name
+                              }
+                            </span>
+                            <Button
+                              size='sm'
+                              variant='ghost'
+                              className='h-6 w-fit px-2 text-xs text-red-600'
+                              onClick={() =>
+                                onUnpublishModel(
+                                  bindingByScriptId.get(version.script_id)!
+                                )
+                              }
+                            >
+                              {t('Unlist')}
+                            </Button>
+                          </div>
+                        ) : version.revoked_at ? (
+                          <span className='text-muted-foreground text-xs'>
+                            -
+                          </span>
+                        ) : (
+                          <div className='flex items-center gap-1'>
+                            <Input
+                              className='h-8 w-32'
+                              placeholder={t('Model name')}
+                              value={modelNameDrafts[version.script_id] || ''}
+                              onChange={(event) =>
+                                setModelNameDrafts((current) => ({
+                                  ...current,
+                                  [version.script_id]: event.target.value,
+                                }))
+                              }
+                            />
+                            <Button
+                              size='sm'
+                              disabled={
+                                publishingScriptId === version.script_id ||
+                                !modelNameDrafts[version.script_id]?.trim()
+                              }
+                              onClick={() => onPublishModel(version)}
+                            >
+                              {publishingScriptId === version.script_id
+                                ? t('Listing...')
+                                : t('List')}
+                            </Button>
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell>
                         {version.revoked_at ? (
@@ -850,7 +989,7 @@ export function ScriptReviewConsolePage() {
                 {publishedGroups.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={8}
+                      colSpan={9}
                       className='text-muted-foreground py-8 text-center'
                     >
                       {loading ? t('Loading...') : t('No published versions')}

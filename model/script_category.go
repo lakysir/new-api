@@ -57,6 +57,21 @@ func GetScriptCategory(id int) (*ScriptCategory, error) {
 	return &c, nil
 }
 
+// IsBalanceProbeScript reports whether the given script id is designated as the
+// balance-probe script of any category. Balance-probe scripts read a target
+// site's balance without running a generation task, so they must never be
+// published as callable models.
+func IsBalanceProbeScript(scriptId int) (bool, error) {
+	var count int64
+	err := DB.Model(&ScriptCategory{}).
+		Where("balance_script_id = ?", scriptId).
+		Count(&count).Error
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
 // SetCategoryBalanceScript designates the audited balance-probe script+version
 // for a category. The version must be executable (approved + not revoked).
 func SetCategoryBalanceScript(categoryId, scriptId, version int) error {

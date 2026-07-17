@@ -206,6 +206,49 @@ export function deleteScriptVersion(scriptId: number, version: number) {
   return unwrap(api.delete(`/api/scripts/${scriptId}/versions/${version}`))
 }
 
+// --- Script → model bindings (admin) ----------------------------------------
+
+// A ScriptModelBinding lists a published script version as a callable new-api
+// model. Orders are funded from the publisher's marketplace available balance.
+export type ScriptModelBinding = {
+  id: number
+  model_name: string
+  script_id: number
+  version: number
+  publisher_user_id: number
+  consume_multiplier: number
+  param_template: string
+  enabled: boolean
+  created_at: number
+  updated_at: number
+}
+
+export function listScriptModelBindings() {
+  return unwrap<ScriptModelBinding[]>(api.get('/api/scripts/model-bindings'))
+}
+
+// publishScriptAsModel binds a script version to a unique model name so it can
+// be invoked through the standard relay (e.g. OpenAI /v1/videos).
+export function publishScriptAsModel(
+  scriptId: number,
+  version: number,
+  body: {
+    model_name: string
+    consume_multiplier?: number
+    param_template?: string
+  }
+) {
+  return unwrap<ScriptModelBinding>(
+    api.post(`/api/scripts/${scriptId}/versions/${version}/publish-model`, body)
+  )
+}
+
+export function unpublishScriptModel(modelName: string) {
+  return unwrap(
+    api.delete(`/api/scripts/model-bindings/${encodeURIComponent(modelName)}`)
+  )
+}
+
 export function updateScriptVersionPricing(
   scriptId: number,
   version: number,

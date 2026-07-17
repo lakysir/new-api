@@ -296,6 +296,11 @@ func SetApiRouter(router *gin.Engine) {
 				scriptAdminRoute.POST("/:id/versions/:version/revoke", controller.RevokeScriptVersion)
 				scriptAdminRoute.DELETE("/:id/versions/:version", controller.DeleteScriptVersion)
 				scriptAdminRoute.PUT("/:id/versions/:version/pricing", controller.UpdateScriptVersionPricing)
+				// Publish a script version as a callable new-api model (bridge to
+				// /v1/videos etc.), list bindings, and unpublish by model name.
+				scriptAdminRoute.POST("/:id/versions/:version/publish-model", controller.PublishScriptAsModel)
+				scriptAdminRoute.GET("/model-bindings", controller.ListScriptModelBindings)
+				scriptAdminRoute.DELETE("/model-bindings/:model_name", controller.UnpublishScriptModel)
 				// Generate/rotate the platform Ed25519 script-signing key.
 				scriptAdminRoute.POST("/signing-key/generate", controller.GenerateScriptSigningKey)
 				// Platform revenue summary (day/week/month/lifetime service fees).
