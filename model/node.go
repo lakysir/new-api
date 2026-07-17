@@ -126,7 +126,7 @@ func (s *NodeSiteStatus) IsValid() bool {
 //
 // Balance model: RemainingQuota is the account balance on the target site as
 // reported by the last successful script execution — it is NOT set by the
-// provider at listing time. First-time listing defaults to 10. DailyLimit caps
+// provider at listing time. First-time listing defaults to 100. DailyLimit caps
 // how many executions are dispatched per Beijing calendar day; DailyUsed counts
 // today's executions and is reset automatically at midnight CST (UTC+8).
 type NodeCapability struct {
@@ -146,7 +146,7 @@ type NodeCapability struct {
 	// which DailyUsed was last zeroed. Zero means it has never been reset.
 	DailyResetAt int64 `json:"daily_reset_at" gorm:"column:daily_reset_at;default:0"`
 	// RemainingQuota is the target-site account balance as last reported by a
-	// successful execution. Updated from the script result; defaults to 10 on
+	// successful execution. Updated from the script result; defaults to 100 on
 	// first listing.
 	RemainingQuota int    `json:"remaining_quota" gorm:"default:0"`
 	WorkWindow     string `json:"work_window" gorm:"type:varchar(64)"`
@@ -311,7 +311,7 @@ func ListNodeSiteStatuses(nodeId string) ([]NodeSiteStatus, error) {
 // still denormalized here so the per-capability detect button and the node
 // enable gate know which site to probe.
 //
-// On first listing RemainingQuota is set to 10 as the initial balance estimate;
+// On first listing RemainingQuota is set to 100 as the initial balance estimate;
 // subsequent executions update it from the actual script result. Re-listing an
 // existing capability preserves the last-known balance and daily counters so
 // the provider's execution history is not wiped on config changes.
@@ -331,8 +331,8 @@ func EnableCapability(cap *NodeCapability) error {
 		var existing NodeCapability
 		err := tx.Where("node_id = ? AND script_id = ? AND version = ?", cap.NodeId, cap.ScriptId, cap.Version).First(&existing).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			// First listing: seed balance with a conservative default of 10.
-			cap.RemainingQuota = 10
+			// First listing: seed balance with a conservative default of 100.
+			cap.RemainingQuota = 100
 			return tx.Create(cap).Error
 		}
 		if err != nil {

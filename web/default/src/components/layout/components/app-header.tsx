@@ -26,7 +26,7 @@ import { useNotifications } from '@/hooks/use-notifications'
 import { useTopNavLinks } from '@/hooks/use-top-nav-links'
 
 import { defaultTopNavLinks } from '../config/top-nav.config'
-import { type TopNavLink } from '../types'
+import type { TopNavLink } from '../types'
 import { Header } from './header'
 import { SystemBrand } from './system-brand'
 import { TopNav } from './top-nav'
@@ -55,6 +55,8 @@ import { TopNav } from './top-nav'
  * />
  */
 type AppHeaderProps = {
+  /** Whether to show the authenticated sidebar toggle. */
+  showSidebarTrigger?: boolean
   /**
    * Custom navigation links, uses default global navigation or dynamically generated from backend if not provided
    */
@@ -95,6 +97,7 @@ type AppHeaderProps = {
 }
 
 export function AppHeader({
+  showSidebarTrigger = true,
   navLinks = defaultTopNavLinks,
   showTopNav = true,
   leftContent,
@@ -113,7 +116,7 @@ export function AppHeader({
 
   return (
     <>
-      <Header>
+      <Header showSidebarTrigger={showSidebarTrigger}>
         <SystemBrand variant='inline' />
 
         {leftContent ? (

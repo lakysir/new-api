@@ -164,6 +164,9 @@ func TestEnableCapabilitySucceedsAndRevocationSuspends(t *testing.T) {
 	if cap.Status != CapabilityStatusActive {
 		t.Fatal("capability should be active")
 	}
+	if cap.RemainingQuota != 100 {
+		t.Fatalf("initial remaining quota = %d, want 100", cap.RemainingQuota)
+	}
 	// Revoking the script version must suspend the capability (N-007).
 	if _, err := SuspendCapabilitiesByScriptVersion(scriptId, v.Version); err != nil {
 		t.Fatal(err)

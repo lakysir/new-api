@@ -73,6 +73,13 @@ export function useTopNavLinks(): TopNavLink[] {
     links.push({ title: t('Console'), href: '/dashboard' })
   }
 
+  // AiToken P2P Marketplace
+  links.push({
+    title: t('AiToken P2P Marketplace'),
+    href: '/buy-aitoken',
+    requiresAuth: !isAuthed,
+  })
+
   // Pricing
   const pricing = modules?.pricing
   if (pricing && typeof pricing === 'object' && pricing.enabled) {

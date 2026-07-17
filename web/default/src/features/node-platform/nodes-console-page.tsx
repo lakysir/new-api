@@ -96,6 +96,7 @@ type EnableFormValue = {
   dailyLimit: string
 }
 type NodesConsoleDraft = {
+  enableFormDefaultsVersion: number
   hideInactive: boolean
   enableForm: Record<string, EnableFormValue>
   openNodeIds: string[]
@@ -104,9 +105,11 @@ type NodesConsoleDraft = {
 const DEFAULT_ENABLE_FORM: EnableFormValue = {
   scriptId: '',
   version: '1',
-  price: '',
-  dailyLimit: '0',
+  price: '0.1',
+  dailyLimit: '100',
 }
+
+const ENABLE_FORM_DEFAULTS_VERSION = 1
 
 function getDraftStorageKey() {
   const userId = window.localStorage.getItem('uid') ?? 'anonymous'
@@ -118,25 +121,35 @@ function loadNodesConsoleDraft(): NodesConsoleDraft {
     const saved = JSON.parse(
       window.localStorage.getItem(getDraftStorageKey()) ?? '{}'
     ) as Partial<NodesConsoleDraft>
+    const usesCurrentDefaults =
+      saved.enableFormDefaultsVersion === ENABLE_FORM_DEFAULTS_VERSION
     const enableForm = Object.fromEntries(
       Object.entries(saved.enableForm ?? {}).flatMap(([nodeId, value]) => {
         if (!value || typeof value !== 'object') return []
         const form = value as Partial<EnableFormValue>
+        let price = form.price || DEFAULT_ENABLE_FORM.price
+        let dailyLimit = form.dailyLimit || DEFAULT_ENABLE_FORM.dailyLimit
+        if (usesCurrentDefaults) {
+          if (typeof form.price === 'string') price = form.price
+          if (typeof form.dailyLimit === 'string') dailyLimit = form.dailyLimit
+        } else if (form.dailyLimit === '0') {
+          dailyLimit = DEFAULT_ENABLE_FORM.dailyLimit
+        }
         return [
           [
             nodeId,
             {
               scriptId: typeof form.scriptId === 'string' ? form.scriptId : '',
               version: typeof form.version === 'string' ? form.version : '',
-              price: typeof form.price === 'string' ? form.price : '',
-              dailyLimit:
-                typeof form.dailyLimit === 'string' ? form.dailyLimit : '0',
+              price,
+              dailyLimit,
             },
           ] as const,
         ]
       })
     ) as Record<string, EnableFormValue>
     return {
+      enableFormDefaultsVersion: ENABLE_FORM_DEFAULTS_VERSION,
       hideInactive:
         typeof saved.hideInactive === 'boolean' ? saved.hideInactive : true,
       enableForm,
@@ -145,7 +158,12 @@ function loadNodesConsoleDraft(): NodesConsoleDraft {
         : [],
     }
   } catch {
-    return { hideInactive: true, enableForm: {}, openNodeIds: [] }
+    return {
+      enableFormDefaultsVersion: ENABLE_FORM_DEFAULTS_VERSION,
+      hideInactive: true,
+      enableForm: {},
+      openNodeIds: [],
+    }
   }
 }
 
@@ -437,6 +455,7 @@ export function NodesConsolePage() {
       window.localStorage.setItem(
         getDraftStorageKey(),
         JSON.stringify({
+          enableFormDefaultsVersion: ENABLE_FORM_DEFAULTS_VERSION,
           hideInactive,
           enableForm,
           openNodeIds,
@@ -672,14 +691,17 @@ export function NodesConsolePage() {
             <label className='text-muted-foreground space-y-1 text-xs'>
               {t('Price')}
               <Input
-                value={enableForm[node.id]?.price ?? ''}
+                value={enableForm[node.id]?.price ?? DEFAULT_ENABLE_FORM.price}
                 onChange={(e) => setForm(node.id, { price: e.target.value })}
               />
             </label>
             <label className='text-muted-foreground space-y-1 text-xs'>
               {t('Daily limit')}
               <Input
-                value={enableForm[node.id]?.dailyLimit ?? '0'}
+                value={
+                  enableForm[node.id]?.dailyLimit ??
+                  DEFAULT_ENABLE_FORM.dailyLimit
+                }
                 onChange={(e) =>
                   setForm(node.id, { dailyLimit: e.target.value })
                 }
@@ -1131,7 +1153,7 @@ export function NodesConsolePage() {
                     }
                     return (
                       <TableRow key={`${a.task_id}:${a.attempt}`}>
-                        <TableCell className='whitespace-nowrap text-xs'>
+                        <TableCell className='text-xs whitespace-nowrap'>
                           {formatUnix(a.updated_at || a.created_at)}
                         </TableCell>
                         <TableCell className='max-w-[160px] truncate font-mono text-xs'>
@@ -1391,13 +1413,18 @@ export function NodesConsolePage() {
                   <Input
                     className='w-28'
                     placeholder={t('Price')}
-                    value={enableForm[nodeId]?.price ?? ''}
+                    value={
+                      enableForm[nodeId]?.price ?? DEFAULT_ENABLE_FORM.price
+                    }
                     onChange={(e) => setForm(nodeId, { price: e.target.value })}
                   />
                   <Input
                     className='w-24'
                     placeholder={t('Daily limit')}
-                    value={enableForm[nodeId]?.dailyLimit ?? '0'}
+                    value={
+                      enableForm[nodeId]?.dailyLimit ??
+                      DEFAULT_ENABLE_FORM.dailyLimit
+                    }
                     onChange={(e) =>
                       setForm(nodeId, { dailyLimit: e.target.value })
                     }
