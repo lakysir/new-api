@@ -403,6 +403,7 @@ func SetApiRouter(router *gin.Engine) {
 			ledgerRoute.GET("/earnings", controller.GetMyEarnings)
 			ledgerRoute.POST("/recharge", middleware.CriticalRateLimit(), controller.RechargeAvailable)
 			ledgerRoute.POST("/withdraw", middleware.CriticalRateLimit(), controller.WithdrawEarnings)
+			ledgerRoute.POST("/withdraw-available", middleware.CriticalRateLimit(), controller.WithdrawAvailable)
 		}
 
 		// Payment: deposit address, fee estimate, withdrawal (Stage G).

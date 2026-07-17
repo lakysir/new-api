@@ -47,6 +47,7 @@ import {
   quoteOrder,
   rechargeAvailable,
   searchProviderGroups,
+  withdrawAvailable,
   type ProviderGroup,
   type ScriptOffer,
 } from './api'
@@ -376,6 +377,11 @@ export function AitokenPurchasePage() {
   const [walletQuota, setWalletQuota] = useState<number | null>(null)
   const [rechargeAmt, setRechargeAmt] = useState('1')
   const [recharging, setRecharging] = useState(false)
+  // Withdraw (move the marketplace available balance back to the main wallet).
+  // The backend enforces a 10-unit minimum and a 5% fee (you receive 95%); a
+  // floor + fee discourage bouncing funds in and out for free.
+  const [withdrawAmt, setWithdrawAmt] = useState('10')
+  const [withdrawing, setWithdrawing] = useState(false)
   // Local task-record log (sent config + returned result per run). Kept in
   // localStorage since the plaintext never leaves this browser.
   const [taskRecords, setTaskRecords] = useState<ClientTaskRecord[]>(
@@ -527,6 +533,32 @@ export function AitokenPurchasePage() {
       toast.error(String((e as Error).message))
     } finally {
       setRecharging(false)
+    }
+  }
+
+  // onWithdraw moves funds from the marketplace available balance back to the
+  // main /wallet balance. The minimum is 10 and a 5% fee is retained by the
+  // platform, so the wallet receives 95% (e.g. 10 → 9.5). The backend is
+  // authoritative on both rules; the client check just avoids a doomed request.
+  async function onWithdraw() {
+    const amountMicros = displayToMicros(withdrawAmt)
+    if (amountMicros < 10_000_000) {
+      toast.error(t('Minimum withdrawal is 10'))
+      return
+    }
+    setWithdrawing(true)
+    try {
+      const res = await withdrawAvailable(amountMicros)
+      toast.success(
+        t('Withdrew to wallet ({{amount}} after 5% fee)', {
+          amount: microsToCurrency(res.net_micros),
+        })
+      )
+      await loadBalance()
+    } catch (e) {
+      toast.error(String((e as Error).message))
+    } finally {
+      setWithdrawing(false)
     }
   }
 
@@ -970,6 +1002,28 @@ export function AitokenPurchasePage() {
               {walletQuota != null
                 ? formatQuotaWithCurrency(walletQuota)
                 : '--'}
+            </div>
+            {/* Withdraw available balance back to the wallet. Minimum 10, a 5%
+                fee is retained (you receive 95%), which discourages bouncing
+                funds in and out for free. */}
+            <div className='mt-3 flex flex-wrap items-center justify-end gap-2 border-t pt-3'>
+              <Input
+                className='h-9 w-28'
+                value={withdrawAmt}
+                onChange={(e) => setWithdrawAmt(e.target.value)}
+                aria-label={t('Withdraw amount')}
+              />
+              <Button
+                className='h-9'
+                variant='outline'
+                onClick={onWithdraw}
+                disabled={withdrawing}
+              >
+                {withdrawing ? t('Withdrawing...') : t('Withdraw to wallet')}
+              </Button>
+            </div>
+            <div className='text-muted-foreground mt-2 text-xs'>
+              {t('Minimum 10 · 5% fee retained · you receive 95%')}
             </div>
           </div>
           <div className='rounded-lg border p-3'>

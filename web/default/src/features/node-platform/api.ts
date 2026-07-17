@@ -511,6 +511,20 @@ export function rechargeAvailable(amountMicros: number) {
   }>(api.post('/api/ledger/recharge', { amount_micros: amountMicros }))
 }
 
+// withdrawAvailable transfers the caller's marketplace available balance back to
+// their main /wallet quota — the inverse of rechargeAvailable. The backend
+// enforces a 10-unit minimum and retains a 5% fee, so only 95% of the requested
+// amount reaches the wallet (net_micros). A real transfer, not a simulation.
+export function withdrawAvailable(amountMicros: number) {
+  return unwrap<{
+    transaction_id: number
+    type: string
+    quota_credited: number
+    fee_micros: number
+    net_micros: number
+  }>(api.post('/api/ledger/withdraw-available', { amount_micros: amountMicros }))
+}
+
 // withdrawEarnings transfers the caller's payable balance for a role (provider =
 // node earnings, author = script earnings) into their main /wallet quota (1:1 in
 // USD). The inverse of rechargeAvailable — a real transfer, not a simulation.

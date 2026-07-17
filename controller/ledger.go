@@ -174,6 +174,77 @@ type withdrawEarningsRequest struct {
 	AmountMicros int64 `json:"amount_micros"`
 }
 
+// Withdrawal policy for moving the marketplace available balance back to the
+// main wallet. A floor plus a fee discourage users from bouncing funds in and
+// out for free: the minimum request is 10 units (10 USD-equivalent) and 5% is
+// forfeited (not credited anywhere), so a 10-unit withdrawal credits 9.5 to the
+// wallet.
+const (
+	minWithdrawAvailableMicros int64 = 10_000_000 // 10 units (1 unit = 1,000,000 micros)
+	withdrawAvailableFeeRatePpm int64 = 50_000     // 5% (parts-per-million)
+)
+
+// WithdrawAvailable transfers the caller's marketplace available balance back to
+// their main wallet quota, the inverse of RechargeAvailable. It enforces a
+// 10-unit minimum and a 5% fee: the full requested amount leaves the available
+// balance and the marketplace, but only the net (95%) is credited to the wallet
+// — the fee is simply forfeited (not credited anywhere), which discourages
+// bouncing funds in and out for free. The available-balance debit is posted
+// first (failing cleanly with ErrInsufficientBalance without touching the
+// wallet); if the wallet credit then fails the ledger is reversed so balances
+// never diverge.
+func WithdrawAvailable(c *gin.Context) {
+	var req withdrawEarningsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if req.AmountMicros < minWithdrawAvailableMicros {
+		common.ApiErrorMsg(c, "minimum withdrawal is 10")
+		return
+	}
+
+	fee := req.AmountMicros * withdrawAvailableFeeRatePpm / 1_000_000
+	net := req.AmountMicros - fee
+	quota := microsToQuota(net)
+	if quota <= 0 {
+		common.ApiErrorMsg(c, "amount too small to withdraw")
+		return
+	}
+
+	userId := c.GetInt("id")
+	reference := fmt.Sprintf("wallet:%d:%d", userId, time.Now().UnixNano())
+	// Debit the full requested amount from the available balance out to the
+	// external source; the fee portion never gets credited to the wallet below,
+	// so it leaves the marketplace forfeited.
+	tx, err := settlement.Withdraw(model.OwnerClient, userId, model.KindAvailable, req.AmountMicros, reference)
+	if err != nil {
+		if errors.Is(err, model.ErrInsufficientBalance) {
+			common.ApiErrorMsg(c, "insufficient available balance")
+			return
+		}
+		common.ApiError(c, err)
+		return
+	}
+	if err := model.IncreaseUserQuota(userId, quota, true); err != nil {
+		// Wallet credit failed after the ledger debit posted; reverse it so the
+		// available balance is restored and no funds are lost.
+		if _, rerr := settlement.ReverseWithdraw(model.OwnerClient, userId, model.KindAvailable, req.AmountMicros, reference); rerr != nil {
+			common.SysError(fmt.Sprintf("withdraw-available wallet credit failed and ledger reverse failed for user %d: credit=%v reverse=%v", userId, err, rerr))
+		}
+		common.ApiError(c, err)
+		return
+	}
+	model.RecordLog(userId, model.LogTypeManage, fmt.Sprintf("提现可用余额 %d micros 到钱包（手续费 %d 已扣除，到账 %d），增加额度 %d", req.AmountMicros, fee, net, quota))
+	common.ApiSuccess(c, gin.H{
+		"transaction_id": tx.Id,
+		"type":           tx.Type,
+		"quota_credited": quota,
+		"fee_micros":     fee,
+		"net_micros":     net,
+	})
+}
+
 // withdrawToWallet moves amountMicros out of an earnings account (owner + kind)
 // and credits the equivalent quota to userId's main wallet. It debits the ledger
 // first (which fails cleanly with ErrInsufficientBalance without touching the
