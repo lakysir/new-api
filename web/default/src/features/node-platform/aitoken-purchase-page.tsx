@@ -24,6 +24,8 @@ import {
   History,
   ListTree,
   LockKeyhole,
+  Plus,
+  Trash2,
   WalletCards,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -188,6 +190,62 @@ function updateJsonValue(
   return container
 }
 
+function removeJsonArrayItem(
+  source: unknown,
+  path: (string | number)[],
+  index: number
+): unknown {
+  const target = path.reduce<unknown>(
+    (value, key) => (value as Record<string | number, unknown>)?.[key],
+    source
+  )
+  if (!Array.isArray(target)) return source
+  return updateJsonValue(
+    source,
+    path,
+    target.filter((_, itemIndex) => itemIndex !== index)
+  )
+}
+
+function appendJsonArrayItem(
+  source: unknown,
+  path: (string | number)[]
+): unknown {
+  const target = path.reduce<unknown>(
+    (value, key) => (value as Record<string | number, unknown>)?.[key],
+    source
+  )
+  if (!Array.isArray(target)) return source
+  return updateJsonValue(source, path, [...target, ''])
+}
+
+function isEmptyArrayItem(value: unknown): boolean {
+  if (value == null) return true
+  if (typeof value === 'string') return value.trim() === ''
+  if (Array.isArray(value)) return value.length === 0
+  if (typeof value === 'object') {
+    return Object.values(value).every(isEmptyArrayItem)
+  }
+  return false
+}
+
+function cleanEmptyArrayItems(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value
+      .map(cleanEmptyArrayItems)
+      .filter((item) => !isEmptyArrayItem(item))
+  }
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        cleanEmptyArrayItems(item),
+      ])
+    )
+  }
+  return value
+}
+
 type JsonFormProps = {
   value: unknown
   onChange?: (path: (string | number)[], value: unknown) => void
@@ -195,9 +253,11 @@ type JsonFormProps = {
 }
 
 function JsonForm(props: JsonFormProps) {
+  const { t } = useTranslation()
   const path = props.path ?? []
   if (props.value !== null && typeof props.value === 'object') {
-    const entries = Array.isArray(props.value)
+    const isArray = Array.isArray(props.value)
+    const entries = isArray
       ? props.value.map((value, index) => [index, value] as const)
       : Object.entries(props.value)
     return (
@@ -207,8 +267,30 @@ function JsonForm(props: JsonFormProps) {
             key={String(key)}
             className='grid gap-1.5 md:grid-cols-[minmax(140px,0.35fr)_1fr] md:gap-4'
           >
-            <div className='text-muted-foreground pt-2 text-sm break-words'>
-              {Array.isArray(props.value) ? `#${Number(key) + 1}` : key}
+            <div className='flex items-center gap-1 pt-1 md:pt-2'>
+              <span className='text-muted-foreground text-sm break-words'>
+                {isArray ? `#${Number(key) + 1}` : key}
+              </span>
+              {isArray && props.onChange && (
+                <Button
+                  type='button'
+                  size='icon-sm'
+                  variant='ghost'
+                  className='text-muted-foreground hover:text-destructive ml-auto'
+                  title={t('Remove item')}
+                  aria-label={t('Remove item {{index}}', {
+                    index: Number(key) + 1,
+                  })}
+                  onClick={() =>
+                    props.onChange?.(
+                      path,
+                      removeJsonArrayItem(props.value, [], Number(key))
+                    )
+                  }
+                >
+                  <Trash2 className='h-4 w-4' />
+                </Button>
+              )}
             </div>
             <JsonForm
               value={value}
@@ -217,6 +299,20 @@ function JsonForm(props: JsonFormProps) {
             />
           </div>
         ))}
+        {isArray && props.onChange && (
+          <Button
+            type='button'
+            size='sm'
+            variant='outline'
+            className='w-full border-dashed'
+            onClick={() =>
+              props.onChange?.(path, appendJsonArrayItem(props.value, []))
+            }
+          >
+            <Plus className='mr-2 h-4 w-4' />
+            {t('Add item')}
+          </Button>
+        )}
       </div>
     )
   }
@@ -763,8 +859,11 @@ export function AitokenPurchasePage() {
     }
     // Validate config is JSON before ordering.
     let inputHash = ''
+    let cleanedConfigText = ''
     try {
-      const config = JSON.parse(configText)
+      const config = cleanEmptyArrayItems(JSON.parse(configText))
+      cleanedConfigText = JSON.stringify(config, null, 2)
+      setConfigText(cleanedConfigText)
       inputHash = await sha256Hex(JSON.stringify(config))
     } catch {
       toast.error(t('Config must be valid JSON'))
@@ -797,7 +896,7 @@ export function AitokenPurchasePage() {
       toast.success(t('Order created and funds reserved'))
       await loadBalance()
       if (['RESERVED', 'DATA_READY', 'RUNNING'].includes(o.state)) {
-        await runViaRelay(o)
+        await runViaRelay(o, cleanedConfigText)
       }
     } catch (e) {
       toast.error(String((e as Error).message))
@@ -828,14 +927,17 @@ export function AitokenPurchasePage() {
 
   // Send the config to the executing provider over the E2EE relay and wait for
   // the encrypted result. task_id == order id in the MVP; attempt 1.
-  async function runViaRelay(targetOrder: Order | null = order) {
+  async function runViaRelay(
+    targetOrder: Order | null = order,
+    executionConfigText = configText
+  ) {
     if (!targetOrder) {
       toast.error(t('Create an order first'))
       return
     }
     let config: unknown
     try {
-      config = JSON.parse(configText)
+      config = JSON.parse(executionConfigText)
     } catch {
       toast.error(t('Config must be valid JSON'))
       return
@@ -892,7 +994,7 @@ export function AitokenPurchasePage() {
           scripts.find((s) => s.id === targetOrder.script_id)?.title ?? '',
         version: targetOrder.version,
         nodeId: targetOrder.chosen_node_id,
-        configText,
+        configText: executionConfigText,
         result: resultText,
         status: 'SUCCESS',
         createdAt: Math.floor(Date.now() / 1000),
@@ -937,7 +1039,7 @@ export function AitokenPurchasePage() {
           scripts.find((s) => s.id === targetOrder.script_id)?.title ?? '',
         version: targetOrder.version,
         nodeId: targetOrder.chosen_node_id,
-        configText,
+        configText: executionConfigText,
         result: '',
         status: 'FAILED',
         error: String((e as Error).message),
