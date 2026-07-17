@@ -16,7 +16,16 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Braces, FileCode, History, ListTree } from 'lucide-react'
+import {
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  Braces,
+  FileCode,
+  History,
+  ListTree,
+  LockKeyhole,
+  WalletCards,
+} from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -969,67 +978,85 @@ export function AitokenPurchasePage() {
         </Button>
       </SectionPageLayout.Actions>
       <SectionPageLayout.Content>
-        {/* Wallet balances and the available-balance recharge action. */}
-        <div className='mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2'>
-          <div className='rounded-lg border p-3'>
-            <div className='flex flex-wrap items-end justify-between gap-3'>
-              <div>
-                <div className='text-muted-foreground text-xs'>
-                  {t('Available')}
-                </div>
-                <div className='mt-1 text-lg font-semibold'>
-                  {microsToCurrency(bal?.client_available)}
-                </div>
+        {/* Keep wallet status and its common actions in one compact toolbar. */}
+        <div className='mb-4 grid overflow-hidden rounded-lg border sm:grid-cols-2 lg:grid-cols-[minmax(150px,0.75fr)_minmax(280px,1.25fr)_minmax(330px,1.5fr)_minmax(150px,0.75fr)]'>
+          <div className='flex min-h-16 items-center gap-3 p-3'>
+            <WalletCards className='text-muted-foreground h-5 w-5 shrink-0' />
+            <div className='min-w-0'>
+              <div className='text-muted-foreground text-xs'>
+                {t('Available')}
               </div>
-              <div className='flex items-center gap-2'>
-                <Input
-                  className='h-9 w-28'
-                  value={rechargeAmt}
-                  onChange={(e) => setRechargeAmt(e.target.value)}
-                  aria-label={t('Recharge amount')}
-                />
-                <Button
-                  className='h-9'
-                  onClick={onRecharge}
-                  disabled={recharging}
-                >
-                  {recharging ? t('Recharging...') : t('Recharge')}
-                </Button>
+              <div className='truncate text-lg font-semibold'>
+                {microsToCurrency(bal?.client_available)}
               </div>
-            </div>
-            <div className='text-muted-foreground mt-2 text-xs'>
-              {t('Recharge available balance')} · {t('Wallet balance')}:{' '}
-              {walletQuota != null
-                ? formatQuotaWithCurrency(walletQuota)
-                : '--'}
-            </div>
-            {/* Withdraw available balance back to the wallet. Minimum 10, a 5%
-                fee is retained (you receive 95%), which discourages bouncing
-                funds in and out for free. */}
-            <div className='mt-3 flex flex-wrap items-center justify-end gap-2 border-t pt-3'>
-              <Input
-                className='h-9 w-28'
-                value={withdrawAmt}
-                onChange={(e) => setWithdrawAmt(e.target.value)}
-                aria-label={t('Withdraw amount')}
-              />
-              <Button
-                className='h-9'
-                variant='outline'
-                onClick={onWithdraw}
-                disabled={withdrawing}
-              >
-                {withdrawing ? t('Withdrawing...') : t('Withdraw to wallet')}
-              </Button>
-            </div>
-            <div className='text-muted-foreground mt-2 text-xs'>
-              {t('Minimum 10 · 5% fee retained · you receive 95%')}
             </div>
           </div>
-          <div className='rounded-lg border p-3'>
-            <div className='text-muted-foreground text-xs'>{t('Reserved')}</div>
-            <div className='mt-1 text-lg font-semibold'>
-              {microsToCurrency(bal?.client_reserved)}
+
+          <div className='flex min-h-16 items-center gap-2 border-t p-3 sm:border-t-0 sm:border-l'>
+            <div className='min-w-0 flex-1'>
+              <div className='text-xs font-medium'>{t('Recharge')}</div>
+              <div className='text-muted-foreground truncate text-xs'>
+                {t('Wallet balance')}:{' '}
+                {walletQuota != null
+                  ? formatQuotaWithCurrency(walletQuota)
+                  : '--'}
+              </div>
+            </div>
+            <Input
+              className='h-9 w-24'
+              inputMode='decimal'
+              value={rechargeAmt}
+              onChange={(e) => setRechargeAmt(e.target.value)}
+              aria-label={t('Recharge amount')}
+            />
+            <Button
+              className='h-9 w-9 shrink-0 p-0'
+              title={recharging ? t('Recharging...') : t('Recharge')}
+              aria-label={recharging ? t('Recharging...') : t('Recharge')}
+              onClick={onRecharge}
+              disabled={recharging}
+            >
+              <ArrowDownToLine className='h-4 w-4' />
+            </Button>
+          </div>
+
+          <div className='flex min-h-16 items-center gap-2 border-t p-3 lg:border-t-0 lg:border-l'>
+            <div className='min-w-0 flex-1'>
+              <div className='text-xs font-medium'>{t('Withdraw to wallet')}</div>
+              <div className='text-muted-foreground truncate text-xs'>
+                {t('Minimum 10; 5% fee; wallet receives 95%')}
+              </div>
+            </div>
+            <Input
+              className='h-9 w-24'
+              inputMode='decimal'
+              value={withdrawAmt}
+              onChange={(e) => setWithdrawAmt(e.target.value)}
+              aria-label={t('Withdraw amount')}
+            />
+            <Button
+              className='h-9 w-9 shrink-0 p-0'
+              variant='outline'
+              title={
+                withdrawing ? t('Withdrawing...') : t('Withdraw to wallet')
+              }
+              aria-label={
+                withdrawing ? t('Withdrawing...') : t('Withdraw to wallet')
+              }
+              onClick={onWithdraw}
+              disabled={withdrawing}
+            >
+              <ArrowUpFromLine className='h-4 w-4' />
+            </Button>
+          </div>
+
+          <div className='flex min-h-16 items-center gap-3 border-t p-3 sm:border-l lg:border-t-0'>
+            <LockKeyhole className='text-muted-foreground h-5 w-5 shrink-0' />
+            <div className='min-w-0'>
+              <div className='text-muted-foreground text-xs'>{t('Reserved')}</div>
+              <div className='truncate text-lg font-semibold'>
+                {microsToCurrency(bal?.client_reserved)}
+              </div>
             </div>
           </div>
         </div>
