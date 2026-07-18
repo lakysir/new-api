@@ -182,7 +182,7 @@ func ListExecutableScriptVersions(scriptId int) ([]ScriptVersion, error) {
 func ListPublishedScriptVersions() ([]ScriptVersion, error) {
 	var versions []ScriptVersion
 	err := DB.Table("script_versions").
-		Select("script_versions.id,script_versions.script_id,script_versions.version,script_versions.author_id,script_versions.title,script_versions.category_id,script_versions.code_sha256,script_versions.signature_key_id,script_versions.signature,script_versions.review_status,script_versions.published_at,script_versions.revoked_at,script_versions.revoked_reason,script_versions.revoke_severity,script_versions.pricing_template_id").
+		Select("script_versions.id,script_versions.script_id,script_versions.version,script_versions.author_id,script_versions.title,script_versions.category_id,script_versions.concurrency,script_versions.code_sha256,script_versions.signature_key_id,script_versions.signature,script_versions.review_status,script_versions.published_at,script_versions.revoked_at,script_versions.revoked_reason,script_versions.revoke_severity,script_versions.pricing_template_id").
 		Order("script_versions.published_at desc,script_versions.id desc").
 		Limit(500).
 		Find(&versions).Error

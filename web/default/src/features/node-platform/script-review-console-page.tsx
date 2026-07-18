@@ -1163,6 +1163,9 @@ export function ScriptReviewConsolePage() {
                     {' / '}
                     {version.author_username || `#${version.author_id}`}
                   </div>
+                  <div className='text-muted-foreground text-xs'>
+                    {t('Concurrency')}: {version.concurrency ?? 1}
+                  </div>
                   {version.revoked_at ? (
                     <div className='text-destructive text-xs'>
                       {t('Revoked')}: {version.revoked_reason || '-'}
