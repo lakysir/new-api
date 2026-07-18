@@ -24,6 +24,7 @@ import { Dialog } from '@/components/dialog'
 import { SectionPageLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Table,
   TableBody,
@@ -209,12 +210,15 @@ export function ScriptReviewConsolePage() {
     Record<number, string>
   >({})
   const [publishingScriptId, setPublishingScriptId] = useState(0)
-  // Browser-extension release management. The operator uploads a single packaged
-  // file (≤5MB) tagged with a version; the newest upload is what the extension
-  // update-checks against and the node console links to for download.
+  // Browser-extension release management. The operator registers a new release
+  // by providing an external download URL, version, and filename. The newest
+  // entry is what the extension update-checks against and what the node console
+  // links to for download.
   const [pluginRelease, setPluginRelease] = useState<PluginRelease | null>(null)
-  const [pluginFile, setPluginFile] = useState<File | null>(null)
   const [pluginVersion, setPluginVersion] = useState('')
+  const [pluginDownloadUrl, setPluginDownloadUrl] = useState('')
+  const [pluginFilename, setPluginFilename] = useState('')
+  const [pluginReleaseNotes, setPluginReleaseNotes] = useState('')
   const [uploadingPlugin, setUploadingPlugin] = useState(false)
 
   const categoryNames = useMemo(
@@ -513,28 +517,39 @@ export function ScriptReviewConsolePage() {
     }
   }
 
-  // Publish a new browser-extension release: validates the file (single file,
-  // ≤5MB) and version, uploads it, then refreshes the shown latest release.
+  // Publish a new browser-extension release by registering its external
+  // download URL. Validates required fields then refreshes the shown release.
   async function onUploadPlugin() {
-    if (!pluginFile) {
-      toast.error(t('Select a plugin file first'))
-      return
-    }
-    if (pluginFile.size > 5 * 1024 * 1024) {
-      toast.error(t('The plugin file must not exceed 5MB'))
-      return
-    }
     const version = pluginVersion.trim()
+    const downloadUrl = pluginDownloadUrl.trim()
+    const filename = pluginFilename.trim()
+
     if (!version) {
       toast.error(t('Enter a version number first'))
       return
     }
+    if (!downloadUrl) {
+      toast.error(t('Enter a download URL'))
+      return
+    }
+    if (!filename) {
+      toast.error(t('Enter a filename'))
+      return
+    }
+
     setUploadingPlugin(true)
     try {
-      const release = await uploadPluginRelease(pluginFile, version)
+      const release = await uploadPluginRelease({
+        download_url: downloadUrl,
+        version,
+        filename,
+        release_notes: pluginReleaseNotes.trim() || undefined,
+      })
       setPluginRelease(release)
-      setPluginFile(null)
       setPluginVersion('')
+      setPluginDownloadUrl('')
+      setPluginFilename('')
+      setPluginReleaseNotes('')
       toast.success(t('Plugin published'))
     } catch (e) {
       toast.error(String((e as Error).message))
@@ -645,27 +660,50 @@ export function ScriptReviewConsolePage() {
               </span>
             ) : null}
           </div>
-          <div className='flex flex-wrap items-center gap-2'>
-            <Input
-              type='file'
-              className='h-9 w-72'
-              onChange={(e) => setPluginFile(e.target.files?.[0] ?? null)}
-            />
-            <Input
-              className='h-9 w-32'
-              placeholder={t('Version (e.g. 2.1.0)')}
-              value={pluginVersion}
-              onChange={(e) => setPluginVersion(e.target.value)}
+
+          {/* Mode toggle */}
+          <div className='space-y-2'>
+            <div className='flex flex-wrap items-center gap-2'>
+              <Input
+                className='h-9 flex-1 min-w-[300px]'
+                placeholder={t('Download URL (https://...)')}
+                value={pluginDownloadUrl}
+                onChange={(e) => setPluginDownloadUrl(e.target.value)}
+              />
+              <Input
+                className='h-9 w-32'
+                placeholder={t('Version (e.g. 2.1.0)')}
+                value={pluginVersion}
+                onChange={(e) => setPluginVersion(e.target.value)}
+              />
+              <Input
+                className='h-9 w-44'
+                placeholder={t('Filename (e.g. plugin.zip)')}
+                value={pluginFilename}
+                onChange={(e) => setPluginFilename(e.target.value)}
+              />
+            </div>
+            <Textarea
+              className='min-h-[72px] w-full resize-none text-sm'
+              placeholder={t('Release notes (optional) — describe what changed in this version')}
+              value={pluginReleaseNotes}
+              onChange={(e) => setPluginReleaseNotes(e.target.value)}
             />
             <Button
-              disabled={uploadingPlugin || !pluginFile || !pluginVersion.trim()}
+              disabled={
+                uploadingPlugin ||
+                !pluginDownloadUrl.trim() ||
+                !pluginVersion.trim() ||
+                !pluginFilename.trim()
+              }
               onClick={onUploadPlugin}
             >
               {uploadingPlugin ? t('Publishing...') : t('Publish plugin')}
             </Button>
           </div>
+
           <p className='text-muted-foreground mt-2 text-xs'>
-            {t('Upload a single packaged file no larger than 5MB.')}
+            {t('Provide an external URL where the plugin package is hosted. You can upload the file to any CDN or file hosting service.')}
           </p>
         </div>
 

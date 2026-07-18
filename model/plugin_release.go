@@ -16,12 +16,18 @@ type PluginRelease struct {
 	Version  string `json:"version" gorm:"type:varchar(32);not null;index"`
 	Filename string `json:"filename" gorm:"type:varchar(255);not null"`
 	Size     int64  `json:"size" gorm:"not null"`
+	// DownloadUrl is the external URL where the plugin package is hosted.
+	// When set, the download endpoint redirects here instead of serving from Content.
+	DownloadUrl string `json:"download_url" gorm:"type:varchar(512)"`
 	// Content holds the raw packaged bytes. Kept out of JSON so metadata queries
-	// never serialize the blob.
-	Content    []byte `json:"-" gorm:"type:blob"`
-	Sha256     string `json:"sha256" gorm:"type:varchar(64)"`
-	UploadedBy int    `json:"uploaded_by"`
-	CreatedAt  int64  `json:"created_at" gorm:"autoCreateTime"`
+	// never serialize the blob. Optional when DownloadUrl is set.
+	Content []byte `json:"-" gorm:"type:blob"`
+	Sha256  string `json:"sha256" gorm:"type:varchar(64)"`
+	// ReleaseNotes is an optional change-log or description shown in the
+	// download dialog so users know what changed in this version.
+	ReleaseNotes string `json:"release_notes" gorm:"type:text"`
+	UploadedBy   int    `json:"uploaded_by"`
+	CreatedAt    int64  `json:"created_at" gorm:"autoCreateTime"`
 }
 
 func (PluginRelease) TableName() string { return "plugin_releases" }
@@ -38,7 +44,7 @@ func CreatePluginRelease(r *PluginRelease) error {
 // blob, for cheap metadata reads (version check, download listing).
 func GetLatestPluginReleaseMeta() (*PluginRelease, error) {
 	var r PluginRelease
-	err := DB.Select("id", "version", "filename", "size", "sha256", "uploaded_by", "created_at").
+	err := DB.Select("id", "version", "filename", "size", "sha256", "download_url", "release_notes", "uploaded_by", "created_at").
 		Order("id desc").First(&r).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {

@@ -290,8 +290,8 @@ export type PluginRelease = {
   available: boolean
   version?: string
   filename?: string
-  size?: number
-  sha256?: string
+  download_url?: string
+  release_notes?: string
   updated_at?: number
 }
 
@@ -299,13 +299,19 @@ export function getLatestPluginRelease() {
   return unwrap<PluginRelease>(api.get('/api/plugin/latest'))
 }
 
-// uploadPluginRelease (admin) publishes a single packaged extension file (≤5MB)
-// tagged with a version string. The upload becomes the latest release used for
-// download links and update prompts.
-export function uploadPluginRelease(file: File, version: string) {
+// uploadPluginRelease (admin) registers a plugin release by its external URL.
+// Required: download_url, version, filename. Optional: release_notes.
+export function uploadPluginRelease(params: {
+  download_url: string
+  version: string
+  filename: string
+  release_notes?: string
+}) {
   const form = new FormData()
-  form.append('file', file)
-  form.append('version', version)
+  form.append('download_url', params.download_url)
+  form.append('version', params.version)
+  form.append('filename', params.filename)
+  if (params.release_notes) form.append('release_notes', params.release_notes)
   return unwrap<PluginRelease>(
     api.post('/api/plugin/upload', form, {
       headers: { 'Content-Type': 'multipart/form-data' },

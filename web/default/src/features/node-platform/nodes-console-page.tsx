@@ -72,6 +72,7 @@ import {
   revokeDevice,
   setNodeEnabled,
   type NodeBalanceCheck,
+  type PluginRelease,
   type ProviderGroup,
   type ScriptCategory,
 } from './api'
@@ -218,17 +219,16 @@ export function NodesConsolePage() {
   const [recordsOpen, setRecordsOpen] = useState(false)
   const [taskAttempts, setTaskAttempts] = useState<ProviderTaskAttempt[]>([])
   const [attemptsLoading, setAttemptsLoading] = useState(false)
-  // Latest published extension version, if any. Backs the "Download plugin"
-  // entry so it only shows once the operator has uploaded a release.
-  const [pluginVersion, setPluginVersion] = useState<string | null>(null)
+  // Latest published extension release, if any. Backs the "Download plugin"
+  // button so it only appears once the operator has uploaded a release.
+  const [pluginRelease, setPluginRelease] = useState<PluginRelease | null>(null)
+  const [pluginDialogOpen, setPluginDialogOpen] = useState(false)
 
   useEffect(() => {
     getLatestPluginRelease()
-      .then((release) =>
-        setPluginVersion(
-          release.available ? (release.version ?? '') : null
-        )
-      )
+      .then((release) => {
+        if (release.available) setPluginRelease(release)
+      })
       .catch(() => {})
   }, [])
 
@@ -881,21 +881,15 @@ export function NodesConsolePage() {
           {t('My Scripts')}
           <ExternalLink className='size-4' />
         </Button>
-        {pluginVersion !== null && (
+        {pluginRelease !== null && (
           <Button
             variant='outline'
-            render={
-              <a
-                href={PLUGIN_DOWNLOAD_URL}
-                target='_blank'
-                rel='noopener noreferrer'
-              />
-            }
+            onClick={() => setPluginDialogOpen(true)}
           >
             <Download className='size-4' />
             {t('Download plugin')}
-            {pluginVersion && (
-              <Badge variant='secondary'>v{pluginVersion}</Badge>
+            {pluginRelease.version && (
+              <Badge variant='secondary'>v{pluginRelease.version}</Badge>
             )}
           </Button>
         )}
@@ -1562,6 +1556,46 @@ export function NodesConsolePage() {
           </>
         )}
       </SectionPageLayout.Content>
+
+      {/* Plugin download dialog: shows version, release notes, and download link */}
+      <Dialog open={pluginDialogOpen} onOpenChange={setPluginDialogOpen}>
+        <DialogContent className='max-w-md'>
+          <DialogHeader>
+            <DialogTitle>
+              {t('Browser Plugin')}
+              {pluginRelease?.version && (
+                <Badge variant='secondary' className='ml-2'>
+                  v{pluginRelease.version}
+                </Badge>
+              )}
+            </DialogTitle>
+            {pluginRelease?.release_notes ? (
+              <DialogDescription className='whitespace-pre-wrap text-left'>
+                {pluginRelease.release_notes}
+              </DialogDescription>
+            ) : (
+              <DialogDescription>
+                {t('Download the latest browser extension package.')}
+              </DialogDescription>
+            )}
+          </DialogHeader>
+          <div className='flex justify-end pt-2'>
+            <Button
+              render={
+                <a
+                  href={PLUGIN_DOWNLOAD_URL}
+                  target='_blank'
+                  rel='noopener noreferrer'
+                />
+              }
+              onClick={() => setPluginDialogOpen(false)}
+            >
+              <Download className='size-4' />
+              {t('Download')}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </SectionPageLayout>
   )
 }
