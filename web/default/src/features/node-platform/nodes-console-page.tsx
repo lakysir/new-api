@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import {
   Ban,
   Cpu,
+  Download,
   ExternalLink,
   History,
   Settings2,
@@ -55,6 +56,7 @@ import {
   deleteDevice,
   deleteNode,
   enableCapability,
+  getLatestPluginRelease,
   getMyProviderGroup,
   listAvailableScriptVersions,
   listBalanceChecks,
@@ -64,6 +66,7 @@ import {
   listMyTaskAttempts,
   listNodeCapabilities,
   listProviderCapabilityStats,
+  PLUGIN_DOWNLOAD_URL,
   removeCapability,
   requestBalanceCheck,
   revokeDevice,
@@ -215,6 +218,19 @@ export function NodesConsolePage() {
   const [recordsOpen, setRecordsOpen] = useState(false)
   const [taskAttempts, setTaskAttempts] = useState<ProviderTaskAttempt[]>([])
   const [attemptsLoading, setAttemptsLoading] = useState(false)
+  // Latest published extension version, if any. Backs the "Download plugin"
+  // entry so it only shows once the operator has uploaded a release.
+  const [pluginVersion, setPluginVersion] = useState<string | null>(null)
+
+  useEffect(() => {
+    getLatestPluginRelease()
+      .then((release) =>
+        setPluginVersion(
+          release.available ? (release.version ?? '') : null
+        )
+      )
+      .catch(() => {})
+  }, [])
 
   async function loadTaskAttempts() {
     setAttemptsLoading(true)
@@ -865,6 +881,24 @@ export function NodesConsolePage() {
           {t('My Scripts')}
           <ExternalLink className='size-4' />
         </Button>
+        {pluginVersion !== null && (
+          <Button
+            variant='outline'
+            render={
+              <a
+                href={PLUGIN_DOWNLOAD_URL}
+                target='_blank'
+                rel='noopener noreferrer'
+              />
+            }
+          >
+            <Download className='size-4' />
+            {t('Download plugin')}
+            {pluginVersion && (
+              <Badge variant='secondary'>v{pluginVersion}</Badge>
+            )}
+          </Button>
+        )}
         <label className='text-muted-foreground mr-3 flex items-center gap-1 text-sm'>
           <input
             type='checkbox'

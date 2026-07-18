@@ -318,6 +318,7 @@ func migrateDB() error {
 		&NodeCapability{},
 		&ScriptCategory{},
 		&ScriptModelBinding{},
+		&PluginRelease{},
 		&NodeSiteStatus{},
 		&PricingTemplate{},
 		&Order{},

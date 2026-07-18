@@ -320,6 +320,16 @@ func SetApiRouter(router *gin.Engine) {
 			}
 		}
 
+		// Browser-extension plugin releases: public version-check + download
+		// (CORS so the extension can call from its own origin), admin upload.
+		pluginRoute := apiRouter.Group("/plugin")
+		pluginRoute.Use(middleware.CORS())
+		{
+			pluginRoute.GET("/latest", controller.GetLatestPluginRelease)
+			pluginRoute.GET("/download", controller.DownloadLatestPluginRelease)
+			pluginRoute.POST("/upload", middleware.AdminAuth(), middleware.CriticalRateLimit(), controller.UploadPluginRelease)
+		}
+
 		scriptApiRoute := apiRouter.Group("/script-api")
 		scriptApiRoute.Use(middleware.CORS(), middleware.TokenAuthReadOnly())
 		{

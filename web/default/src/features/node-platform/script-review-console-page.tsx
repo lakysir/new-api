@@ -41,6 +41,7 @@ import {
   listCategories,
   listPendingScripts,
   listPublishedScriptVersions,
+  getLatestPluginRelease,
   listScriptModelBindings,
   publishScriptAsModel,
   reviewScript,
@@ -48,7 +49,9 @@ import {
   setCategoryBalanceScript,
   unpublishScriptModel,
   updateScriptVersionPricing,
+  uploadPluginRelease,
   type PlatformSigningKey,
+  type PluginRelease,
   type ScriptCategory,
   type ScriptModelBinding,
 } from './api'
@@ -206,6 +209,13 @@ export function ScriptReviewConsolePage() {
     Record<number, string>
   >({})
   const [publishingScriptId, setPublishingScriptId] = useState(0)
+  // Browser-extension release management. The operator uploads a single packaged
+  // file (≤5MB) tagged with a version; the newest upload is what the extension
+  // update-checks against and the node console links to for download.
+  const [pluginRelease, setPluginRelease] = useState<PluginRelease | null>(null)
+  const [pluginFile, setPluginFile] = useState<File | null>(null)
+  const [pluginVersion, setPluginVersion] = useState('')
+  const [uploadingPlugin, setUploadingPlugin] = useState(false)
 
   const categoryNames = useMemo(
     () => new Map(categories.map((category) => [category.id, category.name])),
@@ -265,6 +275,9 @@ export function ScriptReviewConsolePage() {
       setCategories(cats)
       setSigningKey(key)
       setModelBindings(bindings)
+      getLatestPluginRelease()
+        .then(setPluginRelease)
+        .catch(() => {})
       setRefreshTick((n) => n + 1)
     } catch (e) {
       toast.error(String((e as Error).message))
@@ -500,6 +513,36 @@ export function ScriptReviewConsolePage() {
     }
   }
 
+  // Publish a new browser-extension release: validates the file (single file,
+  // ≤5MB) and version, uploads it, then refreshes the shown latest release.
+  async function onUploadPlugin() {
+    if (!pluginFile) {
+      toast.error(t('Select a plugin file first'))
+      return
+    }
+    if (pluginFile.size > 5 * 1024 * 1024) {
+      toast.error(t('The plugin file must not exceed 5MB'))
+      return
+    }
+    const version = pluginVersion.trim()
+    if (!version) {
+      toast.error(t('Enter a version number first'))
+      return
+    }
+    setUploadingPlugin(true)
+    try {
+      const release = await uploadPluginRelease(pluginFile, version)
+      setPluginRelease(release)
+      setPluginFile(null)
+      setPluginVersion('')
+      toast.success(t('Plugin published'))
+    } catch (e) {
+      toast.error(String((e as Error).message))
+    } finally {
+      setUploadingPlugin(false)
+    }
+  }
+
   return (
     <SectionPageLayout>
       <SectionPageLayout.Title>{t('Script Review')}</SectionPageLayout.Title>
@@ -578,6 +621,52 @@ export function ScriptReviewConsolePage() {
               )}
             </p>
           )}
+        </div>
+
+        {/* Browser-extension release: upload a single packaged file (≤5MB) with
+            a version number. The newest upload is the version the extension
+            update-checks against and the node console offers for download. */}
+        <div className='mb-6 rounded-lg border p-4'>
+          <div className='mb-2 text-sm font-medium'>
+            {t('Browser plugin release')}
+          </div>
+          <div className='text-muted-foreground mb-3 text-sm'>
+            {t('Current version')}:{' '}
+            {pluginRelease?.available ? (
+              <span className='text-foreground font-medium'>
+                v{pluginRelease.version}
+              </span>
+            ) : (
+              <span>{t('none')}</span>
+            )}
+            {pluginRelease?.available && pluginRelease.filename ? (
+              <span className='ml-2 font-mono text-xs'>
+                {pluginRelease.filename}
+              </span>
+            ) : null}
+          </div>
+          <div className='flex flex-wrap items-center gap-2'>
+            <Input
+              type='file'
+              className='h-9 w-72'
+              onChange={(e) => setPluginFile(e.target.files?.[0] ?? null)}
+            />
+            <Input
+              className='h-9 w-32'
+              placeholder={t('Version (e.g. 2.1.0)')}
+              value={pluginVersion}
+              onChange={(e) => setPluginVersion(e.target.value)}
+            />
+            <Button
+              disabled={uploadingPlugin || !pluginFile || !pluginVersion.trim()}
+              onClick={onUploadPlugin}
+            >
+              {uploadingPlugin ? t('Publishing...') : t('Publish plugin')}
+            </Button>
+          </div>
+          <p className='text-muted-foreground mt-2 text-xs'>
+            {t('Upload a single packaged file no larger than 5MB.')}
+          </p>
         </div>
 
         <div className='mb-2 text-sm font-medium'>{t('Pending review')}</div>

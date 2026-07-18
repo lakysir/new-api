@@ -281,6 +281,41 @@ export function generatePlatformSigningKey(keyId?: string) {
   )
 }
 
+// --- Browser-extension plugin releases --------------------------------------
+
+// The newest uploaded extension package the operator has published. `available`
+// is false until the first upload. The extension compares `version` against its
+// own manifest version to decide whether to prompt an update.
+export type PluginRelease = {
+  available: boolean
+  version?: string
+  filename?: string
+  size?: number
+  sha256?: string
+  updated_at?: number
+}
+
+export function getLatestPluginRelease() {
+  return unwrap<PluginRelease>(api.get('/api/plugin/latest'))
+}
+
+// uploadPluginRelease (admin) publishes a single packaged extension file (≤5MB)
+// tagged with a version string. The upload becomes the latest release used for
+// download links and update prompts.
+export function uploadPluginRelease(file: File, version: string) {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('version', version)
+  return unwrap<PluginRelease>(
+    api.post('/api/plugin/upload', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  )
+}
+
+// Direct URL for downloading the latest published extension package.
+export const PLUGIN_DOWNLOAD_URL = '/api/plugin/download'
+
 // --- Devices & nodes --------------------------------------------------------
 
 export function listMyDevices() {
