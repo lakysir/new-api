@@ -237,6 +237,7 @@ export interface UpstreamModelMetadataResponse {
     vendor_name?: string
     vendor_icon?: string
     supported_endpoint_types?: string[]
+    endpoints?: string
     request_price_units?: number
     request_price_display_unit?: 'request' | 'second'
     quota_type?: number

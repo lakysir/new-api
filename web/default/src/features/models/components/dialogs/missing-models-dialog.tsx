@@ -84,9 +84,7 @@ export function MissingModelsDialog({
           icon: metadata.icon || metadata.vendor_icon,
           tags: metadata.tags,
           vendor_name: metadata.vendor_name,
-          endpoints: metadata.supported_endpoint_types
-            ? JSON.stringify(metadata.supported_endpoint_types)
-            : '',
+          endpoints: metadata.endpoints || '',
           request_price_units: metadata.request_price_units,
           request_price_display_unit: metadata.request_price_display_unit,
           quota_type: metadata.quota_type,

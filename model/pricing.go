@@ -37,6 +37,7 @@ type Pricing struct {
 	AudioCompletionRatio    *float64                `json:"audio_completion_ratio,omitempty"`
 	EnableGroup             []string                `json:"enable_groups"`
 	SupportedEndpointTypes  []constant.EndpointType `json:"supported_endpoint_types"`
+	Endpoints               string                  `json:"endpoints,omitempty"`
 	BillingMode             string                  `json:"billing_mode,omitempty"`
 	BillingExpr             string                  `json:"billing_expr,omitempty"`
 	PricingVersion          string                  `json:"pricing_version,omitempty"`
@@ -311,6 +312,7 @@ func updatePricing() {
 			pricing.Recommended = meta.Recommended
 			pricing.RequestPriceUnits = meta.RequestPriceUnits
 			pricing.RequestPriceDisplayUnit = meta.RequestPriceDisplayUnit
+			pricing.Endpoints = meta.Endpoints
 		}
 		modelPrice, findPrice := ratio_setting.GetModelPrice(model, false)
 		if findPrice {

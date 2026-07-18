@@ -20,6 +20,7 @@ type upstreamModelMetadata struct {
 	Icon                    string   `json:"icon,omitempty"`
 	Tags                    string   `json:"tags,omitempty"`
 	Endpoints               []string `json:"supported_endpoint_types,omitempty"`
+	EndpointsConfig         string   `json:"endpoints,omitempty"`
 	RequestPriceUnits       int      `json:"request_price_units,omitempty"`
 	RequestPriceDisplayUnit string   `json:"request_price_display_unit,omitempty"`
 	QuotaType               int      `json:"quota_type"`
