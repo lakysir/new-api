@@ -58,8 +58,12 @@ export async function getMarketplaceModelDoc(
   modelName: string
 ): Promise<MarketplaceModelDoc | null> {
   try {
+    // A non-marketplace model returns { success:false } (HTTP 200). That is an
+    // expected "no doc" signal, not a user-facing error — skip the global
+    // business-error/error toast so opening any normal model stays silent.
     const res = await api.get(
-      `/api/scripts/model-doc/${encodeURIComponent(modelName)}`
+      `/api/scripts/model-doc/${encodeURIComponent(modelName)}`,
+      { skipBusinessError: true, skipErrorHandler: true }
     )
     if (res.data?.success && res.data?.data) {
       return res.data.data as MarketplaceModelDoc

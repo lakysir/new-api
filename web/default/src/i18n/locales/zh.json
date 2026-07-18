@@ -2599,6 +2599,7 @@
     "This model runs a marketplace script over the async video API. Submit a task to /v1/videos, then poll GET /v1/videos/{id} until it completes; the result URL is returned under metadata.url.": "该模型通过异步视频接口运行市场脚本：向 /v1/videos 提交任务，然后轮询 GET /v1/videos/{id} 直到完成；结果 URL 会在 metadata.url 中返回。",
     "Request parameters": "请求参数",
     "Result schema": "结果结构（Schema）",
+    "Full API docs": "完整接口文档",
     "Timeout": "超时",
     "List": "上架",
     "Listing...": "上架中...",

@@ -25,7 +25,7 @@ For commercial licensing, please contact support@quantumnous.com
 // fields. Renders nothing when the model is not a marketplace bridge model.
 
 import { useQuery } from '@tanstack/react-query'
-import { Boxes, ScrollText, Sigma } from 'lucide-react'
+import { Boxes, ExternalLink, ScrollText, Sigma } from 'lucide-react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -38,9 +38,26 @@ import {
   staticDataTableClassNames as tableStyles,
 } from '@/components/data-table'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { useStatus } from '@/hooks/use-status'
 
-import { getMarketplaceModelDoc, type MarketplaceModelDoc } from '../api'
+import {
+  getMarketplaceModelDoc,
+  type MarketplaceModelDoc as MarketplaceModelDocType,
+} from '../api'
+
+// useMarketplaceModelDoc fetches per-model bridge docs (deduped by react-query
+// key, so the parent tab and this component share one request). Resolves to
+// null for non-marketplace models — no error toast (see api.ts skip flags).
+export function useMarketplaceModelDoc(modelName: string) {
+  const query = useQuery({
+    queryKey: ['marketplace-model-doc', modelName],
+    queryFn: () => getMarketplaceModelDoc(modelName),
+    enabled: Boolean(modelName),
+    staleTime: 60_000,
+  })
+  return { doc: query.data ?? null, isLoading: query.isLoading }
+}
 
 type SchemaParam = {
   name: string
@@ -83,7 +100,7 @@ function parseSchemaParams(schema: string): SchemaParam[] {
 
 // buildExampleBody constructs a realistic request body: the operator's param
 // template merged under schema defaults/examples, always including the model.
-function buildExampleBody(doc: MarketplaceModelDoc): Record<string, unknown> {
+function buildExampleBody(doc: MarketplaceModelDocType): Record<string, unknown> {
   const body: Record<string, unknown> = { model: doc.model_name }
   // Seed from the script's schema defaults.
   for (const p of parseSchemaParams(doc.script_params)) {
@@ -152,15 +169,15 @@ function SectionTitle(props: {
   )
 }
 
-export function MarketplaceModelDoc(props: { modelName: string }) {
+// MarketplaceModelDoc renders the dynamic, per-script API docs for one bridged
+// model. The doc is passed in by the parent (which fetched it via
+// useMarketplaceModelDoc) so the request is shared; renders nothing when null.
+export function MarketplaceModelDoc(props: {
+  doc: MarketplaceModelDocType | null
+}) {
   const { t } = useTranslation()
   const baseUrl = useBaseUrl()
-  const { data: doc } = useQuery({
-    queryKey: ['marketplace-model-doc', props.modelName],
-    queryFn: () => getMarketplaceModelDoc(props.modelName),
-    enabled: Boolean(props.modelName),
-    staleTime: 60_000,
-  })
+  const doc = props.doc
 
   const params = useMemo(
     () => (doc ? parseSchemaParams(doc.script_params) : []),
@@ -176,9 +193,28 @@ export function MarketplaceModelDoc(props: { modelName: string }) {
   return (
     <section className='border-primary/30 bg-primary/5 space-y-5 rounded-xl border p-4'>
       <div>
-        <SectionTitle icon={Boxes}>
-          {t('AiToken marketplace model')}
-        </SectionTitle>
+        <div className='mb-3 flex items-center justify-between gap-2'>
+          <SectionTitle icon={Boxes}>
+            {t('AiToken marketplace model')}
+          </SectionTitle>
+          {/* Jump to the full marketplace integration guide (quote → order →
+              E2EE relay → receipt), which complements this per-model schema. */}
+          <Button
+            size='sm'
+            variant='outline'
+            className='h-7'
+            render={
+              <a
+                href='/aitoken-api-docs'
+                target='_blank'
+                rel='noopener noreferrer'
+              />
+            }
+          >
+            <ExternalLink className='mr-1.5 size-3.5' aria-hidden='true' />
+            {t('Full API docs')}
+          </Button>
+        </div>
         <p className='text-muted-foreground text-xs leading-relaxed'>
           {t(
             'This model runs a marketplace script over the async video API. Submit a task to /v1/videos, then poll GET /v1/videos/{id} until it completes; the result URL is returned under metadata.url.'
