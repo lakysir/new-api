@@ -997,6 +997,7 @@
     "Confirmed at {{time}} by user #{{userId}}": "Confirmed at {{time}} by user #{{userId}}",
     "Confirmed payment compliance": "Confirmed payment compliance",
     "Conflict": "Conflict",
+    "Concurrency": "Concurrency",
     "Connect": "Connect",
     "Connect through OpenAI, Claude, Gemini, and other compatible API routes": "Connect through OpenAI, Claude, Gemini, and other compatible API routes",
     "Connected to io.net service normally.": "Connected to io.net service normally.",

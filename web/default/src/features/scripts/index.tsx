@@ -477,10 +477,11 @@ export function MyScriptsPage() {
   }
 
   // Open the submit dialog (collect category + author share before submitting).
+  // Category and share % are persisted to localStorage so they survive reopens.
   async function openSubmitDialog(id: number) {
     setSubmitTarget(id)
-    setSubmitCategory('')
-    setSubmitShare('3')
+    setSubmitCategory(localStorage.getItem('script_submit_category') ?? '')
+    setSubmitShare(localStorage.getItem('script_submit_share') ?? '3')
     try {
       setCategories(await listCategories())
     } catch {
@@ -806,9 +807,11 @@ export function MyScriptsPage() {
                 setEditing((prev) => ({ ...prev, title: event.target.value }))
               }
             />
-            <Input
+            <Textarea
               value={editing.description}
               placeholder={t('Description')}
+              rows={3}
+              className='resize-y'
               onChange={(event) =>
                 setEditing((prev) => ({
                   ...prev,
@@ -1007,7 +1010,10 @@ export function MyScriptsPage() {
               <select
                 className='h-9 w-full rounded-md border px-2 text-sm'
                 value={submitCategory}
-                onChange={(e) => setSubmitCategory(e.target.value)}
+                onChange={(e) => {
+                  setSubmitCategory(e.target.value)
+                  localStorage.setItem('script_submit_category', e.target.value)
+                }}
               >
                 <option value=''>{t('(none)')}</option>
                 {categories.map((c) => (
@@ -1025,7 +1031,10 @@ export function MyScriptsPage() {
                 max='5'
                 step='0.01'
                 value={submitShare}
-                onChange={(e) => setSubmitShare(e.target.value)}
+                onChange={(e) => {
+                  setSubmitShare(e.target.value)
+                  localStorage.setItem('script_submit_share', e.target.value)
+                }}
                 placeholder='3'
               />
             </div>

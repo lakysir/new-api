@@ -1015,7 +1015,7 @@ export function ScriptReviewConsolePage() {
                       <TableCell>
                         {version.author_username || `#${version.author_id}`}
                       </TableCell>
-                      <TableCell>{version.concurrency ?? 1}</TableCell>
+                      <TableCell>{version.concurrency || 1}</TableCell>
                       <TableCell>{formatUnix(version.published_at)}</TableCell>
                       <TableCell>
                         {version.revoked_at ? t('Revoked') : t('Published')}

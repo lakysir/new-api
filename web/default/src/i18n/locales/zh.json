@@ -995,6 +995,7 @@
     "Confirmed at {{time}} by user #{{userId}}": "用户 #{{userId}} 于 {{time}} 确认",
     "Confirmed payment compliance": "确认支付合规",
     "Conflict": "矛盾",
+    "Concurrency": "并发数",
     "Connect": "连接",
     "Connect through OpenAI, Claude, Gemini, and other compatible API routes": "通过 OpenAI、Claude、Gemini 以及其他兼容 API 路由接入",
     "Connected to io.net service normally.": "已正常连接 io.net 服务。",
