@@ -1,463 +1,377 @@
 <div align="center">
 
-![new-api](/web/default/public/logo.png)
+![AI Token P2P Platform](./web/default/public/logo.png)
 
-# New API
+# AI Idle Compute Token-P2P Trading Platform
 
-🍥 **Next-Generation Large Model Gateway and AI Asset Management System**
+🚀 **Browser Extension as Node · AI Token Monetization · New-API Enterprise-Grade Relay Gateway**
 
 <p align="center">
-  <a href="./README.md">中文</a> | 
-  <strong>English</strong> | 
-  <a href="./README.fr.md">Français</a> | 
-  <a href="./README.ja.md">日本語</a>
+  <a href="./README.md">简体中文</a> | <strong>English</strong> | <a href="./README.ja.md">日本語</a> | <a href="./README.ko.md">한국어</a>
 </p>
 
 <p align="center">
-  <a href="https://raw.githubusercontent.com/Calcium-Ion/new-api/main/LICENSE">
-    <img src="https://img.shields.io/github/license/Calcium-Ion/new-api?color=brightgreen" alt="license">
-  </a>
-  <a href="https://github.com/Calcium-Ion/new-api/releases/latest">
-    <img src="https://img.shields.io/github/v/release/Calcium-Ion/new-api?color=brightgreen&include_prereleases" alt="release">
-  </a>
-  <a href="https://github.com/users/Calcium-Ion/packages/container/package/new-api">
-    <img src="https://img.shields.io/badge/docker-ghcr.io-blue" alt="docker">
-  </a>
-  <a href="https://hub.docker.com/r/CalciumIon/new-api">
-    <img src="https://img.shields.io/badge/docker-dockerHub-blue" alt="docker">
-  </a>
-  <a href="https://goreportcard.com/report/github.com/Calcium-Ion/new-api">
-    <img src="https://goreportcard.com/badge/github.com/Calcium-Ion/new-api" alt="GoReportCard">
-  </a>
-</p>
-
-<p align="center">
-  <a href="https://trendshift.io/repositories/8227" target="_blank">
-    <img src="https://trendshift.io/api/badge/repositories/8227" alt="Calcium-Ion%2Fnew-api | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/>
-  </a>
-</p>
-
-<p align="center">
-  <a href="#-quick-start">Quick Start</a> •
-  <a href="#-key-features">Key Features</a> •
-  <a href="#-deployment">Deployment</a> •
-  <a href="#-documentation">Documentation</a> •
-  <a href="#-help-support">Help</a>
+  <a href="#️-build--deploy">Build & Deploy</a> •
+  <a href="#-p2p-ai-token-idle-compute-trading">P2P Compute Trading</a> •
+  <a href="#-new-api-relay-gateway">New-API Relay</a>
 </p>
 
 </div>
 
-## 📝 Project Description
-
-> [!NOTE]  
-> This is an open-source project developed based on [One API](https://github.com/songquanpeng/one-api)
-
-> [!IMPORTANT]  
-> - This project is intended solely for lawful and authorized AI API gateway, organization-level authentication, multi-model management, usage analytics, cost accounting, and private deployment scenarios.
-> - Users must lawfully obtain upstream API keys, accounts, model services, and interface permissions, and must comply with upstream terms of service and applicable laws and regulations.
-> - Users should ensure their use complies with upstream terms of service and applicable laws and regulations.
-> - When providing generative AI services to the public, users should comply with applicable regulatory requirements and fulfill all filing, licensing, content safety, real-name verification, log retention, tax, and upstream authorization obligations required by their jurisdiction.
-
 ---
 
-## 🤝 Trusted Partners
+## 📌 Project Overview
 
-<p align="center">
-  <em>No particular order</em>
-</p>
+This project builds a complete **P2P AI compute trading network** on top of [New API](https://github.com/QuantumNous/new-api) (a next-generation large model gateway).
 
-<p align="center">
-  <a href="https://www.cherry-ai.com/" target="_blank">
-    <img src="./docs/images/cherry-studio.png" alt="Cherry Studio" height="80" />
-  </a>
-  <a href="https://bda.pku.edu.cn/" target="_blank">
-    <img src="./docs/images/pku.png" alt="Peking University" height="80" />
-  </a>
-  <a href="https://www.compshare.cn/?ytag=GPU_yy_gh_newapi" target="_blank">
-    <img src="./docs/images/ucloud.png" alt="UCloud" height="80" />
-  </a>
-  <a href="https://www.aliyun.com/" target="_blank">
-    <img src="./docs/images/aliyun.png" alt="Alibaba Cloud" height="80" />
-  </a>
-  <a href="https://io.net/" target="_blank">
-    <img src="./docs/images/io-net.png" alt="IO.NET" height="80" />
-  </a>
-</p>
+Every user who holds a subscription to AI services such as ChatGPT Plus, Claude Pro, or Gemini Advanced can connect their monthly **idle Token quota** to the marketplace, accept tasks from clients, and earn revenue. Clients, in turn, can call multiple AI capabilities at low cost through a unified SDK without subscribing to each platform individually.
 
----
-
-## 🙏 Special Thanks
-
-<p align="center">
-  <a href="https://www.jetbrains.com/?from=new-api" target="_blank">
-    <img src="https://resources.jetbrains.com/storage/products/company/brand/logos/jb_beam.png" alt="JetBrains Logo" width="120" />
-  </a>
-</p>
-
-<p align="center">
-  <strong>Thanks to <a href="https://www.jetbrains.com/?from=new-api">JetBrains</a> for providing free open-source development license for this project</strong>
-</p>
-
----
-
-## 🚀 Quick Start
-
-### Using Docker Compose (Recommended)
-
-```bash
-# Clone the project
-git clone https://github.com/QuantumNous/new-api.git
-cd new-api
-
-# Edit docker-compose.yml configuration
-nano docker-compose.yml
-
-# Start the service
-docker-compose up -d
-```
-
-<details>
-<summary><strong>Using Docker Commands</strong></summary>
-
-```bash
-# Pull the latest image
-docker pull calciumion/new-api:latest
-
-# Using SQLite (default)
-docker run --name new-api -d --restart always \
-  -p 3000:3000 \
-  -e TZ=Asia/Shanghai \
-  -v ./data:/data \
-  calciumion/new-api:latest
-
-# Using MySQL
-docker run --name new-api -d --restart always \
-  -p 3000:3000 \
-  -e SQL_DSN="root:123456@tcp(localhost:3306)/oneapi" \
-  -e TZ=Asia/Shanghai \
-  -v ./data:/data \
-  calciumion/new-api:latest
-```
-
-> **💡 Tip:** `-v ./data:/data` will save data in the `data` folder of the current directory, you can also change it to an absolute path like `-v /your/custom/path:/data`
-
-</details>
-
----
-
-🎉 After deployment is complete, visit `http://localhost:3000` to start using!
-
-> [!WARNING]
-> When operating this project as a public generative AI service or API resale service, users should first complete all required filing, licensing, content safety, real-name verification, log retention, tax, payment, and upstream authorization obligations.
-
-📖 For more deployment methods, please refer to [Deployment Guide](https://docs.newapi.pro/en/docs/installation)
-
----
-
-## 📚 Documentation
-
-<div align="center">
-
-### 📖 [Official Documentation](https://docs.newapi.pro/en/docs) | [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/QuantumNous/new-api)
-
-</div>
-
-**Quick Navigation:**
-
-| Category | Link |
-|------|------|
-| 🚀 Deployment Guide | [Installation Documentation](https://docs.newapi.pro/en/docs/installation) |
-| ⚙️ Environment Configuration | [Environment Variables](https://docs.newapi.pro/en/docs/installation/config-maintenance/environment-variables) |
-| 📡 API Documentation | [API Documentation](https://docs.newapi.pro/en/docs/api) |
-| ❓ FAQ | [FAQ](https://docs.newapi.pro/en/docs/support/faq) |
-| 💬 Community Interaction | [Communication Channels](https://docs.newapi.pro/en/docs/support/community-interaction) |
-
----
-
-## ✨ Key Features
-
-> For detailed features, please refer to [Features Introduction](https://docs.newapi.pro/en/docs/guide/wiki/basic-concepts/features-introduction)
-
-### 🎨 Core Functions
+### Core Highlights
 
 | Feature | Description |
 |------|------|
-| 🎨 New UI | Modern user interface design |
-| 🌍 Multi-language | Supports Chinese, English, French, Japanese |
-| 🔄 Data Compatibility | Fully compatible with the original One API database |
-| 📈 Data Dashboard | Visual console and statistical analysis |
-| 🔒 Permission Management | Token grouping, model restrictions, user management |
-
-### 💰 Authorized Usage Accounting and Billing
-
-- ✅ Internal top-up and quota allocation for lawful authorized scenarios (EPay, Stripe)
-- ✅ Organization-level per-request, usage-based, and cache-hit cost accounting
-- ✅ Cache billing statistics for OpenAI, Azure, DeepSeek, Claude, Qwen, and supported models
-- ✅ Flexible billing policies for internal management or authorized enterprise customers
-
-### 🔐 Authorization and Security
-
-- 😈 Discord authorization login
-- 🤖 LinuxDO authorization login
-- 📱 Telegram authorization login
-- 🔑 OIDC unified authentication
-
-### 🚀 Advanced Features
-
-**API Format Support:**
-- ⚡ [OpenAI Responses](https://docs.newapi.pro/en/docs/api/ai-model/chat/openai/create-response)
-- ⚡ [OpenAI Realtime API](https://docs.newapi.pro/en/docs/api/ai-model/realtime/create-realtime-session) (including Azure)
-- ⚡ [Claude Messages](https://docs.newapi.pro/en/docs/api/ai-model/chat/create-message)
-- ⚡ [Google Gemini](https://doc.newapi.pro/en/api/google-gemini-chat)
-- 🔄 [Rerank Models](https://docs.newapi.pro/en/docs/api/ai-model/rerank/create-rerank) (Cohere, Jina)
-
-**Intelligent Routing:**
-- ⚖️ Channel weighted random
-- 🔄 Automatic retry on failure
-- 🚦 User-level model rate limiting
-
-**Format Conversion:**
-- 🔄 **OpenAI Compatible ⇄ Claude Messages**
-- 🔄 **OpenAI Compatible → Google Gemini**
-- 🔄 **Google Gemini → OpenAI Compatible** - Text only, function calling not supported yet
-- 🚧 **OpenAI Compatible ⇄ OpenAI Responses** - In development
-- 🔄 **Thinking-to-content functionality**
-
-**Reasoning Effort Support:**
-
-<details>
-<summary>View detailed configuration</summary>
-
-**OpenAI series models:**
-- `o3-mini-high` - High reasoning effort
-- `o3-mini-medium` - Medium reasoning effort
-- `o3-mini-low` - Low reasoning effort
-- `gpt-5-high` - High reasoning effort
-- `gpt-5-medium` - Medium reasoning effort
-- `gpt-5-low` - Low reasoning effort
-
-**Claude thinking models:**
-- `claude-3-7-sonnet-20250219-thinking` - Enable thinking mode
-
-**Google Gemini series models:**
-- `gemini-2.5-flash-thinking` - Enable thinking mode
-- `gemini-2.5-flash-nothinking` - Disable thinking mode
-- `gemini-2.5-pro-thinking` - Enable thinking mode
-- `gemini-2.5-pro-thinking-128` - Enable thinking mode with thinking budget of 128 tokens
-- You can also append `-low`, `-medium`, or `-high` to any Gemini model name to request the corresponding reasoning effort (no extra thinking-budget suffix needed).
-
-</details>
+| 🧩 P2P Compute Market | Browser extension as node — monetize idle AI quotas directly |
+| 🔒 End-to-End Encryption (E2EE) | Task parameters and results are encrypted throughout; credentials never leave the local machine |
+| 📜 Marketplace Script Governance | Script review, hash signing, immutable versioning — malicious code is prevented |
+| 🌐 New-API Relay Gateway | Compatible with OpenAI / Claude / Gemini and other mainstream formats, with multi-channel intelligent routing |
+| 💰 Transparent Settlement Ledger | Double-entry bookkeeping; every payment is traceable to its order, receipt, and rate |
+| ⚡ No Script Updates Required | Adding a new AI site only requires the author to upload a script — the extension needs no new release |
 
 ---
 
-## 🤖 Model Support
+## 🛠️ Build & Deploy
 
-> For details, please refer to [API Documentation - Gateway Interface](https://docs.newapi.pro/en/docs/api)
+### Requirements
 
-| Model Type | Description | Documentation |
-|---------|------|------|
-| 🤖 OpenAI GPTs | gpt-4-gizmo-* series | - |
-| 🎨 Midjourney-Proxy | [Midjourney-Proxy(Plus)](https://github.com/novicezk/midjourney-proxy) | [Documentation](https://doc.newapi.pro/en/api/midjourney-proxy-image) |
-| 🎵 Suno-API | [Suno API](https://github.com/Suno-API/Suno-API) | [Documentation](https://doc.newapi.pro/en/api/suno-music) |
-| 🔄 Rerank | Cohere, Jina | [Documentation](https://docs.newapi.pro/en/docs/api/ai-model/rerank/create-rerank) |
-| 💬 Claude | Messages format | [Documentation](https://docs.newapi.pro/en/docs/api/ai-model/chat/create-message) |
-| 🌐 Gemini | Google Gemini format | [Documentation](https://doc.newapi.pro/en/api/google-gemini-chat) |
-| 🔧 Dify | ChatFlow mode | - |
-| 🎯 Custom upstream | Supports configuring legally authorized upstream endpoints | - |
-
-### 📡 Supported Interfaces
-
-<details>
-<summary>View complete interface list</summary>
-
-- [Chat Interface (Chat Completions)](https://docs.newapi.pro/en/docs/api/ai-model/chat/openai/create-chat-completion)
-- [Response Interface (Responses)](https://docs.newapi.pro/en/docs/api/ai-model/chat/openai/create-response)
-- [Image Interface (Image)](https://docs.newapi.pro/en/docs/api/ai-model/images/openai/v1-images-generations--post)
-- [Audio Interface (Audio)](https://docs.newapi.pro/en/docs/api/ai-model/audio/openai/create-transcription)
-- [Video Interface (Video)](https://docs.newapi.pro/en/docs/api/ai-model/videos/create-video-generation)
-- [Embedding Interface (Embeddings)](https://docs.newapi.pro/en/docs/api/ai-model/embeddings/create-embedding)
-- [Rerank Interface (Rerank)](https://docs.newapi.pro/en/docs/api/ai-model/rerank/create-rerank)
-- [Realtime Conversation (Realtime)](https://docs.newapi.pro/en/docs/api/ai-model/realtime/create-realtime-session)
-- [Claude Chat](https://docs.newapi.pro/en/docs/api/ai-model/chat/create-message)
-- [Google Gemini Chat](https://doc.newapi.pro/en/api/google-gemini-chat)
-
-</details>
+| Component | Version Requirement |
+|------|---------|
+| Go | ≥ 1.21 |
+| Node.js | ≥ 18 (or use Bun ≥ 1.0 for faster builds) |
+| Docker | ≥ 20.10 |
+| Docker Compose | ≥ 2.0 |
+| Database | SQLite (default) / MySQL ≥ 5.7.8 / PostgreSQL ≥ 9.6 |
 
 ---
 
-## 🚢 Deployment
-
-> [!TIP]
-> **Latest Docker image:** `calciumion/new-api:latest`
-
-### 📋 Deployment Requirements
-
-| Component | Requirement |
-|------|------|
-| **Local database** | SQLite (Docker must mount `/data` directory)|
-| **Remote database** | MySQL ≥ 5.7.8 or PostgreSQL ≥ 9.6 |
-| **Container engine** | Docker / Docker Compose |
-
-### ⚙️ Environment Variable Configuration
-
-<details>
-<summary>Common environment variable configuration</summary>
-
-| Variable Name | Description | Default Value |
-|--------|------|--------|
-| `SESSION_SECRET` | Session secret (required for multi-machine deployment) | - |
-| `CRYPTO_SECRET` | Encryption secret (required for Redis) | - |
-| `SQL_DSN` | Database connection string | - |
-| `REDIS_CONN_STRING` | Redis connection string | - |
-| `STREAMING_TIMEOUT` | Streaming timeout (seconds) | `300` |
-| `STREAM_SCANNER_MAX_BUFFER_MB` | Max per-line buffer (MB) for the stream scanner; increase when upstream sends huge image/base64 payloads | `64` |
-| `MAX_REQUEST_BODY_MB` | Max request body size (MB, counted **after decompression**; prevents huge requests/zip bombs from exhausting memory). Exceeding it returns `413` | `32` |
-| `AZURE_DEFAULT_API_VERSION` | Azure API version | `2025-04-01-preview` |
-| `ERROR_LOG_ENABLED` | Error log switch | `false` |
-| `PYROSCOPE_URL` | Pyroscope server address | - |
-| `PYROSCOPE_APP_NAME` | Pyroscope application name | `new-api` |
-| `PYROSCOPE_BASIC_AUTH_USER` | Pyroscope basic auth user | - |
-| `PYROSCOPE_BASIC_AUTH_PASSWORD` | Pyroscope basic auth password | - |
-| `PYROSCOPE_MUTEX_RATE` | Pyroscope mutex sampling rate | `5` |
-| `PYROSCOPE_BLOCK_RATE` | Pyroscope block sampling rate | `5` |
-| `HOSTNAME` | Hostname tag for Pyroscope | `new-api` |
-
-📖 **Complete configuration:** [Environment Variables Documentation](https://docs.newapi.pro/en/docs/installation/config-maintenance/environment-variables)
-
-</details>
-
-### 🔧 Deployment Methods
-
-<details>
-<summary><strong>Method 1: Docker Compose (Recommended)</strong></summary>
+### Option 1: Docker Compose (Recommended)
 
 ```bash
 # Clone the project
-git clone https://github.com/QuantumNous/new-api.git
+git clone https://github.com/lakysir/new-api.git
 cd new-api
 
-# Edit configuration
-nano docker-compose.yml
+# Edit configuration as needed
+nano docker-compose.yml   # Configure database, Redis, secrets, etc.
 
-# Start service
+# Start with a single command
 docker-compose up -d
+
+# Check running status
+docker-compose ps
+docker-compose logs -f new-api
 ```
 
-</details>
+🎉 After startup, visit `http://localhost:3000` to access the admin dashboard. Default credentials: `root` / `123456` — **change the password immediately after your first login**.
 
-<details>
-<summary><strong>Method 2: Docker Commands</strong></summary>
+---
 
-**Using SQLite:**
+### Option 2: Build from Source
+
+#### 1. Backend (Go)
+
 ```bash
-docker run --name new-api -d --restart always \
+cd new-api
+
+# Download dependencies
+go mod download
+
+# Build
+go build -ldflags "-s -w" -o new-api-server .
+
+# Run (SQLite by default, data stored in ./data/)
+./new-api-server
+```
+
+#### 2. Frontend
+
+```bash
+cd new-api/web
+
+# Recommended: use Bun (faster)
+bun install && bun run build
+
+# Or use npm
+npm install && npm run build
+# Build output goes to web/dist/
+```
+
+---
+
+### Option 3: Docker Single Command
+
+```bash
+# Using SQLite (simplest)
+docker run --name ai-token-p2p -d --restart always \
   -p 3000:3000 \
   -e TZ=Asia/Shanghai \
   -v ./data:/data \
-  calciumion/new-api:latest
-```
+  lakysir/new-api:latest
 
-**Using MySQL:**
-```bash
-docker run --name new-api -d --restart always \
+# Using MySQL
+docker run --name ai-token-p2p -d --restart always \
   -p 3000:3000 \
-  -e SQL_DSN="root:123456@tcp(localhost:3306)/oneapi" \
+  -e SQL_DSN="root:password@tcp(db:3306)/aitoken" \
   -e TZ=Asia/Shanghai \
   -v ./data:/data \
-  calciumion/new-api:latest
+  lakysir/new-api:latest
 ```
 
-> **💡 Path explanation:** 
-> - `./data:/data` - Relative path, data saved in the data folder of the current directory
-> - You can also use absolute path, e.g.: `/your/custom/path:/data`
+---
 
-</details>
+### Key Environment Variables
 
-<details>
-<summary><strong>Method 3: BaoTa Panel</strong></summary>
-
-1. Install BaoTa Panel (≥ 9.2.0 version)
-2. Search for **New-API** in the application store
-3. One-click installation
-
-📖 [Tutorial with images](./docs/BT.md)
-
-</details>
-
-### ⚠️ Multi-machine Deployment Considerations
+| Variable | Description | Default |
+|--------|------|--------|
+| `SESSION_SECRET` | Session encryption key (**required** for multi-node deployments) | Randomly generated |
+| `CRYPTO_SECRET` | Data encryption key (**required** for Redis scenarios) | - |
+| `SQL_DSN` | Database connection string | SQLite |
+| `REDIS_CONN_STRING` | Redis connection string | - |
+| `STREAMING_TIMEOUT` | Streaming response timeout (seconds) | `300` |
+| `P2P_TURN_SECRET` | TURN server shared secret (for WebRTC relay) | - |
+| `P2P_RELAY_SECRET` | E2EE Relay server signing key | - |
 
 > [!WARNING]
-> - **Must set** `SESSION_SECRET` - Otherwise login status inconsistent
-> - **Shared Redis must set** `CRYPTO_SECRET` - Otherwise data cannot be decrypted
+> You MUST set `SESSION_SECRET` and `CRYPTO_SECRET` for multi-node/production deployments. It is recommended to use MySQL/PostgreSQL + Redis instead of the default SQLite. Please fulfill all applicable compliance obligations before offering this service to the public.
 
-### 🔄 Channel Retry and Cache
+---
 
-**Retry configuration:** `Settings → Operation Settings → General Settings → Failure Retry Count`
+## 🔗 P2P AI Token Idle Compute Trading
 
-**Cache configuration:**
-- `REDIS_CONN_STRING`: Redis cache (recommended)
-- `MEMORY_CACHE_ENABLED`: Memory cache
+### What is P2P Compute Trading?
+
+Many people hold subscriptions to ChatGPT Plus, Claude Pro, or Gemini Advanced but don't use up their monthly Token quota. This platform lets you turn those **idle AI quotas** into income:
+
+- **As a Provider**: Install the browser extension, auto-accept tasks in the background, execute them with your locally logged-in AI account, and get paid.
+- **As a Client**: Purchase AI execution capability via a unified API / SDK, paying per task — no need to subscribe to each platform separately.
+- **As a Script Author**: Use the extension's built-in packet-capture analyzer to write scripts for any AI website, then earn a share of revenue based on adoption.
+
+```
+Client posts task + pays fee
+  → Platform matches an online node
+    → Provider extension executes the task in the local browser using a logged-in AI service
+      → Result returned to Client via end-to-end encryption
+        → Platform auto-settles; Provider receives earnings
+```
+
+---
+
+### Three Roles
+
+#### 🖥️ Provider — AI Quota Supplier
+
+**You have**: ChatGPT Plus / Claude Pro / Gemini Advanced / Midjourney subscriptions.
+
+**You do**: Install extension → choose allowed scripts → set price and daily limit → keep browser open to auto-accept tasks.
+
+**You earn**: Token revenue after each successful task, withdrawable at any time.
+
+| Security Guarantee | Details |
+|---------|------|
+| Credentials stay local | Passwords and cookies exist only in your local browser — never uploaded |
+| Pause anytime | Stop accepting tasks at any time without affecting settled earnings |
+| Transparent authorization | Each script must be manually tested and confirmed before you list it |
+| Traceable earnings | Every payment traces back to a specific order, receipt, and billing detail |
+
+#### 👤 Client — Task Requester
+
+Create tasks via the Client SDK or HTTP API. Task parameters are end-to-end encrypted — the platform server cannot read the content.
+
+```typescript
+import { AiTokenClient } from '@ai-token-p2p/sdk'
+
+const client = new AiTokenClient({ apiKey: 'your-api-key' })
+
+// Query available capabilities (scripts, prices, online node count)
+const caps = await client.listCapabilities()
+
+// Create a task (config is E2EE-encrypted before sending)
+const order = await client.createOrder({
+  scriptId: 'chatgpt-text-v1',
+  config: { prompt: 'Write a project plan for me', model: 'gpt-4o' },
+  maxCost: 0.05,
+  timeoutSeconds: 120,
+})
+
+const result = await client.waitForResult(order.id)
+console.log(result.output)
+```
+
+#### ✍️ Script Author
+
+Use the extension's built-in workbench (`analysis.html`) to generate `runGeneratedTest(config)` scripts for any AI website:
+
+1. Open the target AI site; start packet capture in the analyzer
+2. Perform the target operation; AI auto-analyzes requests and generates a script
+3. Test locally, then submit for review
+4. Upon approval, publish as a hash-locked immutable version
+5. All Provider nodes can adopt the script and you earn a usage share
+
+---
+
+### Security Architecture
+
+| Feature | Implementation |
+|---------|---------|
+| 🔒 End-to-End Encryption | Task params and results are E2EE-encrypted; control plane cannot decrypt |
+| 🚫 Credential Isolation | Third-party cookies, passwords, API keys stay local — never uploaded |
+| 📜 Immutable Scripts | Hash-locked on publish, cannot be overwritten — prevents supply-chain attacks |
+| 🎯 Least Privilege | Scripts can only access their declared target Origin — no cross-site operations |
+| ✅ Dual-sided Receipts | Client + Provider dual-signed receipt per transaction, independently verifiable |
+| 🛡️ Sandbox Review | Auto-scan + sandbox test + manual review before any script goes live |
+
+---
+
+### Provider Quick Start
+
+**Step 1: Install the extension**
+
+Download the latest plugin `.zip` from [Releases](https://github.com/lakysir/new-api/releases) and unzip it.
+
+In Chrome: `chrome://extensions/` → enable **Developer mode** → **Load unpacked** → select the unzipped folder.
+
+**Step 2: Bind your account**
+
+Click the extension icon → log in to your platform account → complete device binding.
+
+**Step 3: List a capability**
+
+1. Open the target AI website (e.g. `chat.openai.com`) and ensure you are logged in
+2. Extension popup → **Script Marketplace** → select a script
+3. Read the description (target site, permissions, cost, account risks)
+4. Click **Local Test** and confirm success
+5. Set your **unit price** and **daily limit**, then click **List**
+
+**Step 4: Accept tasks**
+
+Keep your browser open. The extension auto-accepts and executes tasks in the background. Earnings are logged in real time.
+
+---
+
+## 🌐 New-API Relay Gateway
+
+This project includes a full **New-API large-model relay gateway** — a unified AI API ingress layer supporting multi-model management, format conversion, intelligent routing, and cost accounting.
+
+### What can the relay do?
+
+Just replace `base_url` in your existing code — no other changes needed:
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="your-platform-token",
+    base_url="http://your-server:3000/v1"
+)
+
+response = client.chat.completions.create(
+    model="gpt-4o",   # also accepts claude-3-5-sonnet-20241022, gemini-2.5-pro, etc.
+    messages=[{"role": "user", "content": "Hello"}]
+)
+print(response.choices[0].message.content)
+```
+
+---
+
+### Core Features
+
+#### 🔄 Multi-format API Conversion
+
+| Source | Target | Status |
+|--------|---------|------|
+| OpenAI Chat ↔ Claude Messages | Bidirectional | ✅ |
+| OpenAI Chat → Google Gemini | One-way | ✅ |
+| Google Gemini → OpenAI Chat | Text (function calling in progress) | ✅ |
+| OpenAI Realtime API (incl. Azure) | Real-time voice | ✅ |
+| OpenAI Responses API | New response format | ✅ |
+
+#### ⚖️ Intelligent Routing & High Availability
+
+- **Weighted random**: Assign weights across API keys / providers, auto-balance load
+- **Auto-retry**: Switch to backup channel on failure
+- **Per-user rate limiting**: Fine-grained per-Token request limits to prevent abuse
+
+#### 💰 Granular Billing
+
+- Per-Token billing with cache-hit discount tracking
+- Cache billing for OpenAI, Azure, DeepSeek, Claude, Qwen, and more
+- Internal quota allocation (EPay / Stripe)
+- Visual dashboard for real-time cost tracking per model and user
+
+#### 🔑 Access Control
+
+- Token groups: restrict model scope, usage limits, expiry, source IP
+- Login methods: Discord / Telegram / LinuxDO / OIDC
+- Full request logs and usage audit
+
+---
+
+### Supported Models
+
+| Type | Support |
+|---------|------|
+| OpenAI (Chat / Responses / Realtime) | ✅ Full |
+| Claude Messages | ✅ Full |
+| Google Gemini | ✅ Full |
+| Azure OpenAI | ✅ Full |
+| Midjourney (via Proxy) | ✅ Image generation |
+| Suno | ✅ Music generation |
+| Rerank (Cohere / Jina) | ✅ |
+| Image / Audio / Video / Embeddings | ✅ Full |
+
+#### Reasoning Effort
+
+Append a suffix to any model name — no parameter changes needed:
+
+```
+gpt-5-high / gpt-5-low
+o3-mini-medium
+gemini-2.5-pro-high
+claude-3-7-sonnet-20250219-thinking
+```
+
+---
+
+### Admin Dashboard Quick Start
+
+1. Visit `http://your-server:3000`, log in with the admin account
+2. **Channel Management** → add your API keys
+3. **Token Management** → create tokens for team members or apps
+4. **Dashboard** → view real-time usage, cost, and success rates
+5. **Settings → Operations** → configure retries, rate limits, billing policies
 
 ---
 
 ## 🔗 Related Projects
 
-### Upstream Projects
-
 | Project | Description |
 |------|------|
-| [One API](https://github.com/songquanpeng/one-api) | Original project base |
-| [Midjourney-Proxy](https://github.com/novicezk/midjourney-proxy) | Midjourney interface support |
-
-### Supporting Tools
-
-| Project | Description |
-|------|------|
-| [new-api-key-tool](https://github.com/Calcium-Ion/new-api-key-tool) | Key quota query tool |
-| [new-api-horizon](https://github.com/Calcium-Ion/new-api-horizon) | New API high-performance optimized version |
+| [New API](https://github.com/QuantumNous/new-api) | Upstream gateway |
+| [One API](https://github.com/songquanpeng/one-api) | Original project |
+| [Midjourney-Proxy](https://github.com/novicezk/midjourney-proxy) | Midjourney support |
 
 ---
 
-## 💬 Help Support
+## 📜 License
 
-### 📖 Documentation Resources
-
-| Resource | Link |
-|------|------|
-| 📘 FAQ | [FAQ](https://docs.newapi.pro/en/docs/support/faq) |
-| 💬 Community Interaction | [Communication Channels](https://docs.newapi.pro/en/docs/support/community-interaction) |
-| 🐛 Issue Feedback | [Issue Feedback](https://docs.newapi.pro/en/docs/support/feedback-issues) |
-| 📚 Complete Documentation | [Official Documentation](https://docs.newapi.pro/en/docs) |
-
-### 🤝 Contribution Guide
-
-Welcome all forms of contribution!
-
-- 🐛 Report Bugs
-- 💡 Propose New Features
-- 📝 Improve Documentation
-- 🔧 Submit Code
-
----
-
-## 🌟 Star History
-
-<div align="center">
-
-[![Star History Chart](https://api.star-history.com/svg?repos=Calcium-Ion/new-api&type=Date)](https://star-history.com/#Calcium-Ion/new-api&Date)
-
-</div>
+Licensed under [AGPLv3](./LICENSE), built on [New API](https://github.com/QuantumNous/new-api) (MIT).
+For commercial licensing inquiries, please open an issue or contact us.
 
 ---
 
 <div align="center">
 
-### 💖 Thank you for using New API
+### 💖 Thank you for using the AI Token P2P Platform
 
-If this project is helpful to you, welcome to give us a ⭐️ Star！
-
-**[Official Documentation](https://docs.newapi.pro/en/docs)** • **[Issue Feedback](https://github.com/Calcium-Ion/new-api/issues)** • **[Latest Release](https://github.com/Calcium-Ion/new-api/releases)**
-
-<sub>Built with ❤️ by QuantumNous</sub>
+If this project helps you, please give us a ⭐️ Star!
 
 </div>

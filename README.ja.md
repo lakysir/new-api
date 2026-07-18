@@ -1,480 +1,331 @@
 <div align="center">
 
-![new-api](/web/default/public/logo.png)
+![AI Token P2P Platform](./web/default/public/logo.png)
 
-# New API
+# AI 遊休算力 Token-P2P 取引プラットフォーム
 
-🍥 **次世代大規模モデルゲートウェイとAI資産管理システム**
+🚀 **ブラウザ拡張機能がノードに · AI Token 収益化 · New-API エンタープライズ中継ゲートウェイ**
 
 <p align="center">
-  <a href="./README.zh_CN.md">简体中文</a> |
-  <a href="./README.zh_TW.md">繁體中文</a> |
-  <a href="./README.md">English</a> |
-  <a href="./README.fr.md">Français</a> |
-  <strong>日本語</strong>
+  <a href="./README.md">简体中文</a> |
+  <a href="./README.en.md">English</a> |
+  <strong>日本語</strong> |
+  <a href="./README.ko.md">한국어</a>
 </p>
 
 <p align="center">
-  <a href="https://raw.githubusercontent.com/Calcium-Ion/new-api/main/LICENSE">
-    <img src="https://img.shields.io/github/license/Calcium-Ion/new-api?color=brightgreen" alt="license">
-  </a><!--
-  --><a href="https://github.com/Calcium-Ion/new-api/releases/latest">
-    <img src="https://img.shields.io/github/v/release/Calcium-Ion/new-api?color=brightgreen&include_prereleases" alt="release">
-  </a><!--
-  --><a href="https://hub.docker.com/r/CalciumIon/new-api">
-    <img src="https://img.shields.io/badge/docker-dockerHub-blue" alt="docker">
-  </a><!--
-  --><a href="https://goreportcard.com/report/github.com/Calcium-Ion/new-api">
-    <img src="https://goreportcard.com/badge/github.com/Calcium-Ion/new-api" alt="GoReportCard">
-  </a>
-</p>
-
-<p align="center">
-  <a href="https://trendshift.io/repositories/20180" target="_blank">
-    <img src="https://trendshift.io/api/badge/repositories/20180" alt="QuantumNous%2Fnew-api | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/>
-  </a>
-  <br>
-  <a href="https://hellogithub.com/repository/QuantumNous/new-api" target="_blank">
-    <img src="https://api.hellogithub.com/v1/widgets/recommend.svg?rid=539ac4217e69431684ad4a0bab768811&claim_uid=tbFPfKIDHpc4TzR" alt="Featured｜HelloGitHub" style="width: 250px; height: 54px;" width="250" height="54" />
-  </a><!--
-  --><a href="https://www.producthunt.com/products/new-api/launches/new-api?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-new-api" target="_blank" rel="noopener noreferrer">
-    <img src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1047693&theme=light&t=1769577875005" alt="New API - All-in-one AI asset management gateway. | Product Hunt" style="width: 250px; height: 54px;" width="250" height="54" />
-  </a>
-</p>
-
-<p align="center">
-  <a href="#-クイックスタート">クイックスタート</a> •
-  <a href="#-主な機能">主な機能</a> •
-  <a href="#-デプロイ">デプロイ</a> •
-  <a href="#-ドキュメント">ドキュメント</a> •
-  <a href="#-ヘルプサポート">ヘルプ</a>
+  <a href="#%EF%B8%8F-ビルドとデプロイ">ビルド・デプロイ</a> •
+  <a href="#-p2p-ai-token-遊休算力取引">P2P算力取引</a> •
+  <a href="#-new-api-中継ゲートウェイ">New-API中継</a>
 </p>
 
 </div>
 
-## 📝 プロジェクト説明
+---
 
-> [!IMPORTANT]
-> - 本プロジェクトは、合法的に許可された AI API ゲートウェイ、組織レベルの認証、マルチモデル管理、利用量分析、コスト管理、プライベートデプロイのシナリオのみを対象としています。
-> - ユーザーは、上流の API キー、アカウント、モデルサービス、インターフェース権限を合法的に取得し、上流のサービス利用規約および適用される法律法規を遵守する必要があります。
-> - ユーザーは、利用方法が上流のサービス利用規約および適用される法律法規に準拠していることを確認してください。
-> - 生成 AI サービスを公衆に提供する場合、ユーザーは適用される規制要件を遵守し、管轄区域で求められる届出、ライセンス、コンテンツセキュリティ、本人確認、ログ保持、税務、上流認可などのすべての義務を履行してください。
+## 📌 プロジェクト概要
+
+本プロジェクトは [New API](https://github.com/QuantumNous/new-api)（次世代大規模モデルゲートウェイ）をベースに、完全な **P2P AI 算力取引ネットワーク**を構築したものです。
+
+ChatGPT Plus・Claude Pro・Gemini Advanced などの AI サービスを購読しているユーザーは、毎月の**遊休 Token 枠**をマーケットに接続し、クライアントのタスクを受注して収益を得ることができます。一方、クライアントは統一 SDK を通じて低コストで複数の AI 能力を呼び出せ、各プラットフォームに個別に登録する必要がありません。
+
+### 主な特徴
+
+| 特徴 | 説明 |
+|------|------|
+| 🧩 P2P 算力マーケット | ブラウザ拡張機能がノードに — 遊休 AI 枠を直接収益化 |
+| 🔒 エンドツーエンド暗号化 (E2EE) | タスクのパラメータと結果は全プロセスで暗号化され、認証情報はローカルを離れない |
+| 📜 マーケットスクリプト管理 | スクリプト審査・ハッシュ署名・バージョン不変 — 悪意あるコードを防止 |
+| 🌐 New-API 中継ゲートウェイ | OpenAI / Claude / Gemini 等の主要フォーマットに対応、マルチチャネル・インテリジェントルーティング |
+| 💰 透明な決済台帳 | 複式簿記で、すべての収益を注文・領収書・レートまで追跡可能 |
+| ⚡ スクリプト更新不要 | 新しい AI サイトを追加するにはスクリプトをアップロードするだけ — 拡張機能の更新は不要 |
 
 ---
 
-## 🤝 信頼できるパートナー
+## 🛠️ ビルドとデプロイ
 
-<p align="center">
-  <em>順不同</em>
-</p>
+### 動作要件
 
-<p align="center">
-  <a href="https://www.cherry-ai.com/" target="_blank">
-    <img src="./docs/images/cherry-studio.png" alt="Cherry Studio" height="80" />
-  </a><!--
-  --><a href="https://github.com/iOfficeAI/AionUi/" target="_blank">
-    <img src="./docs/images/aionui.png" alt="Aion UI" height="80" />
-  </a><!--
-  --><a href="https://bda.pku.edu.cn/" target="_blank">
-    <img src="./docs/images/pku.png" alt="北京大学" height="80" />
-  </a><!--
-  --><a href="https://www.compshare.cn/?ytag=GPU_yy_gh_newapi" target="_blank">
-    <img src="./docs/images/ucloud.png" alt="UCloud 優刻得" height="80" />
-  </a><!--
-  --><a href="https://www.aliyun.com/" target="_blank">
-    <img src="./docs/images/aliyun.png" alt="Alibaba Cloud" height="80" />
-  </a><!--
-  --><a href="https://io.net/" target="_blank">
-    <img src="./docs/images/io-net.png" alt="IO.NET" height="80" />
-  </a>
-</p>
+| コンポーネント | バージョン要件 |
+|------|---------|
+| Go | ≥ 1.21 |
+| Node.js | ≥ 18（または Bun ≥ 1.0、高速ビルド推奨） |
+| Docker | ≥ 20.10 |
+| Docker Compose | ≥ 2.0 |
+| データベース | SQLite（デフォルト）/ MySQL ≥ 5.7.8 / PostgreSQL ≥ 9.6 |
 
 ---
 
-## 🙏 特別な感謝
-
-<p align="center">
-  <a href="https://www.jetbrains.com/?from=new-api" target="_blank">
-    <img src="https://resources.jetbrains.com/storage/products/company/brand/logos/jb_beam.png" alt="JetBrains Logo" width="120" />
-  </a>
-</p>
-
-<p align="center">
-  <strong>感謝 <a href="https://www.jetbrains.com/?from=new-api">JetBrains</a> が本プロジェクトに無料のオープンソース開発ライセンスを提供してくれたことに感謝します</strong>
-</p>
-
----
-
-## 🚀 クイックスタート
-
-### Docker Composeを使用（推奨）
+### 方法1：Docker Compose（推奨）
 
 ```bash
-# プロジェクトをクローン
-git clone https://github.com/QuantumNous/new-api.git
+git clone https://github.com/lakysir/new-api.git
 cd new-api
-
-# docker-compose.yml 設定を編集
 nano docker-compose.yml
-
-# サービスを起動
 docker-compose up -d
+docker-compose ps
 ```
 
-<details>
-<summary><strong>Dockerコマンドを使用</strong></summary>
+🎉 起動後、`http://localhost:3000` にアクセス。デフォルト管理者: `root` / `123456`（**初回ログイン後は直ちにパスワードを変更してください**）。
+
+---
+
+### 方法2：ソースからビルド
+
+#### 1. バックエンド（Go）
 
 ```bash
-# 最新のイメージをプル
-docker pull calciumion/new-api:latest
-
-# SQLiteを使用（デフォルト）
-docker run --name new-api -d --restart always \
-  -p 3000:3000 \
-  -e TZ=Asia/Shanghai \
-  -v ./data:/data \
-  calciumion/new-api:latest
-
-# MySQLを使用
-docker run --name new-api -d --restart always \
-  -p 3000:3000 \
-  -e SQL_DSN="root:123456@tcp(localhost:3306)/oneapi" \
-  -e TZ=Asia/Shanghai \
-  -v ./data:/data \
-  calciumion/new-api:latest
+cd new-api
+go mod download
+go build -ldflags "-s -w" -o new-api-server .
+./new-api-server
 ```
 
-> **💡 ヒント:** `-v ./data:/data` は現在のディレクトリの `data` フォルダにデータを保存します。絶対パスに変更することもできます：`-v /your/custom/path:/data`
+#### 2. フロントエンド
 
-</details>
-
----
-
-🎉 デプロイが完了したら、`http://localhost:3000` にアクセスして使用を開始してください！
-
-> [!WARNING]
-> 本プロジェクトを公衆向け生成 AI サービスまたは API 再販サービスとして運営する場合、ユーザーは届出、コンテンツセキュリティ、本人確認、ログ保持、税務、決済、上流認可などの必要なコンプライアンス義務を先に完了してください。
-
-📖 その他のデプロイ方法については[デプロイガイド](https://docs.newapi.pro/ja/docs/installation)を参照してください。
+```bash
+cd new-api/web
+bun install && bun run build
+# または npm install && npm run build
+# 成果物: web/dist/
+```
 
 ---
 
-## 📚 ドキュメント
+### 方法3：Docker 単一コマンド
 
-<div align="center">
+```bash
+# SQLite 使用
+docker run --name ai-token-p2p -d --restart always \
+  -p 3000:3000 -e TZ=Asia/Tokyo -v ./data:/data \
+  lakysir/new-api:latest
 
-### 📖 [公式ドキュメント](https://docs.newapi.pro/ja/docs) | [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/QuantumNous/new-api)
-
-</div>
-
-**クイックナビゲーション:**
-
-| カテゴリ | リンク |
-|------|------|
-| 🚀 デプロイガイド | [インストールドキュメント](https://docs.newapi.pro/ja/docs/installation) |
-| ⚙️ 環境設定 | [環境変数](https://docs.newapi.pro/ja/docs/installation/config-maintenance/environment-variables) |
-| 📡 APIドキュメント | [APIドキュメント](https://docs.newapi.pro/ja/docs/api) |
-| ❓ よくある質問 | [FAQ](https://docs.newapi.pro/ja/docs/support/faq) |
-| 💬 コミュニティ交流 | [交流チャネル](https://docs.newapi.pro/ja/docs/support/community-interaction) |
+# MySQL 使用
+docker run --name ai-token-p2p -d --restart always \
+  -p 3000:3000 \
+  -e SQL_DSN="root:password@tcp(db:3306)/aitoken" \
+  -e TZ=Asia/Tokyo -v ./data:/data \
+  lakysir/new-api:latest
+```
 
 ---
 
-## ✨ 主な機能
+### 主要な環境変数
 
-> 詳細な機能については[機能説明](https://docs.newapi.pro/ja/docs/guide/wiki/basic-concepts/features-introduction)を参照してください。
-
-### 🎨 コア機能
-
-| 機能 | 説明 |
-|------|------|
-| 🎨 新しいUI | モダンなユーザーインターフェースデザイン |
-| 🌍 多言語 | 簡体字中国語、繁体字中国語、英語、フランス語、日本語をサポート |
-| 🔄 データ互換性 | オリジナルのOne APIデータベースと完全に互換性あり |
-| 📈 データダッシュボード | ビジュアルコンソールと統計分析 |
-| 🔒 権限管理 | トークングループ化、モデル制限、ユーザー管理 |
-
-### 💰 認可済み利用量とコスト管理
-
-- ✅ 合法的に許可されたシナリオでの内部チャージとクォータ割り当て（EPay、Stripe）
-- ✅ 組織レベルのリクエスト単位、使用量ベース、キャッシュヒットのコスト会計
-- ✅ OpenAI、Azure、DeepSeek、Claude、Qwen などのモデルのキャッシュ課金統計
-- ✅ 内部管理または認可済み企業顧客向けの柔軟な課金ポリシー
-
-### 🔐 認証とセキュリティ
-
-- 😈 Discord認証ログイン
-- 🤖 LinuxDO認証ログイン
-- 📱 Telegram認証ログイン
-- 🔑 OIDC統一認証
-- 🔍 Key使用量クォータ照会（[new-api-key-tool](https://github.com/Calcium-Ion/new-api-key-tool)と併用）
-
-
-
-### 🚀 高度な機能
-
-**APIフォーマットサポート:**
-- ⚡ [OpenAI Responses](https://docs.newapi.pro/ja/docs/api/ai-model/chat/openai/create-response)
-- ⚡ [OpenAI Realtime API](https://docs.newapi.pro/ja/docs/api/ai-model/realtime/create-realtime-session)（Azureを含む）
-- ⚡ [Claude Messages](https://docs.newapi.pro/ja/docs/api/ai-model/chat/create-message)
-- ⚡ [Google Gemini](https://doc.newapi.pro/ja/api/google-gemini-chat)
-- 🔄 [Rerankモデル](https://docs.newapi.pro/ja/docs/api/ai-model/rerank/create-rerank)（Cohere、Jina）
-
-**インテリジェントルーティング:**
-- ⚖️ チャネル重み付けランダム
-- 🔄 失敗自動リトライ
-- 🚦 ユーザーレベルモデルレート制限
-
-**フォーマット変換:**
-- 🔄 **OpenAI Compatible ⇄ Claude Messages**
-- 🔄 **OpenAI Compatible → Google Gemini**
-- 🔄 **Google Gemini → OpenAI Compatible** - テキストのみ、関数呼び出しはまだサポートされていません
-- 🚧 **OpenAI Compatible ⇄ OpenAI Responses** - 開発中
-- 🔄 **思考からコンテンツへの機能**
-
-**Reasoning Effort サポート:**
-
-<details>
-<summary>詳細設定を表示</summary>
-
-**OpenAIシリーズモデル:**
-- `o3-mini-high` - 高思考努力
-- `o3-mini-medium` - 中思考努力
-- `o3-mini-low` - 低思考努力
-- `gpt-5-high` - 高思考努力
-- `gpt-5-medium` - 中思考努力
-- `gpt-5-low` - 低思考努力
-
-**Claude思考モデル:**
-- `claude-3-7-sonnet-20250219-thinking` - 思考モードを有効にする
-
-**Google Geminiシリーズモデル:**
-- `gemini-2.5-flash-thinking` - 思考モードを有効にする
-- `gemini-2.5-flash-nothinking` - 思考モードを無効にする
-- `gemini-2.5-pro-thinking` - 思考モードを有効にする
-- `gemini-2.5-pro-thinking-128` - 思考モードを有効にし、思考予算を128トークンに設定する
-- Gemini モデル名の末尾に `-low` / `-medium` / `-high` を付けることで推論強度を直接指定できます（追加の思考予算サフィックスは不要です）。
-
-</details>
-
----
-
-## 🤖 モデルサポート
-
-> 詳細については[APIドキュメント - ゲートウェイインターフェース](https://docs.newapi.pro/ja/docs/api)
-
-| モデルタイプ | 説明 | ドキュメント |
-|---------|------|------|
-| 🤖 OpenAI-Compatible | OpenAI互換モデル | [ドキュメント](https://docs.newapi.pro/ja/docs/api/ai-model/chat/openai/createchatcompletion) |
-| 🤖 OpenAI Responses | OpenAI Responsesフォーマット | [ドキュメント](https://docs.newapi.pro/ja/docs/api/ai-model/chat/openai/createresponse) |
-| 🎨 Midjourney-Proxy | [Midjourney-Proxy(Plus)](https://github.com/novicezk/midjourney-proxy) | [ドキュメント](https://doc.newapi.pro/api/midjourney-proxy-image) |
-| 🎵 Suno-API | [Suno API](https://github.com/Suno-API/Suno-API) | [ドキュメント](https://doc.newapi.pro/api/suno-music) |
-| 🔄 Rerank | Cohere、Jina | [ドキュメント](https://docs.newapi.pro/ja/docs/api/ai-model/rerank/creatererank) |
-| 💬 Claude | Messagesフォーマット | [ドキュメント](https://docs.newapi.pro/ja/docs/api/ai-model/chat/createmessage) |
-| 🌐 Gemini | Google Geminiフォーマット | [ドキュメント](https://docs.newapi.pro/ja/docs/api/ai-model/chat/gemini/geminirelayv1beta) |
-| 🔧 Dify | ChatFlowモード | - |
-| 🎯 カスタム上流 | 合法的に許可された上流エンドポイントの設定をサポート | - |
-
-### 📡 サポートされているインターフェース
-
-<details>
-<summary>完全なインターフェースリストを表示</summary>
-
-- [チャットインターフェース (Chat Completions)](https://docs.newapi.pro/ja/docs/api/ai-model/chat/openai/createchatcompletion)
-- [レスポンスインターフェース (Responses)](https://docs.newapi.pro/ja/docs/api/ai-model/chat/openai/createresponse)
-- [イメージインターフェース (Image)](https://docs.newapi.pro/ja/docs/api/ai-model/images/openai/post-v1-images-generations)
-- [オーディオインターフェース (Audio)](https://docs.newapi.pro/ja/docs/api/ai-model/audio/openai/create-transcription)
-- [ビデオインターフェース (Video)](https://docs.newapi.pro/ja/docs/api/ai-model/audio/openai/createspeech)
-- [エンベッドインターフェース (Embeddings)](https://docs.newapi.pro/ja/docs/api/ai-model/embeddings/createembedding)
-- [再ランク付けインターフェース (Rerank)](https://docs.newapi.pro/ja/docs/api/ai-model/rerank/creatererank)
-- [リアルタイム対話インターフェース (Realtime)](https://docs.newapi.pro/ja/docs/api/ai-model/realtime/createrealtimesession)
-- [Claudeチャット](https://docs.newapi.pro/ja/docs/api/ai-model/chat/createmessage)
-- [Google Geminiチャット](https://docs.newapi.pro/ja/docs/api/ai-model/chat/gemini/geminirelayv1beta)
-
-</details>
-
----
-
-## 🚢 デプロイ
-
-> [!TIP]
-> **最新のDockerイメージ:** `calciumion/new-api:latest`
-
-### 📋 デプロイ要件
-
-| コンポーネント | 要件 |
-|------|------|
-| **ローカルデータベース** | SQLite（Dockerは `/data` ディレクトリをマウントする必要があります）|
-| **リモートデータベース** | MySQL ≥ 5.7.8 または PostgreSQL ≥ 9.6 |
-| **コンテナエンジン** | Docker / Docker Compose |
-
-### ⚙️ 環境変数設定
-
-<details>
-<summary>一般的な環境変数設定</summary>
-
-| 変数名 | 説明 | デフォルト値 |
+| 変数名 | 説明 | デフォルト |
 |--------|------|--------|
-| `SESSION_SECRET` | セッションシークレット（マルチマシンデプロイに必須） | - |
-| `CRYPTO_SECRET` | 暗号化シークレット（Redisに必須） | - |
-| `SQL_DSN** | データベース接続文字列 | - |
-| `REDIS_CONN_STRING` | Redis接続文字列 | - |
-| `STREAMING_TIMEOUT` | ストリーミング応答のタイムアウト時間（秒） | `300` |
-| `STREAM_SCANNER_MAX_BUFFER_MB` | ストリームスキャナの1行あたりバッファ上限（MB）。4K画像など巨大なbase64 `data:` ペイロードを扱う場合は値を増加させてください | `64` |
-| `MAX_REQUEST_BODY_MB` | リクエストボディ最大サイズ（MB、**解凍後**に計測。巨大リクエスト/zip bomb によるメモリ枯渇を防止）。超過時は `413` | `32` |
-| `AZURE_DEFAULT_API_VERSION` | Azure APIバージョン | `2025-04-01-preview` |
-| `ERROR_LOG_ENABLED` | エラーログスイッチ | `false` |
-| `PYROSCOPE_URL` | Pyroscopeサーバーのアドレス | - |
-| `PYROSCOPE_APP_NAME` | Pyroscopeアプリ名 | `new-api` |
-| `PYROSCOPE_BASIC_AUTH_USER` | Pyroscope Basic Authユーザー | - |
-| `PYROSCOPE_BASIC_AUTH_PASSWORD` | Pyroscope Basic Authパスワード | - |
-| `PYROSCOPE_MUTEX_RATE` | Pyroscope mutexサンプリング率 | `5` |
-| `PYROSCOPE_BLOCK_RATE` | Pyroscope blockサンプリング率 | `5` |
-| `HOSTNAME` | Pyroscope用のホスト名タグ | `new-api` |
-
-📖 **完全な設定:** [環境変数ドキュメント](https://docs.newapi.pro/ja/docs/installation/config-maintenance/environment-variables)
-
-</details>
-
-### 🔧 デプロイ方法
-
-<details>
-<summary><strong>方法 1: Docker Compose（推奨）</strong></summary>
-
-```bash
-# プロジェクトをクローン
-git clone https://github.com/QuantumNous/new-api.git
-cd new-api
-
-# 設定を編集
-nano docker-compose.yml
-
-# サービスを起動
-docker-compose up -d
-```
-
-</details>
-
-<details>
-<summary><strong>方法 2: Dockerコマンド</strong></summary>
-
-**SQLiteを使用:**
-```bash
-docker run --name new-api -d --restart always \
-  -p 3000:3000 \
-  -e TZ=Asia/Shanghai \
-  -v ./data:/data \
-  calciumion/new-api:latest
-```
-
-**MySQLを使用:**
-```bash
-docker run --name new-api -d --restart always \
-  -p 3000:3000 \
-  -e SQL_DSN="root:123456@tcp(localhost:3306)/oneapi" \
-  -e TZ=Asia/Shanghai \
-  -v ./data:/data \
-  calciumion/new-api:latest
-```
-
-> **💡 パス説明:**
-> - `./data:/data` - 相対パス、データは現在のディレクトリのdataフォルダに保存されます
-> - 絶対パスを使用することもできます：`/your/custom/path:/data`
-
-</details>
-
-<details>
-<summary><strong>方法 3: 宝塔パネル</strong></summary>
-
-1. 宝塔パネル（**9.2.0バージョン**以上）をインストールし、アプリケーションストアで**New-API**を検索してインストールします。
-
-📖 [画像付きチュートリアル](./docs/BT.md)
-
-</details>
-
-### ⚠️ マルチマシンデプロイの注意事項
+| `SESSION_SECRET` | セッション暗号化キー（マルチノードでは**必須**） | 自動生成 |
+| `CRYPTO_SECRET` | データ暗号化キー（Redis 使用時は**必須**） | - |
+| `SQL_DSN` | データベース接続文字列 | SQLite |
+| `REDIS_CONN_STRING` | Redis 接続文字列 | - |
+| `STREAMING_TIMEOUT` | ストリーミングタイムアウト（秒） | `300` |
+| `P2P_TURN_SECRET` | TURN サーバー共有シークレット | - |
+| `P2P_RELAY_SECRET` | E2EE Relay 署名キー | - |
 
 > [!WARNING]
-> - **必ず設定する必要があります** `SESSION_SECRET` - そうしないとマルチマシンデプロイ時にログイン状態が不一致になります
-> - **共有Redisは必ず設定する必要があります** `CRYPTO_SECRET` - そうしないとデータを復号化できません
+> マルチノード/本番環境では `SESSION_SECRET` と `CRYPTO_SECRET` の設定が必須です。
 
-### 🔄 チャネルリトライとキャッシュ
+---
 
-**リトライ設定:** `設定 → 運営設定 → 一般設定 → 失敗リトライ回数`
+## 🔗 P2P AI Token 遊休算力取引
 
-**キャッシュ設定:**
-- `REDIS_CONN_STRING`：Redisキャッシュ（推奨）
-- `MEMORY_CACHE_ENABLED`：メモリキャッシュ
+### P2P 算力取引とは？
+
+ChatGPT Plus・Claude Pro・Gemini Advanced などを利用しているが毎月の Token 枠を使い切れていない方向けに、その**遊休 AI 枠**を収益化するプラットフォームです。
+
+- **Provider として**: ブラウザ拡張機能をインストールし、バックグラウンドで自動受注してローカルの AI アカウントでタスクを実行、報酬を得ます。
+- **Client として**: 統一 API / SDK 経由でタスクごとに AI 実行能力を購入。各プラットフォームへの個別登録不要。
+- **スクリプト作者として**: 内蔵アナライザーで任意の AI サイト向けスクリプトを作成し、採用量に応じた報酬を得ます。
+
+```
+Client がタスクを投稿 + 料金を支払う
+  → プラットフォームがオンラインノードをマッチング
+    → Provider 拡張機能がローカルの AI サービスでタスクを実行
+      → 結果を E2EE 暗号化して Client に返送
+        → プラットフォームが自動決済、Provider が収益を受け取る
+```
+
+---
+
+### 3つの参加ロール
+
+#### 🖥️ Provider — AI 枠提供者
+
+**あなたが持っているもの**: ChatGPT Plus / Claude Pro / Gemini Advanced / Midjourney など。
+
+**あなたがすること**: 拡張機能をインストール → スクリプトを選択 → 価格と上限を設定 → ブラウザを開いたまま待つ。
+
+**あなたが得るもの**: タスク完了ごとの Token 収益（いつでも引き出し可能）。
+
+| セキュリティ保証 | 内容 |
+|---------|------|
+| 認証情報はローカルに留まる | パスワードと Cookie はローカルブラウザにのみ存在 |
+| いつでも停止可能 | 既決済収益に影響なく受注を停止可能 |
+| 透明な認可 | 各スクリプトは手動テスト・確認後に出品 |
+| 収益の追跡可能性 | すべての収益を注文・領収書・課金明細まで追跡 |
+
+#### 👤 Client — タスク依頼者
+
+```typescript
+import { AiTokenClient } from '@ai-token-p2p/sdk'
+
+const client = new AiTokenClient({ apiKey: 'your-api-key' })
+
+const order = await client.createOrder({
+  scriptId: 'chatgpt-text-v1',
+  config: { prompt: 'プロジェクト計画書を書いてください', model: 'gpt-4o' },
+  maxCost: 0.05,
+  timeoutSeconds: 120,
+})
+
+const result = await client.waitForResult(order.id)
+console.log(result.output)
+```
+
+#### ✍️ スクリプト作者
+
+1. 対象 AI サイトでパケットキャプチャを開始
+2. 対象操作を実行 → AI が自動でスクリプトを生成
+3. ローカルテスト → 審査に提出
+4. 承認後、ハッシュロックされた不変バージョンとして公開
+5. 採用量に応じた報酬を受け取る
+
+---
+
+### セキュリティアーキテクチャ
+
+| セキュリティ機能 | 実装内容 |
+|---------|---------|
+| 🔒 E2EE | タスク内容の暗号化、コントロールプレーンは復号不可 |
+| 🚫 認証情報の隔離 | Cookie・パスワード・API Key は Provider ローカルのみ |
+| 📜 スクリプトの不変性 | ハッシュロックで上書き不可、サプライチェーン攻撃を防止 |
+| 🎯 最小権限 | 宣言した Origin にのみアクセス可能 |
+| ✅ 双方向領収書 | 双方署名領収書で独立検証可能 |
+| 🛡️ サンドボックス審査 | 自動スキャン + サンドボックス + 人工審査 |
+
+---
+
+### Provider クイックスタート
+
+**ステップ1**: [Releases](https://github.com/lakysir/new-api/releases) から `.zip` をダウンロードして解凍。Chrome で `chrome://extensions/` → **デベロッパー モード** → **パッケージ化されていない拡張機能を読み込む** → 解凍フォルダを選択。
+
+**ステップ2**: 拡張機能アイコンをクリック → プラットフォームアカウントでログイン → デバイスバインド。
+
+**ステップ3**: 対象 AI サイトを開いてログイン → **スクリプトマーケット** → スクリプトを選択 → ローカルテスト → 価格・上限を設定 → **出品**。
+
+**ステップ4**: ブラウザを開いたままにする。拡張機能がバックグラウンドで自動受注・実行します。
+
+---
+
+## 🌐 New-API 中継ゲートウェイ
+
+### 基本的な使い方
+
+`base_url` を置き換えるだけで既存コードから接続できます：
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="your-platform-token",
+    base_url="http://your-server:3000/v1"
+)
+
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "こんにちは"}]
+)
+print(response.choices[0].message.content)
+```
+
+---
+
+### コア機能
+
+#### 🔄 マルチフォーマット API 変換
+
+| ソース | ターゲット | ステータス |
+|--------|---------|------|
+| OpenAI Chat ↔ Claude Messages | 双方向 | ✅ |
+| OpenAI Chat → Google Gemini | 一方向 | ✅ |
+| Google Gemini → OpenAI Chat | テキスト | ✅ |
+| OpenAI Realtime API（Azure 含む）| リアルタイム音声 | ✅ |
+| OpenAI Responses API | 新形式 | ✅ |
+
+#### ⚖️ インテリジェントルーティング
+
+- 加重ランダム選択で負荷分散
+- 失敗時バックアップチャネルへ自動切り替え
+- ユーザーレベルのレート制限
+
+#### 💰 詳細な課金管理
+
+- Token 単位課金・キャッシュヒット割引
+- OpenAI / Azure / DeepSeek / Claude / Qwen 対応
+- EPay / Stripe チャージ対応
+- 可視化ダッシュボード
+
+#### 🔑 アクセス制御
+
+- Token グループ化（モデル制限・有効期限・IP 制限）
+- Discord / Telegram / LinuxDO / OIDC ログイン
+- 完全なリクエストログ・監査
+
+---
+
+### 対応モデル
+
+| タイプ | 対応 |
+|---------|------|
+| OpenAI（Chat / Responses / Realtime） | ✅ |
+| Claude Messages | ✅ |
+| Google Gemini | ✅ |
+| Azure OpenAI | ✅ |
+| Midjourney（via Proxy） | ✅ |
+| Suno | ✅ |
+| Rerank（Cohere / Jina） | ✅ |
+| 画像 / 音声 / 動画 / 埋め込み | ✅ |
+
+#### Reasoning Effort
+
+```
+gpt-5-high / gpt-5-low / o3-mini-medium
+gemini-2.5-pro-high
+claude-3-7-sonnet-20250219-thinking
+```
+
+---
+
+### 管理画面クイックスタート
+
+1. `http://your-server:3000` にアクセス、管理者でログイン
+2. **チャンネル管理** → API Key を追加
+3. **トークン管理** → チームやアプリ向けトークンを作成
+4. **ダッシュボード** → 使用量・コスト・成功率をリアルタイム確認
+5. **設定 → 運用設定** → リトライ・レート制限・課金ポリシーを設定
 
 ---
 
 ## 🔗 関連プロジェクト
 
-### 上流プロジェクト
-
 | プロジェクト | 説明 |
 |------|------|
-| [One API](https://github.com/songquanpeng/one-api) | オリジナルプロジェクトベース |
-| [Midjourney-Proxy](https://github.com/novicezk/midjourney-proxy) | Midjourneyインターフェースサポート |
-
-### 補助ツール
-
-| プロジェクト | 説明 |
-|------|------|
-| [new-api-key-tool](https://github.com/Calcium-Ion/new-api-key-tool) | キー使用量クォータ照会ツール |
-| [new-api-horizon](https://github.com/Calcium-Ion/new-api-horizon) | New API高性能最適化版 |
-
----
-
-## 💬 ヘルプサポート
-
-### 📖 ドキュメントリソース
-
-| リソース | リンク |
-|------|------|
-| 📘 よくある質問 | [FAQ](https://docs.newapi.pro/ja/docs/support/faq) |
-| 💬 コミュニティ交流 | [交流チャネル](https://docs.newapi.pro/ja/docs/support/community-interaction) |
-| 🐛 問題のフィードバック | [問題フィードバック](https://docs.newapi.pro/ja/docs/support/feedback-issues) |
-| 📚 完全なドキュメント | [公式ドキュメント](https://docs.newapi.pro/ja/docs) |
-
-### 🤝 貢献ガイド
-
-あらゆる形の貢献を歓迎します！
-
-- 🐛 バグを報告する
-- 💡 新しい機能を提案する
-- 📝 ドキュメントを改善する
-- 🔧 コードを提出する
+| [New API](https://github.com/QuantumNous/new-api) | 上流ゲートウェイ |
+| [One API](https://github.com/songquanpeng/one-api) | オリジナルプロジェクト |
+| [Midjourney-Proxy](https://github.com/novicezk/midjourney-proxy) | Midjourney サポート |
 
 ---
 
 ## 📜 ライセンス
 
-このプロジェクトは [GNU Affero General Public License v3.0 (AGPLv3)](./LICENSE) の下でライセンスされています。
-
-本プロジェクトは、[One API](https://github.com/songquanpeng/one-api)（MITライセンス）をベースに開発されたオープンソースプロジェクトです。
-
-お客様の組織のポリシーがAGPLv3ライセンスのソフトウェアの使用を許可していない場合、またはAGPLv3のオープンソース義務を回避したい場合は、こちらまでお問い合わせください：[support@quantumnous.com](mailto:support@quantumnous.com)
-
----
-
-## 🌟 スター履歴
-
-<div align="center">
-
-[![スター履歴チャート](https://api.star-history.com/svg?repos=Calcium-Ion/new-api&type=Date)](https://star-history.com/#Calcium-Ion/new-api&Date)
-
-</div>
+本プロジェクトは [AGPLv3](./LICENSE) でライセンスされており、[New API](https://github.com/QuantumNous/new-api)（MIT）をベースに二次開発されています。
 
 ---
 
 <div align="center">
 
-### 💖 New APIをご利用いただきありがとうございます
+### 💖 AI Token P2P プラットフォームをご利用いただきありがとうございます
 
-このプロジェクトがあなたのお役に立てたなら、ぜひ ⭐️ スターをください！
-
-**[公式ドキュメント](https://docs.newapi.pro/ja/docs)** • **[問題フィードバック](https://github.com/Calcium-Ion/new-api/issues)** • **[最新リリース](https://github.com/Calcium-Ion/new-api/releases)**
-
-<sub>❤️ で構築された QuantumNous</sub>
+このプロジェクトが役に立った場合は、⭐️ Star をいただけると嬉しいです！
 
 </div>
