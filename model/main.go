@@ -268,6 +268,13 @@ func migrateDB() error {
 		return err
 	}
 
+	// Drop the old unique index on leases(node_id, active) that enforced
+	// single-task-per-node. Concurrent execution requires multiple active leases
+	// per node, so the uniqueness constraint must be removed. AutoMigrate won't
+	// drop an existing unique index on its own; we do it explicitly here so it
+	// is recreated as a regular index from the updated struct tag.
+	migrateDropLeaseUniqueIndex()
+
 	err := DB.AutoMigrate(
 		&Channel{},
 		&Token{},
@@ -666,6 +673,25 @@ func migrateTokenModelLimitsToText() error {
 		common.SysLog(fmt.Sprintf("Successfully migrated %s.%s to text", tableName, columnName))
 	}
 	return nil
+}
+
+// migrateDropLeaseUniqueIndex drops the old unique index idx_node_active_lease
+// on the leases table. The original schema enforced a single active lease per
+// node via (node_id, active) uniqueness; concurrent execution requires multiple
+// active leases per node, so the constraint must be removed. AutoMigrate will
+// then recreate the index as a regular (non-unique) index from the struct tag.
+// Safe to run multiple times: the HasIndex check is a no-op when the index is
+// already absent.
+func migrateDropLeaseUniqueIndex() {
+	migrator := DB.Migrator()
+	// Check by both the GORM-generated name and any legacy name variants.
+	for _, indexName := range []string{"idx_node_active_lease"} {
+		if migrator.HasIndex(&Lease{}, indexName) {
+			if err := migrator.DropIndex(&Lease{}, indexName); err != nil {
+				common.SysError("failed to drop unique lease index " + indexName + ": " + err.Error())
+			}
+		}
+	}
 }
 
 // migrateSubscriptionPlanPriceAmount migrates price_amount column from float/double to decimal(10,6)
