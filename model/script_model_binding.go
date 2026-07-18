@@ -163,8 +163,14 @@ func syncMarketplaceChannelModels() error {
 	}
 	sort.Strings(names)
 	ch.Models = strings.Join(names, ",")
-	// Update() persists Models and calls UpdateAbilities to rebuild routing.
-	return ch.Update()
+	// Force-write the models column with Select so an empty list (last model
+	// unpublished) is persisted too — Channel.Update()/GORM Updates skips
+	// zero-value fields, so an empty string would be silently dropped, leaving
+	// the stale model routable. Then rebuild abilities from the fresh value.
+	if err := DB.Model(ch).Select("models").Update("models", ch.Models).Error; err != nil {
+		return err
+	}
+	return ch.UpdateAbilities(nil)
 }
 
 // PublishScriptModel creates a binding and republishes the marketplace channel

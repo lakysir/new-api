@@ -486,6 +486,12 @@ export function ScriptReviewConsolePage() {
     try {
       await unpublishScriptModel(binding.model_name)
       toast.success(t('Removed from the model square'))
+      // Restore the model name in the draft input so the operator can
+      // immediately re-list without retyping it.
+      setModelNameDrafts((current) => ({
+        ...current,
+        [binding.script_id]: binding.model_name,
+      }))
       await load()
     } catch (e) {
       toast.error(String((e as Error).message))
