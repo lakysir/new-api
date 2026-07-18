@@ -983,6 +983,12 @@ export function AitokenPurchasePage() {
       setRelayStatus(t('Sending config, waiting for result...'))
       await session.sendConfig(config)
       const result = await Promise.race([session.waitForResult(), failFast])
+      // If the script returned a failure payload, surface the real error message
+      // instead of the generic SCRIPT_EXECUTION_FAILED text.
+      if (result && typeof result === 'object' && (result as Record<string, unknown>).ok === false) {
+        const scriptError = (result as Record<string, unknown>).error
+        throw new Error(typeof scriptError === 'string' && scriptError ? scriptError : describeOrderError('SCRIPT_EXECUTION_FAILED'))
+      }
       const resultText = JSON.stringify(result, null, 2)
       setRelayResult(resultText)
       setRelayStatus(t('Result received'))
