@@ -255,56 +255,52 @@ type JsonFormProps = {
 function JsonForm(props: JsonFormProps) {
   const { t } = useTranslation()
   const path = props.path ?? []
-  if (props.value !== null && typeof props.value === 'object') {
-    const isArray = Array.isArray(props.value)
-    const entries = isArray
-      ? props.value.map((value, index) => [index, value] as const)
-      : Object.entries(props.value)
+  if (Array.isArray(props.value)) {
     return (
-      <div className='space-y-3'>
-        {entries.map(([key, value]) => (
+      <div className='space-y-2'>
+        {props.value.map((value, index) => (
           <div
-            key={String(key)}
-            className='grid gap-1.5 md:grid-cols-[minmax(140px,0.35fr)_1fr] md:gap-4'
+            // JSON array items have no stable IDs; their position is their identity.
+            // eslint-disable-next-line react/no-array-index-key
+            key={index}
+            className='grid grid-cols-[2rem_minmax(0,1fr)_2rem] items-start gap-2'
           >
-            <div className='flex items-center gap-1 pt-1 md:pt-2'>
-              <span className='text-muted-foreground text-sm break-words'>
-                {isArray ? `#${Number(key) + 1}` : key}
-              </span>
-              {isArray && props.onChange && (
-                <Button
-                  type='button'
-                  size='icon-sm'
-                  variant='ghost'
-                  className='text-muted-foreground hover:text-destructive ml-auto'
-                  title={t('Remove item')}
-                  aria-label={t('Remove item {{index}}', {
-                    index: Number(key) + 1,
-                  })}
-                  onClick={() =>
-                    props.onChange?.(
-                      path,
-                      removeJsonArrayItem(props.value, [], Number(key))
-                    )
-                  }
-                >
-                  <Trash2 className='h-4 w-4' />
-                </Button>
-              )}
-            </div>
+            <span className='text-muted-foreground pt-2 text-xs tabular-nums'>
+              {index + 1}
+            </span>
             <JsonForm
               value={value}
-              path={[...path, key]}
+              path={[...path, index]}
               onChange={props.onChange}
             />
+            {props.onChange ? (
+              <Button
+                type='button'
+                size='icon-sm'
+                variant='ghost'
+                className='text-muted-foreground hover:text-destructive'
+                title={t('Remove item')}
+                aria-label={t('Remove item {{index}}', { index: index + 1 })}
+                onClick={() =>
+                  props.onChange?.(
+                    path,
+                    removeJsonArrayItem(props.value, [], index)
+                  )
+                }
+              >
+                <Trash2 className='h-4 w-4' aria-hidden='true' />
+              </Button>
+            ) : (
+              <span />
+            )}
           </div>
         ))}
-        {isArray && props.onChange && (
+        {props.onChange && (
           <Button
             type='button'
             size='sm'
             variant='outline'
-            className='w-full border-dashed'
+            className='ml-10 w-[calc(100%_-_2.5rem)] border-dashed'
             onClick={() =>
               props.onChange?.(path, appendJsonArrayItem(props.value, []))
             }
@@ -317,9 +313,33 @@ function JsonForm(props: JsonFormProps) {
     )
   }
 
+  if (props.value !== null && typeof props.value === 'object') {
+    return (
+      <div className='divide-y'>
+        {Object.entries(props.value).map(([key, value]) => (
+          <div
+            key={key}
+            className='grid gap-2 py-2.5 first:pt-0 last:pb-0 md:grid-cols-[minmax(8rem,11rem)_minmax(0,1fr)] md:gap-3'
+          >
+            <div className='pt-1.5'>
+              <span className='text-muted-foreground text-sm break-words'>
+                {key}
+              </span>
+            </div>
+            <JsonForm
+              value={value}
+              path={[...path, key]}
+              onChange={props.onChange}
+            />
+          </div>
+        ))}
+      </div>
+    )
+  }
+
   if (!props.onChange) {
     return (
-      <div className='bg-muted/30 min-h-10 rounded-md border px-3 py-2 text-sm break-words'>
+      <div className='min-h-9 py-1.5 text-sm break-words whitespace-pre-wrap'>
         {props.value === null ? 'null' : String(props.value)}
       </div>
     )
@@ -331,6 +351,16 @@ function JsonForm(props: JsonFormProps) {
         className='mt-2 h-4 w-4'
         checked={props.value}
         onChange={(event) => props.onChange?.(path, event.target.checked)}
+      />
+    )
+  }
+  const fieldName = path.at(-1)
+  if (typeof fieldName === 'string' && fieldName.toLowerCase() === 'prompt') {
+    return (
+      <Textarea
+        className='min-h-24 resize-y leading-6'
+        value={props.value === null ? '' : String(props.value)}
+        onChange={(event) => props.onChange?.(path, event.target.value)}
       />
     )
   }
@@ -1326,10 +1356,14 @@ export function AitokenPurchasePage() {
                         ? `${Math.round((o.successes / o.executions) * 100)}% (${o.successes}/${o.executions})`
                         : '-'
                     let statusLabel = t('Offline')
-                    if (o.busy) statusLabel = t('Busy')
-                    else if (o.online) statusLabel = o.concurrency > 1
-                      ? `${t('Online')} (${o.available_slots}/${o.total_slots} ${t('slots')})`
-                      : t('Online')
+                    if (o.busy) {
+                      statusLabel = t('Busy')
+                    } else if (o.online) {
+                      statusLabel =
+                        o.concurrency > 1
+                          ? `${t('Online')} (${o.available_slots}/${o.total_slots} ${t('slots')})`
+                          : t('Online')
+                    }
                     return (
                       <label
                         key={o.node_id}
