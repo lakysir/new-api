@@ -1555,47 +1555,47 @@ export function NodesConsolePage() {
             ))}
           </>
         )}
-      </SectionPageLayout.Content>
 
-      {/* Plugin download dialog: shows version, release notes, and download link */}
-      <Dialog open={pluginDialogOpen} onOpenChange={setPluginDialogOpen}>
-        <DialogContent className='max-w-md'>
-          <DialogHeader>
-            <DialogTitle>
-              {t('Browser Plugin')}
-              {pluginRelease?.version && (
-                <Badge variant='secondary' className='ml-2'>
-                  v{pluginRelease.version}
-                </Badge>
+        {/* Plugin download dialog: shows version, release notes, and download link */}
+        <Dialog open={pluginDialogOpen} onOpenChange={setPluginDialogOpen}>
+          <DialogContent className='max-w-md'>
+            <DialogHeader>
+              <DialogTitle>
+                {t('Browser Plugin')}
+                {pluginRelease?.version && (
+                  <Badge variant='secondary' className='ml-2'>
+                    v{pluginRelease.version}
+                  </Badge>
+                )}
+              </DialogTitle>
+              {pluginRelease?.release_notes ? (
+                <DialogDescription className='whitespace-pre-wrap text-left'>
+                  {pluginRelease.release_notes}
+                </DialogDescription>
+              ) : (
+                <DialogDescription>
+                  {t('Download the latest browser extension package.')}
+                </DialogDescription>
               )}
-            </DialogTitle>
-            {pluginRelease?.release_notes ? (
-              <DialogDescription className='whitespace-pre-wrap text-left'>
-                {pluginRelease.release_notes}
-              </DialogDescription>
-            ) : (
-              <DialogDescription>
-                {t('Download the latest browser extension package.')}
-              </DialogDescription>
-            )}
-          </DialogHeader>
-          <div className='flex justify-end pt-2'>
-            <Button
-              render={
-                <a
-                  href={PLUGIN_DOWNLOAD_URL}
-                  target='_blank'
-                  rel='noopener noreferrer'
-                />
-              }
-              onClick={() => setPluginDialogOpen(false)}
-            >
-              <Download className='size-4' />
-              {t('Download')}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+            </DialogHeader>
+            <div className='flex justify-end pt-2'>
+              <Button
+                render={
+                  <a
+                    href={PLUGIN_DOWNLOAD_URL}
+                    target='_blank'
+                    rel='noopener noreferrer'
+                  />
+                }
+                onClick={() => setPluginDialogOpen(false)}
+              >
+                <Download className='size-4' />
+                {t('Download')}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </SectionPageLayout.Content>
     </SectionPageLayout>
   )
 }
