@@ -39,6 +39,8 @@ type UserScript = {
   updated_at: number
   code_preview?: string
   preview_truncated?: boolean
+  /** Max simultaneous executions this script supports on a single node. Default 1. */
+  concurrency?: number
   review_status?:
     | 'draft'
     | 'pending'
@@ -70,6 +72,7 @@ const emptyForm = {
     2
   ),
   draft_code: '',
+  concurrency: 1,
 }
 
 // EXAMPLE_SCRIPT is the complete reference implementation shown in the editor
@@ -436,6 +439,7 @@ export function MyScriptsPage() {
       description: script.description || '',
       script_params: script.script_params || '',
       draft_code: script.draft_code || '',
+      concurrency: script.concurrency ?? 1,
     })
     setEditorOpen(true)
   }
@@ -452,6 +456,7 @@ export function MyScriptsPage() {
       description: editing.description,
       script_params: editing.script_params,
       code: editing.draft_code,
+      concurrency: editing.concurrency ?? 1,
     }
     if (editing.id) {
       await unwrap(api.put(`/api/scripts/mine/${editing.id}`, payload))
@@ -811,6 +816,34 @@ export function MyScriptsPage() {
                 }))
               }
             />
+
+            {/* Concurrency: how many tasks this script can run simultaneously on a
+                single node. Matches the target site's parallel task capacity. */}
+            <div className='flex items-center gap-3'>
+              <div className='min-w-0 flex-1'>
+                <div className='text-sm font-medium'>{t('Concurrency')}</div>
+                <div className='text-muted-foreground mt-0.5 text-xs'>
+                  {t(
+                    'Max simultaneous executions on one node (matches target site capacity, default 1)'
+                  )}
+                </div>
+              </div>
+              <Input
+                type='number'
+                min={1}
+                step={1}
+                className='h-9 w-24'
+                value={editing.concurrency ?? 1}
+                onChange={(event) => {
+                  const parsed = Math.floor(Number(event.target.value))
+                  setEditing((prev) => ({
+                    ...prev,
+                    concurrency: Number.isFinite(parsed) && parsed >= 1 ? parsed : 1,
+                  }))
+                }}
+                aria-label={t('Concurrency')}
+              />
+            </div>
 
             {/* ── Collapsible reference example ───────────────────────── */}
             <div className='rounded-lg border'>

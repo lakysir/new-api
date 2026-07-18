@@ -106,20 +106,15 @@ func Dispatch(orderId string, attempt int) (*Result, error) {
 	}
 
 	taskId := orderId // 1:1 order:task in the MVP
-	// Try candidates in ranked order. A node can pass the ScheduleCandidates
-	// filter (state=IDLE) yet still fail reservation with ErrNodeBusy when it
-	// carries a stale active lease (expired-but-not-yet-reaped, or a lost race).
-	// Skip past those to the next idle candidate instead of failing the whole
-	// dispatch — otherwise "auto" reports "node already has an active lease"
-	// while other free nodes sit unused. A chosen node has a single-element
-	// list, so it still surfaces ErrNodeBusy as before.
+	// Try candidates in ranked order. A node can pass ScheduleCandidates yet
+	// still fail reservation when a concurrent request grabs the last slot; skip
+	// past those to the next candidate. A chosen node has a single-element list
+	// so it still surfaces ErrNodeBusy as before.
 	var result *Result
 	for _, best := range attemptOrder {
 		var attemptResult *Result
 		txErr := model.DB.Transaction(func(tx *gorm.DB) error {
-			// Reuse the atomic reservation primitive, but within this tx we also
-			// advance the order and enqueue the offer so all three commit together.
-			lease, ta, rerr := reserveInTx(tx, taskId, orderId, best.NodeId, attempt, DefaultLeaseTTL)
+			lease, ta, rerr := reserveInTx(tx, taskId, orderId, best.NodeId, o.ScriptId, o.Version, attempt, DefaultLeaseTTL)
 			if rerr != nil {
 				return rerr
 			}
@@ -169,24 +164,54 @@ func Dispatch(orderId string, attempt int) (*Result, error) {
 }
 
 // reserveInTx creates the lease + task attempt + flips node to BUSY inside an
-// existing transaction (mirrors model.ReserveNode but composable).
-func reserveInTx(tx *gorm.DB, taskId, orderId, nodeId string, attempt int, ttl time.Duration) (*model.Lease, *model.TaskAttempt, error) {
+// existing transaction. With concurrent execution the node may accept multiple
+// tasks up to its total concurrency; capacity is checked transactionally here.
+func reserveInTx(tx *gorm.DB, taskId, orderId, nodeId string, scriptId, version, attempt int, ttl time.Duration) (*model.Lease, *model.TaskAttempt, error) {
 	var node model.Node
 	if err := tx.Where("id = ?", nodeId).First(&node).Error; err != nil {
 		return nil, nil, model.ErrNodeNotFound
 	}
-	if node.State != model.NodeStateIdle || !node.IsOnline() {
+	if !node.IsOnline() {
 		return nil, nil, model.ErrNodeBusy
 	}
+	// Node-level capacity: active leases < sum of all capability concurrency.
+	var totalCap int64
+	tx.Table("node_capabilities").
+		Select("COALESCE(SUM(concurrency), 1)").
+		Where("node_id = ? AND status = ?", nodeId, model.CapabilityStatusActive).
+		Scan(&totalCap)
+	if totalCap < 1 {
+		totalCap = 1
+	}
+	var totalActive int64
+	tx.Model(&model.Lease{}).Where("node_id = ? AND active = ?", nodeId, true).Count(&totalActive)
+	if totalActive >= totalCap {
+		return nil, nil, model.ErrNodeBusy
+	}
+	// Per-script capacity: active leases for this script < this cap's concurrency.
+	var scriptCap int64
+	tx.Table("node_capabilities").
+		Select("COALESCE(concurrency, 1)").
+		Where("node_id = ? AND script_id = ? AND version = ? AND status = ?", nodeId, scriptId, version, model.CapabilityStatusActive).
+		Scan(&scriptCap)
+	if scriptCap < 1 {
+		scriptCap = 1
+	}
+	var scriptActive int64
+	tx.Model(&model.Lease{}).
+		Where("node_id = ? AND script_id = ? AND version = ? AND active = ?", nodeId, scriptId, version, true).
+		Count(&scriptActive)
+	if scriptActive >= scriptCap {
+		return nil, nil, model.ErrNodeBusy
+	}
+
 	active := true
 	lease := &model.Lease{
 		Id: "lea_" + model.NewEventId()[4:], NodeId: nodeId, TaskId: taskId,
+		ScriptId: scriptId, Version: version,
 		Attempt: attempt, Active: &active, ExpiresAt: time.Now().Add(ttl).Unix(),
 	}
 	if err := tx.Create(lease).Error; err != nil {
-		if isUniqueErr(err) {
-			return nil, nil, model.ErrNodeBusy
-		}
 		return nil, nil, err
 	}
 	ta := &model.TaskAttempt{TaskId: taskId, OrderId: orderId, Attempt: attempt, NodeId: nodeId, LeaseId: lease.Id, State: model.AttemptReserved}

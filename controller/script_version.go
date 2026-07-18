@@ -338,10 +338,18 @@ func PublishScriptVersion(c *gin.Context) {
 		TimeoutSeconds:    180,
 		CategoryId:        script.CategoryId,
 		PricingTemplateId: templateId,
-		Code:              normalized,
-		CodeSha256:        codeSha256,
-		ReviewStatus:      model.ScriptVersionApproved,
-		PublishedAt:       common.GetTimestamp(),
+		// Snapshot the concurrency value so this version's scheduling semantics
+		// are immutable even if the author later changes the draft concurrency.
+		Concurrency: func() int {
+			if script.Concurrency < 1 {
+				return 1
+			}
+			return script.Concurrency
+		}(),
+		Code:         normalized,
+		CodeSha256:   codeSha256,
+		ReviewStatus: model.ScriptVersionApproved,
+		PublishedAt:  common.GetTimestamp(),
 	}
 	claim := model.DB.Model(&model.UserScript{}).
 		Where("id = ? AND user_id = ? AND review_status = ?", script.Id, script.UserId, model.ScriptReviewApproved).

@@ -80,6 +80,8 @@ type PendingScript = {
   review_status: string
   author_share_rate_ppm?: number
   category_id?: number
+  /** Max simultaneous executions per node this script supports. */
+  concurrency?: number
 }
 
 type DiffLine = {
@@ -587,6 +589,7 @@ export function ScriptReviewConsolePage() {
               <TableHead>{t('Author')}</TableHead>
               <TableHead>{t('Category')}</TableHead>
               <TableHead>{t('Author share')}</TableHead>
+              <TableHead>{t('Concurrency')}</TableHead>
               <TableHead>{t('Platform fee %')}</TableHead>
               <TableHead>{t('View Code')}</TableHead>
               <TableHead>{t('Note')}</TableHead>
@@ -603,6 +606,7 @@ export function ScriptReviewConsolePage() {
                   {categoryNames.get(s.category_id || 0) || t('Uncategorized')}
                 </TableCell>
                 <TableCell>{ppmToPercent(s.author_share_rate_ppm)}%</TableCell>
+                <TableCell>{s.concurrency ?? 1}</TableCell>
                 <TableCell>
                   <Input
                     className='h-8 w-20'
@@ -857,6 +861,7 @@ export function ScriptReviewConsolePage() {
                   <TableHead>{t('Version')}</TableHead>
                   <TableHead>{t('Category')}</TableHead>
                   <TableHead>{t('Author')}</TableHead>
+                  <TableHead>{t('Concurrency')}</TableHead>
                   <TableHead>{t('Published')}</TableHead>
                   <TableHead>{t('Status')}</TableHead>
                   <TableHead>{t('Model square')}</TableHead>
@@ -883,6 +888,7 @@ export function ScriptReviewConsolePage() {
                       <TableCell>
                         {version.author_username || `#${version.author_id}`}
                       </TableCell>
+                      <TableCell>{version.concurrency ?? 1}</TableCell>
                       <TableCell>{formatUnix(version.published_at)}</TableCell>
                       <TableCell>
                         {version.revoked_at ? t('Revoked') : t('Published')}

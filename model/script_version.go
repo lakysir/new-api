@@ -33,16 +33,20 @@ type ScriptVersion struct {
 	AllowedOrigins    string `json:"allowed_origins" gorm:"type:text"` // JSON array
 	TimeoutSeconds    int    `json:"timeout_seconds" gorm:"default:180"`
 	PricingTemplateId int    `json:"pricing_template_id" gorm:"default:0;index"`
-	Code              string `json:"code,omitempty" gorm:"type:mediumtext"`
-	CodeSha256        string `json:"code_sha256" gorm:"type:varchar(80);index"`
-	SignatureKeyId    string `json:"signature_key_id" gorm:"type:varchar(64)"`
-	Signature         string `json:"signature" gorm:"type:varchar(256)"`
-	ReviewStatus      string `json:"review_status" gorm:"type:varchar(16);index;default:approved"`
-	PublishedAt       int64  `json:"published_at" gorm:"bigint;index"`
-	RevokedAt         int64  `json:"revoked_at" gorm:"bigint;default:0;index"`
-	RevokedReason     string `json:"revoked_reason,omitempty" gorm:"type:varchar(512)"`
-	RevokeSeverity    string `json:"revoke_severity,omitempty" gorm:"type:varchar(16)"`
-	CreatedAt         int64  `json:"created_at" gorm:"autoCreateTime"`
+	// Concurrency is the max simultaneous executions this script supports per
+	// node — snapshotted from UserScript.Concurrency at publish time so version
+	// semantics are immutable after publish. Defaults to 1.
+	Concurrency    int    `json:"concurrency" gorm:"default:1;not null"`
+	Code           string `json:"code,omitempty" gorm:"type:mediumtext"`
+	CodeSha256     string `json:"code_sha256" gorm:"type:varchar(80);index"`
+	SignatureKeyId string `json:"signature_key_id" gorm:"type:varchar(64)"`
+	Signature      string `json:"signature" gorm:"type:varchar(256)"`
+	ReviewStatus   string `json:"review_status" gorm:"type:varchar(16);index;default:approved"`
+	PublishedAt    int64  `json:"published_at" gorm:"bigint;index"`
+	RevokedAt      int64  `json:"revoked_at" gorm:"bigint;default:0;index"`
+	RevokedReason  string `json:"revoked_reason,omitempty" gorm:"type:varchar(512)"`
+	RevokeSeverity string `json:"revoke_severity,omitempty" gorm:"type:varchar(16)"`
+	CreatedAt      int64  `json:"created_at" gorm:"autoCreateTime"`
 	AuthorUsername      string `json:"author_username,omitempty" gorm:"-"`
 	AuthorShareRatePPM   int64  `json:"author_share_rate_ppm" gorm:"-"`
 	PlatformFeeRatePPM   int64  `json:"platform_fee_rate_ppm" gorm:"-"`

@@ -727,6 +727,7 @@ export function NodesConsolePage() {
                 <TableRow>
                   <TableHead>{t('Script')}</TableHead>
                   <TableHead>{t('Version')}</TableHead>
+                  <TableHead>{t('Concurrency')}</TableHead>
                   <TableHead>{t('Price')}</TableHead>
                   <TableHead>{t('Balance')}</TableHead>
                   <TableHead>{t('Today')}</TableHead>
@@ -775,6 +776,7 @@ export function NodesConsolePage() {
                         {title ? ` ${title}` : ''}
                       </TableCell>
                       <TableCell>v{c.version}</TableCell>
+                      <TableCell>{c.concurrency ?? 1}</TableCell>
                       <TableCell>{microsToCurrency(c.price_micros)}</TableCell>
                       <TableCell>{c.remaining_quota}</TableCell>
                       <TableCell>{daily}</TableCell>
@@ -835,7 +837,7 @@ export function NodesConsolePage() {
                 {list.length === 0 && (
                   <TableRow>
                     <TableCell
-                      colSpan={10}
+                      colSpan={11}
                       className='text-muted-foreground h-20 text-center'
                     >
                       {t('No capabilities')}
@@ -1439,6 +1441,7 @@ export function NodesConsolePage() {
                     <TableRow>
                       <TableHead>{t('Script')}</TableHead>
                       <TableHead>{t('Version')}</TableHead>
+                      <TableHead>{t('Concurrency')}</TableHead>
                       <TableHead>{t('Price')}</TableHead>
                       <TableHead>{t('Balance')}</TableHead>
                       <TableHead>{t('Today')}</TableHead>
@@ -1473,6 +1476,7 @@ export function NodesConsolePage() {
                             {scriptTitle ? ` ${scriptTitle}` : ''}
                           </TableCell>
                           <TableCell>v{c.version}</TableCell>
+                          <TableCell>{c.concurrency ?? 1}</TableCell>
                           <TableCell>
                             {microsToCurrency(c.price_micros)}
                           </TableCell>

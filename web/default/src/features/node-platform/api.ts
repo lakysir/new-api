@@ -368,8 +368,16 @@ export type ScriptOffer = {
   provider_group_name?: string
   price_micros: number
   online: boolean
-  /** Online but currently running a task, so it can't take a new one. */
+  /** True when the node has no available slots for this script (node or script
+   *  concurrency limit exhausted). */
   busy: boolean
+  /** The script's per-node concurrency — how many tasks this script can run
+   *  simultaneously on this node. */
+  concurrency: number
+  /** How many more tasks this script can accept on this node right now. */
+  available_slots: number
+  /** Total concurrency slots for this script on this node. */
+  total_slots: number
   remaining_quota: number
   state: string
   /** Lifetime task attempts (success + failure) on this node. */

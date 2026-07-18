@@ -18,6 +18,10 @@ type userScriptSaveRequest struct {
 	ScriptParams string `json:"script_params"`
 	Code         string `json:"code"`
 	DraftCode    string `json:"draft_code"`
+	// Concurrency is the maximum simultaneous executions this script supports
+	// on a single node (default 1). Authors set this to match the target site's
+	// capacity; providers and buyers see it when browsing the marketplace.
+	Concurrency int `json:"concurrency"`
 }
 
 type publishedScriptListItem struct {
@@ -127,7 +131,11 @@ func SaveMyScriptDraft(c *gin.Context) {
 		}
 		id = parsed
 	}
-	script, err := model.UpsertUserScriptDraft(c.GetInt("id"), id, req.Title, req.Description, req.ScriptParams, scriptCodeFromRequest(req))
+	concurrency := req.Concurrency
+	if concurrency < 1 {
+		concurrency = 1
+	}
+	script, err := model.UpsertUserScriptDraft(c.GetInt("id"), id, req.Title, req.Description, req.ScriptParams, scriptCodeFromRequest(req), concurrency)
 	if err != nil {
 		common.ApiError(c, err)
 		return

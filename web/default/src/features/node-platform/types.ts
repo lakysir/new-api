@@ -89,6 +89,8 @@ export type NodeCapability = {
   /** Denormalized target-site category; 0 when the script has no category. */
   category_id: number
   price_micros: number
+  /** Max simultaneous executions for this script on this node (from script version). */
+  concurrency: number
   /** Max executions per day; 0 = unlimited. Resets at midnight CST (UTC+8). */
   daily_limit: number
   /** Executions today since the last Beijing-midnight reset. */

@@ -34,6 +34,12 @@ type UserScript struct {
 	ReviewStatus  string `json:"review_status" gorm:"type:varchar(16);index;default:draft"`
 	ReviewNote    string `json:"review_note,omitempty" gorm:"type:varchar(512)"`
 	LatestVersion int    `json:"latest_version" gorm:"default:0"`
+	// Concurrency is the maximum number of simultaneous executions this script
+	// supports on a single node (default 1). A browser node that has multiple
+	// third-party tabs open simultaneously can run up to this many tasks in
+	// parallel for this script. The value is snapshotted into ScriptVersion at
+	// publish time so older versions keep their original concurrency semantics.
+	Concurrency int `json:"concurrency" gorm:"default:1;not null"`
 	// AuthorShareRatePpm: the author's cut, proposed at submit-review (ppm of the
 	// provider execution price). PlatformFeeRatePpm: platform service fee, set by
 	// the operator at review. Both feed the immutable pricing_template at publish.
@@ -121,7 +127,7 @@ func ListPublishedUserScripts(offset int, limit int) ([]UserScript, int64, error
 	}
 	var scripts []UserScript
 	err := DB.Table("user_scripts").
-		Select("user_scripts.id,user_scripts.user_id,script_versions.title,script_versions.description,script_versions.script_params,user_scripts.published,script_versions.published_at,user_scripts.created_at,script_versions.published_at AS updated_at,script_versions.code AS published_code").
+		Select("user_scripts.id,user_scripts.user_id,user_scripts.concurrency,script_versions.title,script_versions.description,script_versions.script_params,user_scripts.published,script_versions.published_at,user_scripts.created_at,script_versions.published_at AS updated_at,script_versions.code AS published_code").
 		Joins("JOIN script_versions ON script_versions.script_id = user_scripts.id AND script_versions.version = user_scripts.latest_version").
 		Where("published = ?", true).
 		Where(publishedVersionExists, ScriptVersionApproved).
@@ -175,7 +181,7 @@ func GetPublishedUserScriptCode(id int) (*UserScript, error) {
 
 func ListUserScripts(userId int) ([]UserScript, error) {
 	var scripts []UserScript
-	err := DB.Select("id,user_id,title,description,script_params,draft_code,published,published_at,review_status,review_note,latest_version,created_at,updated_at").
+	err := DB.Select("id,user_id,title,description,script_params,draft_code,published,published_at,review_status,review_note,latest_version,concurrency,created_at,updated_at").
 		Where("user_id = ?", userId).
 		Order("user_scripts.updated_at desc,user_scripts.id desc").
 		Find(&scripts).Error
@@ -190,7 +196,7 @@ func ListUserScripts(userId int) ([]UserScript, error) {
 func ListScriptsByReviewStatus(status string) ([]UserScript, error) {
 	var scripts []UserScript
 	err := DB.Table("user_scripts").
-		Select("user_scripts.id,user_scripts.user_id,user_scripts.title,user_scripts.description,user_scripts.script_params,user_scripts.draft_code,user_scripts.review_status,user_scripts.review_note,user_scripts.latest_version,user_scripts.author_share_rate_ppm,user_scripts.platform_fee_rate_ppm,user_scripts.category_id,user_scripts.published,user_scripts.published_at,user_scripts.created_at,user_scripts.updated_at,previous_version.title AS previous_title,previous_version.description AS previous_description,previous_version.script_params AS previous_script_params,previous_version.code AS previous_code").
+		Select("user_scripts.id,user_scripts.user_id,user_scripts.title,user_scripts.description,user_scripts.script_params,user_scripts.draft_code,user_scripts.review_status,user_scripts.review_note,user_scripts.latest_version,user_scripts.concurrency,user_scripts.author_share_rate_ppm,user_scripts.platform_fee_rate_ppm,user_scripts.category_id,user_scripts.published,user_scripts.published_at,user_scripts.created_at,user_scripts.updated_at,previous_version.title AS previous_title,previous_version.description AS previous_description,previous_version.script_params AS previous_script_params,previous_version.code AS previous_code").
 		Joins("LEFT JOIN script_versions previous_version ON previous_version.script_id = user_scripts.id AND previous_version.version = user_scripts.latest_version").
 		Where("user_scripts.review_status = ?", status).
 		Order("user_scripts.updated_at desc,user_scripts.id desc").
@@ -213,10 +219,13 @@ func GetUserScriptById(id int, userId int) (*UserScript, error) {
 	return &script, nil
 }
 
-func UpsertUserScriptDraft(userId int, id int, title string, description string, scriptParams string, code string) (*UserScript, error) {
+func UpsertUserScriptDraft(userId int, id int, title string, description string, scriptParams string, code string, concurrency int) (*UserScript, error) {
 	title, description, scriptParams, code, err := NormalizeUserScriptInput(title, description, scriptParams, code)
 	if err != nil {
 		return nil, err
+	}
+	if concurrency < 1 {
+		concurrency = 1
 	}
 	if id > 0 {
 		script, err := GetUserScriptById(id, userId)
@@ -224,11 +233,13 @@ func UpsertUserScriptDraft(userId int, id int, title string, description string,
 			return nil, err
 		}
 		draftChanged := script.Title != title || script.Description != description ||
-			script.ScriptParams != scriptParams || script.DraftCode != code
+			script.ScriptParams != scriptParams || script.DraftCode != code ||
+			script.Concurrency != concurrency
 		script.Title = title
 		script.Description = description
 		script.ScriptParams = scriptParams
 		script.DraftCode = code
+		script.Concurrency = concurrency
 		if draftChanged {
 			script.ReviewStatus = ScriptReviewDraft
 			script.ReviewNote = ""
@@ -244,6 +255,7 @@ func UpsertUserScriptDraft(userId int, id int, title string, description string,
 		Description:  description,
 		ScriptParams: scriptParams,
 		DraftCode:    code,
+		Concurrency:  concurrency,
 	}
 	if err := DB.Create(script).Error; err != nil {
 		return nil, err

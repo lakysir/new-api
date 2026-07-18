@@ -32,18 +32,24 @@ var (
 	ErrLeaseExpired = errors.New("lease expired or released")
 )
 
-// Lease is a short-lived exclusive reservation of a node for a task attempt.
-// Active is a nullable bool used with a partial unique index so only one active
-// lease per node can exist; released leases set Active=NULL to free the slot.
+// Lease is a short-lived reservation of a node for a task attempt. Unlike the
+// original single-lease model, multiple active leases per node are now allowed
+// up to the node's total concurrency (sum of Concurrency across all active
+// capabilities). Released leases set Active=NULL; the index on (node_id, active)
+// is no longer unique so concurrent tasks can share the node.
 type Lease struct {
 	Id      string `json:"id" gorm:"primaryKey;type:varchar(64)"`
-	NodeId  string `json:"node_id" gorm:"type:varchar(64);not null;uniqueIndex:idx_node_active_lease"`
+	NodeId  string `json:"node_id" gorm:"type:varchar(64);not null;index:idx_node_active_lease"`
 	TaskId  string `json:"task_id" gorm:"type:varchar(64);index;not null"`
 	Attempt int    `json:"attempt" gorm:"not null"`
-	// Active is part of a composite unique index with NodeId: at most one
-	// (node_id, active=true) row can exist, so a node holds one active lease.
-	// Released leases set Active=NULL; NULLs don't collide, freeing the slot.
-	Active      *bool  `json:"active" gorm:"uniqueIndex:idx_node_active_lease"`
+	// Active is NULL when released; non-NULL (true) while the lease is held.
+	// The idx_node_active_lease index is NOT unique — multiple active leases per
+	// node are allowed, bounded by the node's total concurrency capacity.
+	Active   *bool  `json:"active" gorm:"index:idx_node_active_lease"`
+	// ScriptId and Version track which script this lease is for, enabling the
+	// per-script concurrency limit check during reservation.
+	ScriptId int `json:"script_id" gorm:"index;default:0"`
+	Version  int `json:"version" gorm:"default:0"`
 	ExpiresAt   int64  `json:"expires_at" gorm:"index;not null"`
 	ReleasedAt  int64  `json:"released_at" gorm:"default:0"`
 	Reason      string `json:"reason,omitempty" gorm:"type:varchar(64)"`
@@ -86,17 +92,35 @@ func forUpdateOption() string {
 	return "FOR UPDATE"
 }
 
+// nodeCapacityInTx returns the total concurrency capacity of a node (sum of
+// Concurrency across all active capabilities) and the current active lease count.
+// Both values are computed within the passed transaction.
+func nodeCapacityInTx(tx *gorm.DB, nodeId string) (totalConcurrency int64, activeLeases int64, err error) {
+	row := tx.Table("node_capabilities").
+		Select("COALESCE(SUM(concurrency), 0)").
+		Where("node_id = ? AND status = ?", nodeId, CapabilityStatusActive)
+	if err = row.Scan(&totalConcurrency).Error; err != nil {
+		return
+	}
+	if totalConcurrency < 1 {
+		totalConcurrency = 1
+	}
+	err = tx.Model(&Lease{}).
+		Where("node_id = ? AND active = ?", nodeId, true).
+		Count(&activeLeases).Error
+	return
+}
+
 // ReserveNode atomically creates an active lease for a node and a RESERVED task
-// attempt, but only if the node is currently IDLE and online and holds no other
-// active lease. The unique index on (node_id) WHERE active guarantees that even
-// under a race, only one caller wins; the loser gets ErrNodeBusy.
-func ReserveNode(taskId, orderId, nodeId string, attempt int, ttl time.Duration) (*Lease, *TaskAttempt, error) {
+// attempt. Unlike the old single-lease model, multiple leases are allowed up to
+// the node's total concurrency (sum of capability.Concurrency). There is also a
+// per-script limit: active leases for the same (node, script, version) must be
+// below that capability's concurrency. ErrNodeBusy is returned when either
+// limit is reached.
+func ReserveNode(taskId, orderId, nodeId string, scriptId, version, attempt int, ttl time.Duration) (*Lease, *TaskAttempt, error) {
 	var lease *Lease
 	var ta *TaskAttempt
 	err := DB.Transaction(func(tx *gorm.DB) error {
-		// Lock the node row and re-check it is idle + online. FOR UPDATE matches
-		// the codebase convention; the partial unique index on (node_id) WHERE
-		// active is the real correctness guard, this only reduces contention.
 		var node Node
 		if err := tx.Set("gorm:query_option", forUpdateOption()).Where("id = ?", nodeId).First(&node).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -104,7 +128,30 @@ func ReserveNode(taskId, orderId, nodeId string, attempt int, ttl time.Duration)
 			}
 			return err
 		}
-		if node.State != NodeStateIdle || !node.IsOnline() {
+		if !node.IsOnline() {
+			return ErrNodeBusy
+		}
+		totalCap, activeCount, err := nodeCapacityInTx(tx, nodeId)
+		if err != nil {
+			return err
+		}
+		if activeCount >= totalCap {
+			return ErrNodeBusy
+		}
+		// Per-script concurrency guard: count active leases for this exact script.
+		var scriptCap int64
+		tx.Table("node_capabilities").
+			Select("COALESCE(concurrency, 1)").
+			Where("node_id = ? AND script_id = ? AND version = ? AND status = ?", nodeId, scriptId, version, CapabilityStatusActive).
+			Scan(&scriptCap)
+		if scriptCap < 1 {
+			scriptCap = 1
+		}
+		var scriptActive int64
+		tx.Model(&Lease{}).
+			Where("node_id = ? AND script_id = ? AND version = ? AND active = ?", nodeId, scriptId, version, true).
+			Count(&scriptActive)
+		if scriptActive >= scriptCap {
 			return ErrNodeBusy
 		}
 
@@ -112,29 +159,26 @@ func ReserveNode(taskId, orderId, nodeId string, attempt int, ttl time.Duration)
 			Id:        "lea_" + common.GetUUID(),
 			NodeId:    nodeId,
 			TaskId:    taskId,
+			ScriptId:  scriptId,
+			Version:   version,
 			Attempt:   attempt,
 			Active:    boolPtr(true),
 			ExpiresAt: time.Now().Add(ttl).Unix(),
 		}
 		if err := tx.Create(l).Error; err != nil {
-			if isUniqueConstraintErr(err) {
-				return ErrNodeBusy // another active lease exists for this node
-			}
 			return err
 		}
-
 		attemptRow := &TaskAttempt{
 			TaskId: taskId, OrderId: orderId, Attempt: attempt,
 			NodeId: nodeId, LeaseId: l.Id, State: AttemptReserved,
 		}
 		if err := tx.Create(attemptRow).Error; err != nil {
 			if isUniqueConstraintErr(err) {
-				return errors.New("task attempt already exists") // (task_id, attempt) reused
+				return errors.New("task attempt already exists")
 			}
 			return err
 		}
-
-		// Flip the node to BUSY so scheduling excludes it immediately.
+		// Flip to BUSY whenever any active lease exists (may already be BUSY).
 		if err := tx.Model(&Node{}).Where("id = ?", nodeId).Update("state", NodeStateBusy).Error; err != nil {
 			return err
 		}
@@ -184,9 +228,9 @@ func RenewLease(leaseId string, ttl time.Duration, expectedVersion int64) (*Leas
 	return updated, nil
 }
 
-// ReleaseLease frees a node's active lease (setting Active=NULL so the partial
-// unique index no longer blocks a new lease) and returns the node to IDLE. It
-// is idempotent: releasing an already-released lease is a no-op success.
+// ReleaseLease frees a node's active lease (setting Active=NULL) and returns
+// the node to IDLE only when no other active leases remain. It is idempotent:
+// releasing an already-released lease is a no-op success.
 func ReleaseLease(leaseId, reason string) error {
 	return DB.Transaction(func(tx *gorm.DB) error {
 		var l Lease
@@ -206,10 +250,21 @@ func ReleaseLease(leaseId, reason string) error {
 		}).Error; err != nil {
 			return err
 		}
-		// Only return the node to IDLE if it is not offline/draining.
-		return tx.Model(&Node{}).
-			Where("id = ? AND state = ?", l.NodeId, NodeStateBusy).
-			Update("state", NodeStateIdle).Error
+		// Return the node to IDLE only when this was the last active lease.
+		// With concurrent execution a node may still hold other active leases
+		// (for other scripts / tasks); only go back to IDLE when none remain.
+		var remaining int64
+		if err := tx.Model(&Lease{}).
+			Where("node_id = ? AND active = ?", l.NodeId, true).
+			Count(&remaining).Error; err != nil {
+			return err
+		}
+		if remaining == 0 {
+			return tx.Model(&Node{}).
+				Where("id = ? AND state = ?", l.NodeId, NodeStateBusy).
+				Update("state", NodeStateIdle).Error
+		}
+		return nil
 	})
 }
 

@@ -137,6 +137,10 @@ type NodeCapability struct {
 	CategoryId int    `json:"category_id" gorm:"index;default:0"` // denormalized from the script
 	UserId     int    `json:"user_id" gorm:"index;not null"`
 	PriceMicros int64 `json:"price_micros" gorm:"default:0"`
+	// Concurrency is the maximum simultaneous executions for this script on this
+	// node — denormalized from ScriptVersion.Concurrency at listing time so the
+	// scheduler can compute per-node total capacity without joining versions.
+	Concurrency int `json:"concurrency" gorm:"default:1;not null"`
 	// DailyLimit is the maximum script executions dispatched per day.
 	// Zero means no daily cap. Resets at midnight Beijing time (CST, UTC+8).
 	DailyLimit int `json:"daily_limit" gorm:"column:daily_quota;default:0"`
@@ -307,9 +311,9 @@ func ListNodeSiteStatuses(nodeId string) ([]NodeSiteStatus, error) {
 //
 // Listing no longer gates on a passing balance check: a provider lists the
 // script first, then runs the per-capability balance check, and finally turns
-// the node on (SetNodeEnabled) once all its capabilities pass. The category is
-// still denormalized here so the per-capability detect button and the node
-// enable gate know which site to probe.
+// the node on (SetNodeEnabled) once all its capabilities pass. The category and
+// concurrency are denormalized here so the scheduler can compute node capacity
+// without joining script_versions on every scheduling query.
 //
 // On first listing RemainingQuota is set to 100 as the initial balance estimate;
 // subsequent executions update it from the actual script result. Re-listing an
@@ -323,9 +327,14 @@ func EnableCapability(cap *NodeCapability) error {
 	if !cap.IsTestValid() {
 		return ErrCapabilityTestRequired
 	}
-	// Denormalize the category so scheduling and the balance-check gate know the
-	// target site. The balance check itself is deferred to SetNodeEnabled.
+	// Denormalize category and concurrency from the script version so scheduling
+	// queries can compute node capacity without an extra join.
 	cap.CategoryId = sv.CategoryId
+	concurrency := sv.Concurrency
+	if concurrency < 1 {
+		concurrency = 1
+	}
+	cap.Concurrency = concurrency
 	cap.Status = CapabilityStatusActive
 	return DB.Transaction(func(tx *gorm.DB) error {
 		var existing NodeCapability
@@ -339,15 +348,16 @@ func EnableCapability(cap *NodeCapability) error {
 			return err
 		}
 		cap.Id = existing.Id
-		// Re-listing: update only listing metadata. Preserve the existing balance
-		// (from prior execution results) and daily counters so history is kept.
+		// Re-listing: update listing metadata including the latest concurrency.
+		// Preserve the existing balance and daily counters so history is kept.
 		return tx.Model(&NodeCapability{}).Where("id = ?", existing.Id).Updates(map[string]any{
-			"category_id":    cap.CategoryId,
-			"price_micros":   cap.PriceMicros,
-			"daily_quota":    cap.DailyLimit,
-			"work_window":    cap.WorkWindow,
-			"status":         CapabilityStatusActive,
-			"suspend_reason": "",
+			"category_id":     cap.CategoryId,
+			"concurrency":     cap.Concurrency,
+			"price_micros":    cap.PriceMicros,
+			"daily_quota":     cap.DailyLimit,
+			"work_window":     cap.WorkWindow,
+			"status":          CapabilityStatusActive,
+			"suspend_reason":  "",
 			"test_expires_at": cap.TestExpiresAt,
 		}).Error
 	})

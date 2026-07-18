@@ -1321,7 +1321,9 @@ export function AitokenPurchasePage() {
                         : '-'
                     let statusLabel = t('Offline')
                     if (o.busy) statusLabel = t('Busy')
-                    else if (o.online) statusLabel = t('Online')
+                    else if (o.online) statusLabel = o.concurrency > 1
+                      ? `${t('Online')} (${o.available_slots}/${o.total_slots} ${t('slots')})`
+                      : t('Online')
                     return (
                       <label
                         key={o.node_id}
@@ -1357,6 +1359,11 @@ export function AitokenPurchasePage() {
                         <span className='text-muted-foreground text-xs'>
                           {t('quota')}: {o.remaining_quota}
                         </span>
+                        {o.concurrency > 1 && (
+                          <span className='text-muted-foreground text-xs'>
+                            {t('slots')}: {o.available_slots}/{o.total_slots}
+                          </span>
+                        )}
                         {!o.available && (
                           <span className='text-xs text-red-600'>
                             {o.unavailable_reason === 'QUOTA_EXHAUSTED' &&
