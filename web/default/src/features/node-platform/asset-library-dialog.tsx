@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import {
   Check,
+  Clock3,
   Copy,
   FileAudio,
   FileImage,
@@ -25,6 +26,7 @@ import {
   Loader2,
   Trash2,
   Upload,
+  ZoomIn,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -87,6 +89,7 @@ export function AssetLibraryDialog(props: AssetLibraryDialogProps) {
   const [uploadProgress, setUploadProgress] = useState(0)
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [pendingDelete, setPendingDelete] = useState<UserAsset | null>(null)
+  const [previewAsset, setPreviewAsset] = useState<UserAsset | null>(null)
   const [copiedId, setCopiedId] = useState<number | null>(null)
 
   useEffect(() => {
@@ -190,7 +193,17 @@ export function AssetLibraryDialog(props: AssetLibraryDialogProps) {
           <div key={asset.id} className='overflow-hidden rounded-md border bg-card'>
             <div className='flex aspect-video items-center justify-center overflow-hidden bg-muted/40'>
               {asset.media_type === 'image' && (
-                <img className='h-full w-full object-contain' src={asset.url} alt={asset.filename} loading='lazy' />
+                <button
+                  type='button'
+                  className='group relative h-full w-full cursor-zoom-in'
+                  aria-label={t('Preview image')}
+                  onClick={() => setPreviewAsset(asset)}
+                >
+                  <img className='h-full w-full object-contain' src={asset.url} alt={asset.filename} loading='lazy' />
+                  <span className='absolute right-2 bottom-2 flex h-8 w-8 items-center justify-center rounded-md bg-black/65 text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100'>
+                    <ZoomIn className='h-4 w-4' aria-hidden='true' />
+                  </span>
+                </button>
               )}
               {asset.media_type === 'video' && (
                 <video className='h-full w-full object-contain' src={asset.url} controls preload='metadata' />
@@ -240,7 +253,7 @@ export function AssetLibraryDialog(props: AssetLibraryDialogProps) {
 
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
-      <DialogContent className='flex h-[min(80vh,760px)] w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden p-0 sm:w-[60vw] sm:max-w-[1200px]'>
+      <DialogContent closeLabel={t('Close')} className='flex h-[min(80vh,760px)] w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden p-0 sm:w-[60vw] sm:max-w-[1200px]'>
         <DialogHeader className='border-b px-5 py-4 text-left'>
           <DialogTitle>{t('Resource library')}</DialogTitle>
           <DialogDescription>
@@ -249,8 +262,12 @@ export function AssetLibraryDialog(props: AssetLibraryDialogProps) {
         </DialogHeader>
 
         <div className='flex items-center justify-between gap-4 border-b bg-muted/25 px-5 py-3'>
-          <div className='min-w-0 text-xs text-muted-foreground'>
-            {t('Images, video, and audio. Up to 100 MB per file.')}
+          <div className='min-w-0 space-y-1 text-xs text-muted-foreground'>
+            <div>{t('Images, video, and audio. Up to 100 MB per file.')}</div>
+            <div className='flex items-center gap-1.5 text-amber-700 dark:text-amber-400'>
+              <Clock3 className='h-3.5 w-3.5 shrink-0' aria-hidden='true' />
+              <span>{t('Resources are retained for 24 hours and automatically expire afterward.')}</span>
+            </div>
           </div>
           <input
             ref={fileInputRef}
@@ -301,6 +318,18 @@ export function AssetLibraryDialog(props: AssetLibraryDialogProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <Dialog open={previewAsset != null} onOpenChange={(open) => { if (!open) setPreviewAsset(null) }}>
+        <DialogContent closeLabel={t('Close')} className='flex h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] items-center justify-center overflow-hidden bg-black/95 p-4 text-white sm:max-w-[calc(100vw-2rem)]' aria-label={t('Preview image')}>
+          <DialogTitle className='sr-only'>{t('Preview image')}</DialogTitle>
+          {previewAsset && (
+            <img
+              className='max-h-full max-w-full object-contain'
+              src={previewAsset.url}
+              alt={previewAsset.filename}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </Dialog>
   )
 }

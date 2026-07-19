@@ -1234,16 +1234,19 @@ export function AitokenPurchasePage() {
         {/* Full-width sticky action bar — spans both columns, always visible at viewport bottom */}
         <div className='sticky bottom-0 z-10 mt-4 rounded-lg border border-white/15 bg-black/80 px-4 py-4 text-white shadow-xl backdrop-blur-xl'>
           <div className='grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start'>
-            <div className='grid min-w-0 grid-cols-[3.25rem_minmax(0,1fr)] gap-3'>
+            <div className='grid min-w-0 grid-cols-[6rem_minmax(0,1fr)] gap-3'>
               <button
                 type='button'
-                className='group flex min-h-[5.75rem] w-[3.25rem] items-center justify-center rounded-md border border-white/25 bg-white/[0.06] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_8px_24px_rgba(0,0,0,0.24)] transition-colors hover:border-white/45 hover:bg-white/[0.1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-black'
+                className='group flex min-h-[5.75rem] w-24 flex-col items-center justify-center gap-2 rounded-md border border-white/25 bg-white/[0.06] px-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_8px_24px_rgba(0,0,0,0.24)] transition-colors hover:border-white/45 hover:bg-white/[0.1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-black'
                 onClick={() => setAssetLibraryOpen(true)}
                 aria-label={t('Open resource library')}
                 title={t('Open resource library')}
               >
                 <span className='flex h-9 w-9 items-center justify-center rounded-md border border-white/20 bg-black/25 text-white/80 shadow-[0_5px_14px_rgba(0,0,0,0.28)] transition-colors group-hover:border-white/35 group-hover:bg-white/10 group-hover:text-white'>
                   <Plus className='h-4 w-4' aria-hidden='true' />
+                </span>
+                <span className='text-xs font-medium text-white/80 group-hover:text-white'>
+                  {t('Resource upload')}
                 </span>
               </button>
               <div className='min-w-0 space-y-3'>
