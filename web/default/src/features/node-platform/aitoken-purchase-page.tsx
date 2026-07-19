@@ -211,6 +211,19 @@ function getViewModeStorageKey(view: 'parameters') {
   return `aitoken-purchase-${view}-view:${userId}`
 }
 
+function getDescriptionExpandedStorageKey() {
+  const userId = window.localStorage.getItem('uid') ?? 'anonymous'
+  return `aitoken-purchase-description-expanded:${userId}`
+}
+
+function loadDescriptionExpanded(): boolean {
+  try {
+    return window.localStorage.getItem(getDescriptionExpandedStorageKey()) !== 'false'
+  } catch {
+    return true
+  }
+}
+
 function loadViewMode(view: 'parameters'): ViewMode {
   try {
     return window.localStorage.getItem(getViewModeStorageKey(view)) === 'json'
@@ -404,6 +417,7 @@ function JsonForm(props: JsonFormProps) {
   return (
     <Input
       type={typeof props.value === 'number' ? 'number' : 'text'}
+      className={compact ? 'h-7 px-2 text-xs' : undefined}
       value={props.value === null ? '' : String(props.value)}
       onChange={(event) => {
         let value: string | number = event.target.value
@@ -648,8 +662,8 @@ export function AitokenPurchasePage() {
   const [expandedRecordId, setExpandedRecordId] = useState<string | null>(null)
   // Wallet interactions (recharge/withdraw) live in a dialog to keep the top bar compact.
   const [walletOpen, setWalletOpen] = useState(false)
-  // Keep usage notes open by default so parameters can be copied while configuring a run.
-  const [descExpanded, setDescExpanded] = useState(true)
+  // Usage notes are open by default; the user's preference persists across visits.
+  const [descExpanded, setDescExpanded] = useState(loadDescriptionExpanded)
 
   function updateTask(localId: string, patch: Partial<QueuedTask>) {
     setTaskQueue((prev) =>
@@ -690,6 +704,11 @@ export function AitokenPurchasePage() {
     try { window.localStorage.setItem(getViewModeStorageKey('parameters'), parametersView) }
     catch { /* best-effort */ }
   }, [parametersView])
+
+  useEffect(() => {
+    try { window.localStorage.setItem(getDescriptionExpandedStorageKey(), String(descExpanded)) }
+    catch { /* best-effort */ }
+  }, [descExpanded])
 
   async function loadBalance() {
     try {
@@ -745,7 +764,7 @@ export function AitokenPurchasePage() {
   }
 
   async function selectScript(value: number, preferredVersion?: number, fallbackVersion?: number, loadParams = true) {
-    setScriptId(value); setOffers([]); setNodeId(''); setAutoSelect(true); setOffersPage(0); setQuote(null); setDescExpanded(true)
+    setScriptId(value); setOffers([]); setNodeId(''); setAutoSelect(true); setOffersPage(0); setQuote(null)
     if (!value) { setAvailableVersions([]); return }
     try {
       const available = await listAvailableScriptVersions(value)
@@ -1210,16 +1229,16 @@ export function AitokenPurchasePage() {
         </div>
 
         {/* Full-width sticky action bar — spans both columns, always visible at viewport bottom */}
-        <div className='sticky bottom-0 z-10 mt-4 rounded-lg border bg-card px-4 py-4 shadow-lg'>
+        <div className='sticky bottom-0 z-10 mt-4 rounded-lg border border-white/15 bg-black/80 px-4 py-4 text-white shadow-xl backdrop-blur-xl'>
           <div className='grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start'>
             <div className='min-w-0 space-y-3'>
               <div className='flex flex-wrap items-center gap-2'>
                 <span className='mr-1 text-sm font-medium'>{t('Script')}</span>
-                <select className='h-9 min-w-[220px] flex-1 rounded-md border bg-background px-2 text-sm' value={scriptId} onChange={(e) => void selectScript(Number(e.target.value))}>
+                <select className='h-9 min-w-[220px] flex-1 rounded-md border border-white/20 bg-white/10 px-2 text-sm text-white outline-none focus:border-white/50 [&>option]:bg-white [&>option]:text-black' value={scriptId} onChange={(e) => void selectScript(Number(e.target.value))}>
                   <option value={0}>{t('Select a script')}</option>
                   {scripts.map((s) => (<option key={s.id} value={s.id}>#{s.id} {s.title}</option>))}
                 </select>
-                <select className='h-9 w-28 rounded-md border bg-background px-2 text-sm' value={version} disabled={!scriptId || versions.length === 0} aria-label={t('Version')} onChange={(e) => {
+                <select className='h-9 w-28 rounded-md border border-white/20 bg-white/10 px-2 text-sm text-white outline-none focus:border-white/50 disabled:text-white/40 [&>option]:bg-white [&>option]:text-black' value={version} disabled={!scriptId || versions.length === 0} aria-label={t('Version')} onChange={(e) => {
                   const v = Number(e.target.value); setVersion(v); setOffers([]); setNodeId(''); setAutoSelect(true); setOffersPage(0); setQuote(null)
                   const sel = availableVersions.find((item) => item.version === v)
                   setConfigText(configTextFromParams(sel?.script_params))
@@ -1229,13 +1248,13 @@ export function AitokenPurchasePage() {
                 </select>
               </div>
               {selectedScript?.description && (
-                <div className='rounded-md border bg-background px-3 py-2 text-xs'>
-                  <button type='button' className='flex w-full items-start gap-2 text-left' onClick={() => setDescExpanded((value) => !value)} aria-expanded={descExpanded}>
-                    <span className='text-muted-foreground shrink-0 font-medium'>{t('Script description')}</span>
-                    <span className={descExpanded ? 'min-w-0 flex-1 break-words whitespace-pre-wrap' : 'min-w-0 flex-1 truncate'}>{selectedScript.description}</span>
+                <div className='flex items-start gap-2 rounded-md border border-white/15 bg-white/5 px-3 py-2 text-xs'>
+                  <span className='shrink-0 font-medium text-white/60'>{t('Script description')}</span>
+                  <span className={descExpanded ? 'min-w-0 flex-1 select-text break-words whitespace-pre-wrap' : 'min-w-0 flex-1 select-text truncate'}>{selectedScript.description}</span>
+                  <button type='button' className='shrink-0 rounded p-0.5 text-white/60 hover:bg-white/10 hover:text-white' onClick={() => setDescExpanded((value) => !value)} aria-expanded={descExpanded} aria-label={descExpanded ? t('Collapse') : t('Expand')}>
                     {descExpanded
-                      ? <ChevronUp className='text-muted-foreground mt-0.5 h-3.5 w-3.5 shrink-0' aria-hidden='true' />
-                      : <ChevronDown className='text-muted-foreground mt-0.5 h-3.5 w-3.5 shrink-0' aria-hidden='true' />}
+                      ? <ChevronUp className='h-3.5 w-3.5' aria-hidden='true' />
+                      : <ChevronDown className='h-3.5 w-3.5' aria-hidden='true' />}
                   </button>
                 </div>
               )}
@@ -1244,16 +1263,16 @@ export function AitokenPurchasePage() {
             <div className='flex min-w-64 flex-col items-stretch gap-2 lg:items-end'>
               <div className='flex flex-wrap items-center justify-between gap-x-4 gap-y-2 lg:justify-end'>
                 <div className='text-sm'>
-                  <span className='text-muted-foreground'>{t('Total')}: </span>
+                  <span className='text-white/60'>{t('Total')}: </span>
                   <span className='text-lg font-semibold'>{quote ? microsToCurrency(quote.MaxCustomerMicros) : '-'}</span>
                 </div>
-                <Button className='min-w-40' onClick={() => void onPurchase()} disabled={!quote || insufficientBalance}>
+                <Button className='min-w-40 bg-white text-black hover:bg-white/90 disabled:bg-white/20 disabled:text-white/40' onClick={() => void onPurchase()} disabled={!quote || insufficientBalance}>
                   {t('Purchase and run')}
                 </Button>
               </div>
-              {insufficientBalance && <div className='text-xs text-red-600'>{t('Insufficient balance')}</div>}
+              {insufficientBalance && <div className='text-xs text-red-300'>{t('Insufficient balance')}</div>}
               {quote && (
-                <div className='flex flex-wrap justify-end gap-x-4 gap-y-1 text-xs text-muted-foreground'>
+                <div className='flex flex-wrap justify-end gap-x-4 gap-y-1 text-xs text-white/60'>
                   <span>{t('Provider')}: {microsToCurrency(quote.ProviderMicros)}</span>
                   <span>{t('Author')}: {microsToCurrency(quote.AuthorMicros)}</span>
                   <span>{t('Platform fee')}: {microsToCurrency(quote.PlatformFeeMicros)}</span>
@@ -1357,16 +1376,3 @@ export function AitokenPurchasePage() {
     </SectionPageLayout>
   )
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
