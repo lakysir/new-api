@@ -115,9 +115,13 @@ type NodeSiteStatus struct {
 
 func (NodeSiteStatus) TableName() string { return "node_site_status" }
 
-// IsValid reports whether a passed balance check is still within its window.
+// IsValid reports whether the node has a passing balance check for the
+// category. A passed check does not expire on a timer: it stays valid until an
+// explicit recheck flips balance_ok to false. If the node is actually broken at
+// execution time the order fails, which shows up in the success rate — that is
+// the only signal needed, and periodic re-probing is too burdensome at scale.
 func (s *NodeSiteStatus) IsValid() bool {
-	return s.BalanceOk && s.ExpiresAt > time.Now().Unix()
+	return s.BalanceOk
 }
 
 // NodeCapability is a script version a node has enabled, with its price, daily

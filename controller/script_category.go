@@ -11,9 +11,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// balanceCheckTTL is how long a passing balance probe keeps a category usable
-// on a node before it must be re-probed.
-const balanceCheckTTL = 6 * time.Hour
+// A passing balance probe keeps a category usable on a node until an explicit
+// recheck flips balance_ok to false — it does not expire on a timer. A broken
+// node is caught by failed executions (and its success rate) rather than by
+// periodic re-probing, which is too burdensome at scale.
 
 // ListCategories returns all script categories (public — clients/providers use
 // it to browse by target site).
@@ -163,9 +164,11 @@ func ReportBalanceCheck(c *gin.Context) {
 		return
 	}
 	now := time.Now().UnixMilli()
+	// ExpiresAt is retained as an informational far-future marker for a passing
+	// check; scheduling and enable gates key off balance_ok, not this timestamp.
 	expiresAt := int64(0)
 	if req.BalanceOk {
-		expiresAt = time.Now().Add(balanceCheckTTL).Unix()
+		expiresAt = time.Now().Add(100 * 365 * 24 * time.Hour).Unix()
 	}
 	status := &model.NodeSiteStatus{
 		NodeId:        nodeId,

@@ -223,7 +223,11 @@ func ListOffersForScript(scriptId, version int, providerGroupId string, consumeM
 		}
 
 		testValid := r.TestExpiresAt > now
-		balanceValid := r.CategoryId == 0 || (r.BalanceOk && r.BalanceExpiresAt > now)
+		// A passing balance check does not expire on a timer: once the provider
+		// proved the target site is usable, the node stays schedulable until an
+		// explicit recheck flips balance_ok to false (a broken node surfaces via
+		// failed executions / success rate instead).
+		balanceValid := r.CategoryId == 0 || r.BalanceOk
 		balanceEnough := int64(r.RemainingQuota) > consumeMultiplier
 		owned := r.UserId == viewerUserId
 		enabledOrOwned := r.Enabled || owned
@@ -242,7 +246,7 @@ func ListOffersForScript(scriptId, version int, providerGroupId string, consumeM
 		} else if !testValid {
 			reason = "CAPABILITY_TEST_EXPIRED"
 		} else if !balanceValid {
-			reason = "BALANCE_CHECK_EXPIRED"
+			reason = "BALANCE_CHECK_FAILED"
 		}
 		offers = append(offers, ScriptOffer{
 			NodeId:            r.NodeId,
@@ -321,8 +325,10 @@ func ScheduleCandidates(scriptId, version int, maxPriceMicros int64, limit int, 
 		Where(`(SELECT COUNT(*) FROM leases l WHERE l.node_id = cap.node_id AND l.script_id = ? AND l.version = ? AND l.active = ?) < `+
 			`COALESCE(cap.concurrency, 1)`,
 			scriptId, version, true).
-		// Node must have a valid balance check for the category (or no category).
-		Where("cap.category_id = 0 OR (s.balance_ok = ? AND s.expires_at > ?)", true, now)
+		// Node must have a passing balance check for the category (or no
+		// category). A passed check does not expire on a timer — it stays valid
+		// until an explicit recheck flips balance_ok to false.
+		Where("cap.category_id = 0 OR s.balance_ok = ?", true)
 	if chosenNodeId != "" {
 		q = q.Where("n.enabled = ? OR (n.id = ? AND n.user_id = ?)", true, chosenNodeId, clientUserId)
 	} else {
