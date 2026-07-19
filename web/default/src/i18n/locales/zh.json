@@ -1,6 +1,7 @@
 {
   "translation": {
-    "Do not refresh while running — it interrupts tasks": "运行中请勿刷新，会中断任务",
+    "Keep this page open and do not refresh while tasks are running, as this will interrupt them": "运行中请保持该页面且勿刷新，会中断任务",
+    "All P2P data is cached only in your browser and is not stored on the server": "P2P所有数据仅在浏览器本地缓存，服务器不会保存",
     "360": "360",
     "1000": "1000",
     "10000": "10000",

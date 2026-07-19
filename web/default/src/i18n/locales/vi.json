@@ -1,6 +1,7 @@
 {
   "translation": {
-    "Do not refresh while running — it interrupts tasks": "Không tải lại khi đang chạy — sẽ làm gián đoạn tác vụ",
+    "Keep this page open and do not refresh while tasks are running, as this will interrupt them": "Khi đang chạy, hãy giữ trang này mở và không tải lại vì thao tác đó sẽ làm gián đoạn tác vụ",
+    "All P2P data is cached only in your browser and is not stored on the server": "Toàn bộ dữ liệu P2P chỉ được lưu vào bộ nhớ đệm trong trình duyệt và không được lưu trên máy chủ",
     "360": "360",
     "1000": "1000",
     "10000": "10000",

@@ -1026,9 +1026,8 @@ export function AitokenPurchasePage() {
       <SectionPageLayout.Title>
         <span className='inline-flex flex-wrap items-baseline gap-x-2 gap-y-0.5'>
           {t('AiToken P2P Marketplace')}
-          {/* Refresh drops any in-flight run's encrypted relay connection. */}
           <span className='text-[11px] font-normal text-red-500'>
-            {t('Do not refresh while running — it interrupts tasks')}
+            {t('All P2P data is cached only in your browser and is not stored on the server')}
           </span>
         </span>
       </SectionPageLayout.Title>
@@ -1195,8 +1194,14 @@ export function AitokenPurchasePage() {
 
           {/* RIGHT: Task queue panel — sticky, shows all in-flight and completed tasks */}
           <div className='sticky top-4 flex min-w-0 flex-col gap-3'>
-            <div className='flex items-center justify-between'>
-              <div className='text-sm font-medium'>{t('Task queue')}</div>
+            <div className='flex flex-wrap items-center justify-between gap-2'>
+              <div className='inline-flex flex-wrap items-baseline gap-x-2 gap-y-0.5'>
+                <span className='text-sm font-medium'>{t('Task queue')}</span>
+                {/* Refresh drops any in-flight run's encrypted relay connection. */}
+                <span className='text-[11px] text-red-500'>
+                  {t('Keep this page open and do not refresh while tasks are running, as this will interrupt them')}
+                </span>
+              </div>
               {taskQueue.length > 0 && (
                 <div className='flex items-center gap-2'>
                   <span className='text-muted-foreground text-xs'>

@@ -1,6 +1,7 @@
 {
   "translation": {
-    "Do not refresh while running — it interrupts tasks": "Ne pas actualiser pendant l’exécution — cela interrompt les tâches",
+    "Keep this page open and do not refresh while tasks are running, as this will interrupt them": "Pendant l’exécution, gardez cette page ouverte et ne l’actualisez pas, car cela interromprait les tâches",
+    "All P2P data is cached only in your browser and is not stored on the server": "Toutes les données P2P sont mises en cache uniquement dans votre navigateur et ne sont pas stockées sur le serveur",
     "360": "360",
     "1000": "1000",
     "10000": "10000",
