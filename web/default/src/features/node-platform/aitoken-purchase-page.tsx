@@ -37,7 +37,7 @@ import {
   XCircle,
   ZoomIn,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -1180,6 +1180,24 @@ export function AitokenPurchasePage() {
     } finally { setOffersLoading(false) }
   }
 
+  // Mirrors the currently-displayed selection so an async task that finishes
+  // long after it was fired can tell whether the offers panel still shows the
+  // same script/version before refreshing it (the user may have switched away).
+  const viewedSelectionRef = useRef({ scriptId, version, groupFilterId, consumeMultiplier })
+  useEffect(() => {
+    viewedSelectionRef.current = { scriptId, version, groupFilterId, consumeMultiplier }
+  }, [scriptId, version, groupFilterId, consumeMultiplier])
+
+  // refreshOffersAfterTask re-fetches provider offers for a task's script once it
+  // settles, so availability (busy/idle, remaining quota, free slots) reflects
+  // the run that just finished. Skips the refresh if the panel has since moved
+  // to a different script/version, so it never clobbers what the user is viewing.
+  function refreshOffersAfterTask(taskScriptId: number, taskVersion: number) {
+    const viewed = viewedSelectionRef.current
+    if (viewed.scriptId !== taskScriptId || viewed.version !== taskVersion) return
+    void loadOffersFor(viewed.scriptId, viewed.version, viewed.groupFilterId, viewed.consumeMultiplier, true)
+  }
+
   async function selectScript(value: number, preferredVersion?: number, fallbackVersion?: number, loadParams = true) {
     setScriptId(value); setOffers([]); setNodeId(''); setAutoSelect(true); setOffersPage(0); setQuote(null)
     if (!value) { setAvailableVersions([]); return }
@@ -1397,6 +1415,10 @@ export function AitokenPurchasePage() {
       } finally { cancelled = true; session.close() }
     } catch (e) {
       updateTask(localId, { status: 'failed', error: String((e as Error).message), relayStatus: '' })
+    } finally {
+      // Task settled (success/fail/refund) — refresh offers so provider
+      // availability reflects the run that just finished.
+      refreshOffersAfterTask(taskScriptId, taskVersion)
     }
   }
 
@@ -1427,6 +1449,10 @@ export function AitokenPurchasePage() {
     // Fire and forget — doesn't block the UI for further submissions
     void runTask(localId, scriptId, version, cleanedConfigText, inputHash,
       capturedAutoSelect, capturedNodeId, capturedGroupFilterId, capturedMultiplier)
+    // Refresh offers now that a run is starting — the chosen provider will show
+    // as busy / with reduced free slots. Preserve the current selection so the
+    // quote and picked provider aren't reset out from under the user.
+    void loadOffersFor(scriptId, version, groupFilterId, consumeMultiplier, true)
   }
 
   async function onCancelTask(orderId: string) {
