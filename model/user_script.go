@@ -191,23 +191,66 @@ func ListUserScripts(userId int) ([]UserScript, error) {
 	return scripts, nil
 }
 
-// ListScriptsByReviewStatus returns scripts in a given review status without
-// code bodies. Used by the operator review console (admin).
+// ListScriptsByReviewStatus returns scripts in a given review status. The draft
+// code is included (the reviewer needs it); the last published version's
+// title/description/params/code are attached via fillPreviousPublishedVersions
+// so the review console can diff the pending draft against what is currently
+// live. Used by the operator review console (admin).
 func ListScriptsByReviewStatus(status string) ([]UserScript, error) {
 	var scripts []UserScript
 	err := DB.Table("user_scripts").
-		Select("user_scripts.id,user_scripts.user_id,user_scripts.title,user_scripts.description,user_scripts.script_params,user_scripts.draft_code,user_scripts.review_status,user_scripts.review_note,user_scripts.latest_version,user_scripts.concurrency,user_scripts.author_share_rate_ppm,user_scripts.platform_fee_rate_ppm,user_scripts.category_id,user_scripts.published,user_scripts.published_at,user_scripts.created_at,user_scripts.updated_at,previous_version.title AS previous_title,previous_version.description AS previous_description,previous_version.script_params AS previous_script_params,previous_version.code AS previous_code").
-		Joins("LEFT JOIN script_versions previous_version ON previous_version.script_id = user_scripts.id AND previous_version.version = user_scripts.latest_version").
+		Select("user_scripts.id,user_scripts.user_id,user_scripts.title,user_scripts.description,user_scripts.script_params,user_scripts.draft_code,user_scripts.review_status,user_scripts.review_note,user_scripts.latest_version,user_scripts.concurrency,user_scripts.author_share_rate_ppm,user_scripts.platform_fee_rate_ppm,user_scripts.category_id,user_scripts.published,user_scripts.published_at,user_scripts.created_at,user_scripts.updated_at").
 		Where("user_scripts.review_status = ?", status).
 		Order("user_scripts.updated_at desc,user_scripts.id desc").
 		Find(&scripts).Error
 	if err != nil {
 		return nil, err
 	}
+	// Previous* fields are gorm:"-" (not backed by a user_scripts column), so a
+	// JOIN alias cannot populate them — GORM drops unmapped columns during scan.
+	// Fill them explicitly from the last published version, like AuthorUsername.
+	fillPreviousPublishedVersions(scripts)
 	for i := range scripts {
 		scripts[i].AuthorUsername, _ = GetUsernameById(scripts[i].UserId, true)
 	}
 	return scripts, nil
+}
+
+// fillPreviousPublishedVersions loads, for each script that has a published
+// version, the ScriptVersion that user_scripts.latest_version points at and
+// copies its title/description/params/code into the Previous* fields. Scripts
+// with no published version (latest_version == 0) are left blank, which the
+// review console renders as "Initial version". Best-effort: a lookup error
+// leaves the Previous* fields empty rather than failing the whole listing.
+func fillPreviousPublishedVersions(scripts []UserScript) {
+	scriptIds := make([]int, 0, len(scripts))
+	for i := range scripts {
+		if scripts[i].LatestVersion > 0 {
+			scriptIds = append(scriptIds, scripts[i].Id)
+		}
+	}
+	if len(scriptIds) == 0 {
+		return
+	}
+	var versions []ScriptVersion
+	if err := DB.Where("script_id IN ?", scriptIds).Find(&versions).Error; err != nil {
+		return
+	}
+	type versionKey struct{ scriptId, version int }
+	byKey := make(map[versionKey]*ScriptVersion, len(versions))
+	for i := range versions {
+		byKey[versionKey{versions[i].ScriptId, versions[i].Version}] = &versions[i]
+	}
+	for i := range scripts {
+		v := byKey[versionKey{scripts[i].Id, scripts[i].LatestVersion}]
+		if v == nil {
+			continue
+		}
+		scripts[i].PreviousTitle = v.Title
+		scripts[i].PreviousDescription = v.Description
+		scripts[i].PreviousScriptParams = v.ScriptParams
+		scripts[i].PreviousCode = v.Code
+	}
 }
 
 func GetUserScriptById(id int, userId int) (*UserScript, error) {
