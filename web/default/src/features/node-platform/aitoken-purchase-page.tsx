@@ -385,18 +385,25 @@ function isMediaUrlArray(value: unknown): value is string[] {
 // clear badge (empties the value → the caller restores an input) and, in array
 // context, a delete badge (removes the element). Image/video open a fullscreen
 // zoom. Fixed width keeps the form column from changing size.
+// onClear/onDelete are omitted in read-only contexts (task-queue params
+// preview), where the thumb is display-only. size='sm' shrinks it further so a
+// row of params previews stays short and doesn't inflate the card height.
 type MediaThumbProps = {
   url: string
   kind: MediaKind
-  onClear: () => void
+  onClear?: () => void
   onDelete?: () => void
+  size?: 'md' | 'sm'
 }
-function MediaThumb({ url, kind, onClear, onDelete }: MediaThumbProps) {
+function MediaThumb({ url, kind, onClear, onDelete, size = 'md' }: MediaThumbProps) {
   const { t } = useTranslation()
   const [zoomOpen, setZoomOpen] = useState(false)
+  const small = size === 'sm'
+  const boxWidth = kind === 'audio' ? (small ? 'w-36' : 'w-44') : small ? 'w-20' : 'w-28'
+  const boxHeight = small ? 'h-14' : 'h-20'
   return (
-    <div className={`relative shrink-0 overflow-hidden rounded-md border bg-muted/40 ${kind === 'audio' ? 'w-44' : 'w-28'}`}>
-      <div className='flex h-20 items-center justify-center overflow-hidden'>
+    <div className={`relative shrink-0 overflow-hidden rounded-md border bg-muted/40 ${boxWidth}`}>
+      <div className={`flex items-center justify-center overflow-hidden ${boxHeight}`}>
         {kind === 'image' && (
           <button type='button' className='h-full w-full cursor-zoom-in' aria-label={t('Preview')} onClick={() => setZoomOpen(true)}>
             <img className='h-full w-full object-cover' src={url} alt='' loading='lazy' />
@@ -407,34 +414,39 @@ function MediaThumb({ url, kind, onClear, onDelete }: MediaThumbProps) {
         )}
         {kind === 'audio' && (
           <div className='flex w-full flex-col items-center gap-1 px-1.5'>
-            <FileAudio className='h-5 w-5 text-muted-foreground' aria-hidden='true' />
+            <FileAudio className={small ? 'h-4 w-4 text-muted-foreground' : 'h-5 w-5 text-muted-foreground'} aria-hidden='true' />
             <audio className='h-7 w-full' src={url} controls preload='metadata' />
           </div>
         )}
       </div>
-      {/* Action badges: delete element (if array) then clear value */}
-      <div className='absolute right-0.5 top-0.5 flex gap-0.5'>
-        {onDelete && (
-          <button
-            type='button'
-            className='flex h-5 w-5 items-center justify-center rounded bg-black/60 text-white hover:bg-destructive'
-            title={t('Remove item')}
-            aria-label={t('Remove item')}
-            onClick={onDelete}
-          >
-            <Trash2 className='h-3 w-3' aria-hidden='true' />
-          </button>
-        )}
-        <button
-          type='button'
-          className='flex h-5 w-5 items-center justify-center rounded bg-black/60 text-white hover:bg-black/80'
-          title={t('Clear')}
-          aria-label={t('Clear')}
-          onClick={onClear}
-        >
-          <X className='h-3 w-3' aria-hidden='true' />
-        </button>
-      </div>
+      {/* Action badges: delete element (if array) then clear value. Read-only
+          previews pass neither, so no badges render. */}
+      {(onDelete || onClear) && (
+        <div className='absolute right-0.5 top-0.5 flex gap-0.5'>
+          {onDelete && (
+            <button
+              type='button'
+              className='flex h-5 w-5 items-center justify-center rounded bg-black/60 text-white hover:bg-destructive'
+              title={t('Remove item')}
+              aria-label={t('Remove item')}
+              onClick={onDelete}
+            >
+              <Trash2 className='h-3 w-3' aria-hidden='true' />
+            </button>
+          )}
+          {onClear && (
+            <button
+              type='button'
+              className='flex h-5 w-5 items-center justify-center rounded bg-black/60 text-white hover:bg-black/80'
+              title={t('Clear')}
+              aria-label={t('Clear')}
+              onClick={onClear}
+            >
+              <X className='h-3 w-3' aria-hidden='true' />
+            </button>
+          )}
+        </div>
+      )}
       {(kind === 'image' || kind === 'video') && (
         <Dialog open={zoomOpen} onOpenChange={setZoomOpen}>
           <DialogContent closeLabel={t('Close')} className='flex h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] items-center justify-center overflow-hidden bg-black/95 p-4 text-white sm:max-w-[calc(100vw-2rem)]' aria-label={t('Preview')}>
@@ -457,16 +469,20 @@ type JsonFormProps = {
   path?: (string | number)[]
   // compact: smaller text + tighter row spacing for read-only result display
   compact?: boolean
+  // previewMedia: in read-only mode, render media URLs as small preview thumbs
+  // instead of plain text (used by the task-queue parameters preview).
+  previewMedia?: boolean
 }
 
 function JsonForm(props: JsonFormProps) {
   const { t } = useTranslation()
   const path = props.path ?? []
   const compact = props.compact ?? false
+  const previewMedia = props.previewMedia ?? false
   // Editable array of media URLs: render each entry as an inline preview box
   // (or an input while it isn't yet a media URL), wrapping in a single row, with
   // an Add button at the end. min-w-0 keeps it inside the value column.
-  if (props.onChange && !compact && isMediaUrlArray(props.value)) {
+  if (props.onChange && isMediaUrlArray(props.value)) {
     const items = props.value
     return (
       <div className='flex min-w-0 flex-wrap items-center gap-2'>
@@ -525,6 +541,30 @@ function JsonForm(props: JsonFormProps) {
     )
   }
 
+  // Read-only array of media URLs (params preview): a wrapping row of small
+  // display-only thumbs. Falls through to the generic renderer otherwise.
+  if (previewMedia && !props.onChange && isMediaUrlArray(props.value)) {
+    return (
+      <div className='flex min-w-0 flex-wrap items-center gap-1.5'>
+        {props.value.map((item, index) => {
+          const kind = classifyMediaUrl(item)
+          return kind ? (
+            // eslint-disable-next-line react/no-array-index-key
+            <MediaThumb key={index} url={item.trim()} kind={kind} size='sm' />
+          ) : (
+            <span
+              // eslint-disable-next-line react/no-array-index-key
+              key={index}
+              className='text-muted-foreground max-w-full truncate text-[11px]'
+            >
+              {item}
+            </span>
+          )
+        })}
+      </div>
+    )
+  }
+
   if (Array.isArray(props.value)) {
     return (
       <div className='space-y-1'>
@@ -537,7 +577,7 @@ function JsonForm(props: JsonFormProps) {
             <span className='text-muted-foreground pt-2 text-xs tabular-nums'>
               {index + 1}
             </span>
-            <JsonForm value={value} path={[...path, index]} onChange={props.onChange} compact={compact} />
+            <JsonForm value={value} path={[...path, index]} onChange={props.onChange} compact={compact} previewMedia={previewMedia} />
             {props.onChange ? (
               <Button
                 type='button'
@@ -586,13 +626,24 @@ function JsonForm(props: JsonFormProps) {
             <div className={compact ? 'pt-0.5' : 'pt-1.5'}>
               <span className={compact ? 'text-muted-foreground text-[11px] break-words' : 'text-muted-foreground text-sm break-words'}>{key}</span>
             </div>
-            <JsonForm value={value} path={[...path, key]} onChange={props.onChange} compact={compact} />
+            <JsonForm value={value} path={[...path, key]} onChange={props.onChange} compact={compact} previewMedia={previewMedia} />
           </div>
         ))}
       </div>
     )
   }
   if (!props.onChange) {
+    // Params preview: a single media URL renders as a small display-only thumb.
+    if (previewMedia && typeof props.value === 'string') {
+      const kind = classifyMediaUrl(props.value)
+      if (kind) {
+        return (
+          <div className='py-0.5'>
+            <MediaThumb url={props.value.trim()} kind={kind} size='sm' />
+          </div>
+        )
+      }
+    }
     return (
       <div className={compact ? 'py-0.5 text-[11px] leading-4 break-words whitespace-pre-wrap' : 'min-h-9 py-1.5 text-sm break-words whitespace-pre-wrap'}>
         {props.value === null ? 'null' : String(props.value)}
@@ -621,7 +672,7 @@ function JsonForm(props: JsonFormProps) {
   }
   // A single string field holding a media URL collapses into a preview box;
   // clearing it (setting it empty) restores the input on the next render.
-  if (!compact && typeof props.value === 'string') {
+  if (typeof props.value === 'string') {
     const kind = classifyMediaUrl(props.value)
     if (kind) {
       return (
@@ -723,6 +774,11 @@ function TaskCard({ task, onChange, onCancel }: TaskCardProps) {
   const expanded = task.expanded === true
   // Fullscreen media preview (image/video) opened from the compact thumbnail.
   const [mediaOpen, setMediaOpen] = useState(false)
+  // Sent-parameters section: collapsed by default (result matters more; params
+  // are for verifying the result came from the right inputs) with its own
+  // visual/JSON toggle.
+  const [paramsOpen, setParamsOpen] = useState(false)
+  const [paramsView, setParamsView] = useState<ViewMode>('form')
   const canCancel =
     task.order != null &&
     ['FUNDS_RESERVED', 'MATCHING', 'OFFERED'].includes(task.order.state)
@@ -815,6 +871,18 @@ function TaskCard({ task, onChange, onCancel }: TaskCardProps) {
       : structuredNode
     : null
 
+  // Sent parameters — parsed once for the visual view; falls back to raw text.
+  let paramsParsed: unknown
+  let paramsOk = false
+  if (task.configText) {
+    try {
+      paramsParsed = JSON.parse(task.configText)
+      paramsOk = true
+    } catch {
+      paramsOk = false
+    }
+  }
+
   return (
     <div className='rounded-lg border text-sm overflow-hidden'>
       {/* Header */}
@@ -902,6 +970,55 @@ function TaskCard({ task, onChange, onCancel }: TaskCardProps) {
                 </div>
               </div>
               {resultNode}
+            </div>
+          )}
+
+          {/* Sent parameters — collapsed by default so cards stay short. Toggling
+              open reveals a visual (with media previews) or JSON view. */}
+          {task.configText && (
+            <div className='min-w-0'>
+              <div className='flex items-center gap-2'>
+                <button
+                  type='button'
+                  className='text-muted-foreground hover:text-foreground flex flex-1 items-center gap-1 text-xs font-medium'
+                  onClick={() => setParamsOpen((value) => !value)}
+                  aria-expanded={paramsOpen}
+                >
+                  {paramsOpen ? <ChevronUp className='h-3 w-3' /> : <ChevronDown className='h-3 w-3' />}
+                  {t('Parameters')}
+                </button>
+                {paramsOpen && paramsOk && (
+                  <div className='flex shrink-0 gap-1' role='group'>
+                    <Button
+                      type='button' size='sm'
+                      variant={paramsView === 'form' ? 'secondary' : 'ghost'}
+                      onClick={() => setParamsView('form')}
+                    >
+                      <ListTree className='mr-1 h-3 w-3' />{t('Visual')}
+                    </Button>
+                    <Button
+                      type='button' size='sm'
+                      variant={paramsView === 'json' ? 'secondary' : 'ghost'}
+                      onClick={() => setParamsView('json')}
+                    >
+                      <Braces className='mr-1 h-3 w-3' />JSON
+                    </Button>
+                  </div>
+                )}
+              </div>
+              {paramsOpen && (
+                <div className='mt-2'>
+                  {paramsOk && paramsView === 'form' ? (
+                    <div className='max-h-60 overflow-y-auto rounded-md border bg-muted/10 p-2'>
+                      <JsonForm value={paramsParsed} compact previewMedia />
+                    </div>
+                  ) : (
+                    <pre className='bg-muted/30 max-h-60 overflow-auto rounded-md border p-2 text-xs whitespace-pre-wrap break-all'>
+                      {task.configText}
+                    </pre>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
