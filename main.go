@@ -135,6 +135,14 @@ func main() {
 	// the scheduler and pushes them to the owning node's live control channel.
 	go dispatch.StartPublisher(nodehub.Default, time.Second, make(chan struct{}))
 
+	// Stale-lease sweeper: releases leases whose TTL elapsed without a terminal
+	// signal from the provider (e.g. the provider tab closed mid-run), so a
+	// leaked lease can't permanently occupy a node's concurrency slot. Master
+	// only — it mutates shared lease/node state.
+	if common.IsMasterNode {
+		go dispatch.StartLeaseExpiryLoop(time.Minute, make(chan struct{}))
+	}
+
 	// Wire task polling adaptor factory (breaks service -> relay import cycle).
 	// Must run before the system task runner starts: the async_task_poll handler
 	// calls service.RunTaskPollingOnce, which needs this factory set.

@@ -2,6 +2,7 @@ package dispatch
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -106,6 +107,34 @@ func StartPublisher(sender EventSender, interval time.Duration, stop <-chan stru
 		case <-ticker.C:
 			if _, _, err := PublishBatch(sender, 100); err != nil {
 				common.SysError("outbox publish batch failed: " + err.Error())
+			}
+		}
+	}
+}
+
+// StartLeaseExpiryLoop periodically releases active leases whose TTL has passed.
+// A lease is normally released when the provider reports the task's terminal
+// state (result_ready / failed / cancelled). If the provider tab closes or the
+// relay drops mid-run, that message never arrives and the lease stays active,
+// permanently occupying one of the node's concurrency slots (shown as e.g.
+// "1/2 slots" on an otherwise idle node). This sweep reclaims those slots once
+// DefaultLeaseTTL has elapsed. Runs until stop is closed.
+func StartLeaseExpiryLoop(interval time.Duration, stop <-chan struct{}) {
+	if interval <= 0 {
+		interval = time.Minute
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-stop:
+			return
+		case <-ticker.C:
+			released, err := model.ExpireStaleLeases(common.GetTimestamp())
+			if err != nil {
+				common.SysError("stale lease expiry failed: " + err.Error())
+			} else if released > 0 {
+				common.SysLog(fmt.Sprintf("released %d stale lease(s)", released))
 			}
 		}
 	}

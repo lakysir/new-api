@@ -1061,7 +1061,7 @@ export function AitokenPurchasePage() {
                       const rate = o.executions > 0 ? `${Math.round((o.successes / o.executions) * 100)}% (${o.successes}/${o.executions})` : '-'
                       let statusLabel = t('Offline')
                       if (o.busy) statusLabel = t('Busy')
-                      else if (o.online) statusLabel = o.concurrency > 1 ? `${t('Online')} (${o.available_slots}/${o.total_slots} ${t('slots')})` : t('Online')
+                      else if (o.online) statusLabel = t('Online')
                       return (
                         <label key={o.node_id} className='flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border p-2 text-[11px]'>
                           <input type='radio' name='offer' checked={!autoSelect && nodeId === o.node_id} disabled={!o.available && o.unavailable_reason !== 'BALANCE_CHECK_EXPIRED'} onChange={() => selectProvider(o.node_id)} />
