@@ -1355,6 +1355,14 @@ export function AitokenPurchasePage() {
       }
       await loadBalance()
       const config = JSON.parse(cleanedConfigText)
+      // Optional per-task result timeout (ms), e.g. 240000. Falls back to the
+      // session default (15 min) when unset or invalid. Left in the config so
+      // the input hash still matches; scripts ignore the extra field.
+      const configuredTimeout = (config as Record<string, unknown>)?.timeoutMs
+      const resultTimeoutMs =
+        typeof configuredTimeout === 'number' && configuredTimeout > 0
+          ? configuredTimeout
+          : undefined
       const relayUrl = `${location.origin.replace(/^http/, 'ws')}/api/relay`
       const session = new ClientRelaySession({ relayUrl, taskId: o.id, attempt: 1, clientDeviceId: `client-${o.client_id}` })
       upd({ relayStatus: t('Connecting to relay...') })
@@ -1379,7 +1387,7 @@ export function AitokenPurchasePage() {
         await Promise.race([session.waitEstablished(), failFast])
         upd({ relayStatus: t('Sending config, waiting for result...') })
         await session.sendConfig(config)
-        const result = await Promise.race([session.waitForResult(), failFast])
+        const result = await Promise.race([session.waitForResult(resultTimeoutMs), failFast])
         if (result && typeof result === 'object' && (result as Record<string, unknown>).ok === false) {
           const scriptError = (result as Record<string, unknown>).error
           throw new Error(typeof scriptError === 'string' && scriptError ? scriptError : describeOrderError('SCRIPT_EXECUTION_FAILED'))

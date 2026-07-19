@@ -186,8 +186,12 @@ export class ClientRelaySession {
     this.#socket!.send(tagFrame(TAG_DATA, frame) as unknown as ArrayBuffer)
   }
 
-  /** Await the provider's encrypted result. */
-  waitForResult(timeoutMs = 120000): Promise<unknown> {
+  /**
+   * Await the provider's encrypted result. Defaults to a 15-minute limit so
+   * long-running scripts (video/audio generation, etc.) aren't cut off; pass
+   * timeoutMs (e.g. 240000) to override per task.
+   */
+  waitForResult(timeoutMs = 900000): Promise<unknown> {
     return Promise.race([
       this.#resultPromise,
       new Promise((_, rej) =>
