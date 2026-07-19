@@ -14,8 +14,15 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import {
+  getScriptVersionCode,
   listCategories,
   listScriptVersions,
   publishScriptVersion,
@@ -230,6 +237,148 @@ function CodePreviewDialog({
   )
 }
 
+// A single code column: label + scrollable monospace body (or a status note).
+function CodePane({
+  code,
+  loading,
+  error,
+  emptyText,
+}: {
+  code: string
+  loading?: boolean
+  error?: string
+  emptyText: string
+}) {
+  const { t } = useTranslation()
+  return (
+    <pre className='bg-muted/40 h-full min-h-[280px] overflow-auto rounded-lg border p-3 font-mono text-xs whitespace-pre-wrap'>
+      {loading
+        ? t('Loading...')
+        : error
+          ? `/* ${error} */`
+          : code || `/* ${emptyText} */`}
+    </pre>
+  )
+}
+
+// MyScriptCodeDialog lets an author compare the current draft against the last
+// published version. The draft is passed in; the published code is fetched
+// lazily from the script's latest_version when the dialog opens. Three views:
+// Draft, Published, and side-by-side Compare.
+function MyScriptCodeDialog({
+  script,
+  onOpenChange,
+}: {
+  script: UserScript | null
+  onOpenChange: (open: boolean) => void
+}) {
+  const { t } = useTranslation()
+  const draftCode = script?.draft_code || ''
+  const publishedVersion = script?.latest_version || 0
+  const hasPublished = !!script?.published && publishedVersion > 0
+
+  const [publishedCode, setPublishedCode] = useState('')
+  const [loadingPublished, setLoadingPublished] = useState(false)
+  const [publishedError, setPublishedError] = useState('')
+
+  // Fetch the last published version's code when a script that has one is
+  // opened. Keyed on script id + version so switching scripts refetches.
+  useEffect(() => {
+    if (!script || !hasPublished) {
+      setPublishedCode('')
+      setPublishedError('')
+      return
+    }
+    let cancelled = false
+    setLoadingPublished(true)
+    setPublishedError('')
+    getScriptVersionCode(script.id, publishedVersion)
+      .then((res) => {
+        if (!cancelled) setPublishedCode(res.code || '')
+      })
+      .catch((err) => {
+        if (!cancelled)
+          setPublishedError(String((err as Error)?.message || err))
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingPublished(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [script, hasPublished, publishedVersion])
+
+  const publishedLabel = hasPublished
+    ? t('Published v{{v}}', { v: publishedVersion })
+    : t('Published')
+
+  return (
+    <Dialog
+      open={!!script}
+      onOpenChange={onOpenChange}
+      title={`${script?.title || ''} #${script?.id || ''}`}
+      description={
+        script?.has_unpublished_changes
+          ? t('Draft has unpublished changes.')
+          : script?.description
+      }
+      contentClassName='sm:max-w-4xl'
+      contentHeight='58vh'
+    >
+      <Tabs defaultValue='draft' className='h-full'>
+        <TabsList>
+          <TabsTrigger value='draft'>{t('Draft')}</TabsTrigger>
+          {hasPublished ? (
+            <>
+              <TabsTrigger value='published'>{publishedLabel}</TabsTrigger>
+              <TabsTrigger value='compare'>{t('Compare')}</TabsTrigger>
+            </>
+          ) : null}
+        </TabsList>
+
+        <TabsContent value='draft'>
+          <CodePane code={draftCode} emptyText={t('No draft code.')} />
+        </TabsContent>
+
+        {hasPublished ? (
+          <>
+            <TabsContent value='published'>
+              <CodePane
+                code={publishedCode}
+                loading={loadingPublished}
+                error={publishedError}
+                emptyText={t('No published code.')}
+              />
+            </TabsContent>
+
+            <TabsContent value='compare'>
+              <div className='grid h-full gap-3 lg:grid-cols-2'>
+                <div className='flex min-h-0 flex-col gap-1'>
+                  <span className='text-muted-foreground text-xs font-medium'>
+                    {t('Draft')}
+                  </span>
+                  <CodePane code={draftCode} emptyText={t('No draft code.')} />
+                </div>
+                <div className='flex min-h-0 flex-col gap-1'>
+                  <span className='text-muted-foreground text-xs font-medium'>
+                    {publishedLabel}
+                  </span>
+                  <CodePane
+                    code={publishedCode}
+                    loading={loadingPublished}
+                    error={publishedError}
+                    emptyText={t('No published code.')}
+                  />
+                </div>
+              </div>
+            </TabsContent>
+          </>
+        ) : null}
+      </Tabs>
+    </Dialog>
+  )
+}
+
 function DescriptionDialog({
   script,
   onOpenChange,
@@ -422,13 +571,11 @@ export function MyScriptsPage() {
     loadMine().catch((err) => toast.error(String(err?.message || err)))
   }, [])
 
+  // Load the full record (including draft_code) so the code dialog can show the
+  // draft and fetch the last published version for comparison.
   async function openMinePreview(id: number) {
     const script = await unwrap<UserScript>(api.get(`/api/scripts/mine/${id}`))
-    setPreviewScript({
-      ...script,
-      code_preview: script.draft_code || '',
-      preview_truncated: false,
-    })
+    setPreviewScript(script)
   }
 
   async function openMineEditor(id: number) {
@@ -713,7 +860,7 @@ export function MyScriptsPage() {
           </Table>
         </div>
 
-        <CodePreviewDialog
+        <MyScriptCodeDialog
           script={previewScript}
           onOpenChange={(open) => {
             if (!open) setPreviewScript(null)

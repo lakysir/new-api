@@ -141,6 +141,16 @@ export function listScriptVersions(scriptId: number) {
   )
 }
 
+// getScriptVersionCode fetches the manifest + full code body of a fixed,
+// approved (non-revoked) version. The author console uses it to show the last
+// published code alongside the current draft. The request rejects with the
+// server message on 404 (not found) or 410 (revoked) so callers can surface it.
+export function getScriptVersionCode(scriptId: number, version: number) {
+  return unwrap<{ manifest: Record<string, unknown>; code: string }>(
+    api.get(`/api/scripts/${scriptId}/versions/${version}`)
+  )
+}
+
 // Admin: approve/reject a pending draft; revoke a published version.
 export function listPendingScripts() {
   return unwrap<
