@@ -389,6 +389,14 @@ export function NodesConsolePage() {
   // Enable a capability: run the challenge test to get a window, then list the
   // script version on the node with the provider's price and daily quota.
   async function onEnableCapability(nodeId: string) {
+    // Listing a new, unverified capability while the node is enabled risks it
+    // being scheduled a task it can't run. Require the node to be disabled first
+    // so every new capability goes through its balance check before scheduling.
+    const node = nodes.find((n) => n.id === nodeId)
+    if (node?.enabled) {
+      toast.error(t('Disable the node before listing a new script'))
+      return
+    }
     const f = enableForm[nodeId]
     if (!f || !f.scriptId || !f.version) {
       toast.error(t('Select a script and version'))
@@ -663,22 +671,31 @@ export function NodesConsolePage() {
 
   function renderCapabilities(node: NodeInfo) {
     const list = caps[node.id] ?? []
+    // New capabilities are unverified until their balance check passes, and an
+    // enabled node can be scheduled at any moment. Only allow listing while the
+    // node is disabled so a bad capability can't get a task before it's checked.
+    const listingLocked = node.enabled
     return (
       <div className='space-y-5'>
         <section>
           <div className='mb-3'>
             <h4 className='text-sm font-medium'>{t('List capability')}</h4>
             <p className='text-muted-foreground text-xs'>
-              {t(
-                'List the script first, then run its balance check from the row below'
-              )}
+              {listingLocked
+                ? t(
+                    'Disable the node before listing a new script — new capabilities must pass their balance check before the node can be scheduled again'
+                  )
+                : t(
+                    'List the script first, then run its balance check from the row below'
+                  )}
             </p>
           </div>
           <div className='bg-background grid gap-3 rounded-md border p-3 sm:grid-cols-2 xl:grid-cols-[minmax(220px,2fr)_100px_130px_130px_auto]'>
             <label className='text-muted-foreground space-y-1 text-xs'>
               {t('Script')}
               <select
-                className='text-foreground h-9 w-full rounded-md border bg-transparent px-2 text-sm'
+                className='text-foreground h-9 w-full rounded-md border bg-transparent px-2 text-sm disabled:opacity-50'
+                disabled={listingLocked}
                 value={enableForm[node.id]?.scriptId || ''}
                 onChange={(e) => selectScript(node.id, e.target.value)}
               >
@@ -693,8 +710,8 @@ export function NodesConsolePage() {
             <label className='text-muted-foreground space-y-1 text-xs'>
               {t('Version')}
               <select
-                className='text-foreground h-9 w-full rounded-md border bg-transparent px-2 text-sm'
-                disabled={!enableForm[node.id]?.scriptId}
+                className='text-foreground h-9 w-full rounded-md border bg-transparent px-2 text-sm disabled:opacity-50'
+                disabled={listingLocked || !enableForm[node.id]?.scriptId}
                 value={enableForm[node.id]?.version || ''}
                 onChange={(e) => setForm(node.id, { version: e.target.value })}
               >
@@ -711,6 +728,7 @@ export function NodesConsolePage() {
             <label className='text-muted-foreground space-y-1 text-xs'>
               {t('Price')}
               <Input
+                disabled={listingLocked}
                 value={enableForm[node.id]?.price ?? DEFAULT_ENABLE_FORM.price}
                 onChange={(e) => setForm(node.id, { price: e.target.value })}
               />
@@ -718,6 +736,7 @@ export function NodesConsolePage() {
             <label className='text-muted-foreground space-y-1 text-xs'>
               {t('Daily limit')}
               <Input
+                disabled={listingLocked}
                 value={
                   enableForm[node.id]?.dailyLimit ??
                   DEFAULT_ENABLE_FORM.dailyLimit
@@ -729,6 +748,7 @@ export function NodesConsolePage() {
             </label>
             <Button
               className='self-end'
+              disabled={listingLocked}
               onClick={() => onEnableCapability(node.id)}
             >
               {t('List capability')}
