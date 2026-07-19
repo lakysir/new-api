@@ -264,14 +264,17 @@ type JsonFormProps = {
   value: unknown
   onChange?: (path: (string | number)[], value: unknown) => void
   path?: (string | number)[]
+  // compact: smaller text + tighter row spacing for read-only result display
+  compact?: boolean
 }
 
 function JsonForm(props: JsonFormProps) {
   const { t } = useTranslation()
   const path = props.path ?? []
+  const compact = props.compact ?? false
   if (Array.isArray(props.value)) {
     return (
-      <div className='space-y-2'>
+      <div className='space-y-1'>
         {props.value.map((value, index) => (
           <div
             // eslint-disable-next-line react/no-array-index-key
@@ -281,7 +284,7 @@ function JsonForm(props: JsonFormProps) {
             <span className='text-muted-foreground pt-2 text-xs tabular-nums'>
               {index + 1}
             </span>
-            <JsonForm value={value} path={[...path, index]} onChange={props.onChange} />
+            <JsonForm value={value} path={[...path, index]} onChange={props.onChange} compact={compact} />
             {props.onChange ? (
               <Button
                 type='button'
@@ -323,12 +326,14 @@ function JsonForm(props: JsonFormProps) {
         {Object.entries(props.value).map(([key, value]) => (
           <div
             key={key}
-            className='grid gap-2 py-2.5 first:pt-0 last:pb-0 md:grid-cols-[minmax(8rem,11rem)_minmax(0,1fr)] md:gap-3'
+            className={compact
+              ? 'grid gap-1 py-1 first:pt-0 last:pb-0 md:grid-cols-[minmax(6rem,9rem)_minmax(0,1fr)] md:gap-2'
+              : 'grid gap-2 py-2.5 first:pt-0 last:pb-0 md:grid-cols-[minmax(8rem,11rem)_minmax(0,1fr)] md:gap-3'}
           >
-            <div className='pt-1.5'>
-              <span className='text-muted-foreground text-sm break-words'>{key}</span>
+            <div className={compact ? 'pt-0.5' : 'pt-1.5'}>
+              <span className={compact ? 'text-muted-foreground text-[11px] break-words' : 'text-muted-foreground text-sm break-words'}>{key}</span>
             </div>
-            <JsonForm value={value} path={[...path, key]} onChange={props.onChange} />
+            <JsonForm value={value} path={[...path, key]} onChange={props.onChange} compact={compact} />
           </div>
         ))}
       </div>
@@ -336,7 +341,7 @@ function JsonForm(props: JsonFormProps) {
   }
   if (!props.onChange) {
     return (
-      <div className='min-h-9 py-1.5 text-sm break-words whitespace-pre-wrap'>
+      <div className={compact ? 'py-0.5 text-[11px] leading-4 break-words whitespace-pre-wrap' : 'min-h-9 py-1.5 text-sm break-words whitespace-pre-wrap'}>
         {props.value === null ? 'null' : String(props.value)}
       </div>
     )
@@ -467,15 +472,19 @@ function TaskCard({ task, onResultViewChange, onCancel }: TaskCardProps) {
       const parsed = JSON.parse(task.relayResult) as unknown
       resultNode =
         task.resultView === 'json' ? (
-          <pre className='bg-muted/30 max-h-64 overflow-auto rounded-md border p-2 text-xs'>
+          // whitespace-pre-wrap prevents horizontal overflow; the card stays within its column
+          <pre className='bg-muted/30 max-h-60 overflow-auto rounded-md border p-2 text-xs whitespace-pre-wrap break-all'>
             {task.relayResult}
           </pre>
         ) : (
-          <JsonForm value={parsed} />
+          // compact + scrollable container — result data can be large
+          <div className='max-h-60 overflow-y-auto rounded-md border bg-muted/10 p-2'>
+            <JsonForm value={parsed} compact />
+          </div>
         )
     } catch {
       resultNode = (
-        <pre className='bg-muted/30 max-h-64 overflow-auto rounded-md border p-2 text-xs'>
+        <pre className='bg-muted/30 max-h-60 overflow-auto rounded-md border p-2 text-xs whitespace-pre-wrap break-all'>
           {task.relayResult}
         </pre>
       )
@@ -511,12 +520,12 @@ function TaskCard({ task, onResultViewChange, onCancel }: TaskCardProps) {
         </button>
       </div>
 
-      {/* Expanded body */}
+      {/* Expanded body — min-w-0 + overflow-hidden prevent result content from blowing card width */}
       {expanded && (
-        <div className='border-t px-3 py-3 space-y-3'>
+        <div className='min-w-0 overflow-hidden border-t px-3 py-3 space-y-3'>
           {task.order && (
             <div className='text-xs space-y-1'>
-              <div className='font-mono text-muted-foreground'>{task.order.id}</div>
+              <div className='font-mono text-muted-foreground truncate'>{task.order.id}</div>
               <div>
                 {t('State')}: <b>{task.order.state}</b>
                 {task.order.chosen_node_id && (
@@ -531,10 +540,11 @@ function TaskCard({ task, onResultViewChange, onCancel }: TaskCardProps) {
             </div>
           )}
           {resultNode && (
-            <div>
-              <div className='mb-2 flex items-center justify-between gap-2'>
-                <span className='text-xs font-medium'>{t('Result')}</span>
-                <div className='flex gap-1' role='group'>
+            <div className='min-w-0'>
+              {/* Header: Result label left, toggle buttons right — shrink-0 keeps buttons in frame */}
+              <div className='mb-2 flex items-center gap-2'>
+                <span className='text-xs font-medium flex-1'>{t('Result')}</span>
+                <div className='flex shrink-0 gap-1' role='group'>
                   <Button
                     type='button' size='sm'
                     variant={task.resultView === 'form' ? 'secondary' : 'ghost'}
@@ -1084,8 +1094,8 @@ export function AitokenPurchasePage() {
               <div className='text-muted-foreground mt-1 text-xs'>{t('Only the hash of these parameters crosses the control plane; the plaintext travels the encrypted data plane to the provider.')}</div>
             </div>
 
-            {/* Sticky action bar — always visible at bottom as user scrolls */}
-            <div className='sticky bottom-0 z-10 rounded-lg border bg-background p-4 shadow-md'>
+            {/* Sticky action bar — subtle tinted background + top accent border to visually separate from form cards above */}
+            <div className='sticky bottom-0 z-10 rounded-lg border border-t-2 border-t-primary/20 bg-muted/30 p-4 shadow-md backdrop-blur-sm'>
               <div className='flex flex-wrap items-center gap-3'>
                 <Button variant='outline' onClick={onQuote}>{t('Get quote')}</Button>
                 <Button onClick={() => void onPurchase()} disabled={!quote || insufficientBalance}>
