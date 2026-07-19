@@ -774,10 +774,9 @@ function TaskCard({ task, onChange, onCancel }: TaskCardProps) {
   const expanded = task.expanded === true
   // Fullscreen media preview (image/video) opened from the compact thumbnail.
   const [mediaOpen, setMediaOpen] = useState(false)
-  // Sent-parameters section: collapsed by default (result matters more; params
-  // are for verifying the result came from the right inputs) with its own
-  // visual/JSON toggle.
-  const [paramsOpen, setParamsOpen] = useState(false)
+  // Expanded body is split into two top-level tabs: Result (default) and
+  // Parameters. The Parameters tab has its own visual/JSON sub-toggle.
+  const [activeTab, setActiveTab] = useState<'result' | 'params'>('result')
   const [paramsView, setParamsView] = useState<ViewMode>('form')
   const canCancel =
     task.order != null &&
@@ -923,14 +922,19 @@ function TaskCard({ task, onChange, onCancel }: TaskCardProps) {
             </div>
           )}
           {task.order && (
+            // Order id + state share one line; the node/cancel affordances follow.
             <div className='text-xs space-y-1'>
-              <div className='font-mono text-muted-foreground truncate'>{task.order.id}</div>
-              <div>
-                {t('State')}: <b>{task.order.state}</b>
-                {task.order.chosen_node_id && (
-                  <> · {t('Node')}: <span className='font-mono'>{task.order.chosen_node_id}</span></>
-                )}
+              <div className='flex flex-wrap items-center gap-x-3 gap-y-1'>
+                <span className='font-mono text-muted-foreground min-w-0 truncate'>{task.order.id}</span>
+                <span className='shrink-0'>
+                  {t('State')}: <b>{task.order.state}</b>
+                </span>
               </div>
+              {task.order.chosen_node_id && (
+                <div className='truncate'>
+                  {t('Node')}: <span className='font-mono'>{task.order.chosen_node_id}</span>
+                </div>
+              )}
               {canCancel && (
                 <Button size='sm' variant='outline' onClick={() => { if (task.order) onCancel(task.order.id) }}>
                   {t('Cancel order')}
@@ -938,76 +942,107 @@ function TaskCard({ task, onChange, onCancel }: TaskCardProps) {
               )}
             </div>
           )}
-          {resultNode && (
+
+          {/* Two top-level tabs: Parameters and Result. Result keeps its own
+              preview/visual/JSON sub-toggle. Splitting them keeps the card short
+              so neither section gets clipped by the card's overflow. */}
+          <div className='flex gap-1 border-b' role='tablist'>
+            <button
+              type='button'
+              role='tab'
+              aria-selected={activeTab === 'params'}
+              className={`-mb-px border-b-2 px-3 py-1.5 text-xs font-medium transition-colors ${
+                activeTab === 'params'
+                  ? 'border-foreground text-foreground'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+              onClick={() => setActiveTab('params')}
+            >
+              {t('Parameters')}
+            </button>
+            <button
+              type='button'
+              role='tab'
+              aria-selected={activeTab === 'result'}
+              className={`-mb-px border-b-2 px-3 py-1.5 text-xs font-medium transition-colors ${
+                activeTab === 'result'
+                  ? 'border-foreground text-foreground'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+              onClick={() => setActiveTab('result')}
+            >
+              {t('Result')}
+            </button>
+          </div>
+
+          {/* Result tab */}
+          {activeTab === 'result' && (
             <div className='min-w-0'>
-              {/* Header: Result label left, toggle buttons right — shrink-0 keeps buttons in frame */}
-              <div className='mb-2 flex items-center gap-2'>
-                <span className='text-xs font-medium flex-1'>{t('Result')}</span>
-                <div className='flex shrink-0 gap-1' role='group'>
-                  {media && (
-                    <Button
-                      type='button' size='sm'
-                      variant={resultView === 'preview' ? 'secondary' : 'ghost'}
-                      onClick={() => onChange(task.localId, { resultView: 'preview' })}
-                    >
-                      <Eye className='mr-1 h-3 w-3' />{t('Preview')}
-                    </Button>
-                  )}
-                  <Button
-                    type='button' size='sm'
-                    variant={resultView === 'form' ? 'secondary' : 'ghost'}
-                    onClick={() => onChange(task.localId, { resultView: 'form' })}
-                  >
-                    <ListTree className='mr-1 h-3 w-3' />{t('Visual')}
-                  </Button>
-                  <Button
-                    type='button' size='sm'
-                    variant={resultView === 'json' ? 'secondary' : 'ghost'}
-                    onClick={() => onChange(task.localId, { resultView: 'json' })}
-                  >
-                    <Braces className='mr-1 h-3 w-3' />JSON
-                  </Button>
+              {resultNode ? (
+                <>
+                  {/* Sub-toggle: preview (media) / visual / JSON */}
+                  <div className='mb-2 flex justify-end'>
+                    <div className='flex shrink-0 gap-1' role='group'>
+                      {media && (
+                        <Button
+                          type='button' size='sm'
+                          variant={resultView === 'preview' ? 'secondary' : 'ghost'}
+                          onClick={() => onChange(task.localId, { resultView: 'preview' })}
+                        >
+                          <Eye className='mr-1 h-3 w-3' />{t('Preview')}
+                        </Button>
+                      )}
+                      <Button
+                        type='button' size='sm'
+                        variant={resultView === 'form' ? 'secondary' : 'ghost'}
+                        onClick={() => onChange(task.localId, { resultView: 'form' })}
+                      >
+                        <ListTree className='mr-1 h-3 w-3' />{t('Visual')}
+                      </Button>
+                      <Button
+                        type='button' size='sm'
+                        variant={resultView === 'json' ? 'secondary' : 'ghost'}
+                        onClick={() => onChange(task.localId, { resultView: 'json' })}
+                      >
+                        <Braces className='mr-1 h-3 w-3' />JSON
+                      </Button>
+                    </div>
+                  </div>
+                  {resultNode}
+                </>
+              ) : (
+                <div className='text-muted-foreground py-6 text-center text-xs'>
+                  {t('No result yet')}
                 </div>
-              </div>
-              {resultNode}
+              )}
             </div>
           )}
 
-          {/* Sent parameters — collapsed by default so cards stay short. Toggling
-              open reveals a visual (with media previews) or JSON view. */}
-          {task.configText && (
+          {/* Parameters tab — visual (with media previews) or JSON view. */}
+          {activeTab === 'params' && (
             <div className='min-w-0'>
-              <div className='flex items-center gap-2'>
-                <button
-                  type='button'
-                  className='text-muted-foreground hover:text-foreground flex flex-1 items-center gap-1 text-xs font-medium'
-                  onClick={() => setParamsOpen((value) => !value)}
-                  aria-expanded={paramsOpen}
-                >
-                  {paramsOpen ? <ChevronUp className='h-3 w-3' /> : <ChevronDown className='h-3 w-3' />}
-                  {t('Parameters')}
-                </button>
-                {paramsOpen && paramsOk && (
-                  <div className='flex shrink-0 gap-1' role='group'>
-                    <Button
-                      type='button' size='sm'
-                      variant={paramsView === 'form' ? 'secondary' : 'ghost'}
-                      onClick={() => setParamsView('form')}
-                    >
-                      <ListTree className='mr-1 h-3 w-3' />{t('Visual')}
-                    </Button>
-                    <Button
-                      type='button' size='sm'
-                      variant={paramsView === 'json' ? 'secondary' : 'ghost'}
-                      onClick={() => setParamsView('json')}
-                    >
-                      <Braces className='mr-1 h-3 w-3' />JSON
-                    </Button>
-                  </div>
-                )}
-              </div>
-              {paramsOpen && (
-                <div className='mt-2'>
+              {task.configText ? (
+                <>
+                  {paramsOk && (
+                    <div className='mb-2 flex justify-end'>
+                      <div className='flex shrink-0 gap-1' role='group'>
+                        <Button
+                          type='button' size='sm'
+                          variant={paramsView === 'form' ? 'secondary' : 'ghost'}
+                          onClick={() => setParamsView('form')}
+                        >
+                          <ListTree className='mr-1 h-3 w-3' />{t('Visual')}
+                        </Button>
+                        <Button
+                          type='button' size='sm'
+                          variant={paramsView === 'json' ? 'secondary' : 'ghost'}
+                          onClick={() => setParamsView('json')}
+                        >
+                          <Braces className='mr-1 h-3 w-3' />JSON
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                   {paramsOk && paramsView === 'form' ? (
                     <div className='max-h-60 overflow-y-auto rounded-md border bg-muted/10 p-2'>
                       <JsonForm value={paramsParsed} compact previewMedia />
@@ -1017,6 +1052,10 @@ function TaskCard({ task, onChange, onCancel }: TaskCardProps) {
                       {task.configText}
                     </pre>
                   )}
+                </>
+              ) : (
+                <div className='text-muted-foreground py-6 text-center text-xs'>
+                  {t('No parameters')}
                 </div>
               )}
             </div>
