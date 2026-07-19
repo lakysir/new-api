@@ -1,0 +1,16 @@
+{
+  "Bill by request": "Bill by request",
+  "Bill by second": "Bill by second",
+  "Display unit": "Display unit",
+  "Only affects the displayed price on pricing model cards.": "Only affects the displayed price on pricing model cards.",
+  "Only affects the displayed unit on pricing model cards.": "Only affects the displayed unit on pricing model cards.",
+  "Request count": "Request count",
+  "Success Cost": "Success Cost",
+  "Failure Cost": "Failure Cost",
+  "Running Cost": "Running Cost",
+  "Consume multiplier": "Consume multiplier",
+  "Units of work for one run (min 1). The fee is the base price times this value; the script decides what it means (e.g. seconds of video, number of images).": "Units of work for one run (min 1). The fee is the base price times this value; the script decides what it means (e.g. seconds of video, number of images).",
+  "Insufficient node balance for this amount": "Insufficient node balance for this amount",
+  "Script description": "Script description",
+  "Your node (disabled) — selectable for testing": "Your node (disabled) — selectable for testing"
+}

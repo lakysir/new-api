@@ -27,7 +27,6 @@ import {
   History,
   ListTree,
   Loader2,
-  LockKeyhole,
   Plus,
   Trash2,
   WalletCards,
@@ -604,6 +603,10 @@ export function AitokenPurchasePage() {
   const [taskRecords, setTaskRecords] = useState<ClientTaskRecord[]>(loadTaskRecords)
   const [recordsOpen, setRecordsOpen] = useState(false)
   const [expandedRecordId, setExpandedRecordId] = useState<string | null>(null)
+  // Wallet interactions (recharge/withdraw) live in a dialog to keep the top bar compact.
+  const [walletOpen, setWalletOpen] = useState(false)
+  // Script description is collapsed to one line by default; expand for the full text.
+  const [descExpanded, setDescExpanded] = useState(false)
 
   function updateTask(localId: string, patch: Partial<QueuedTask>) {
     setTaskQueue((prev) =>
@@ -899,6 +902,22 @@ export function AitokenPurchasePage() {
     <SectionPageLayout>
       <SectionPageLayout.Title>{t('AiToken P2P Marketplace')}</SectionPageLayout.Title>
       <SectionPageLayout.Actions>
+        {/* Compact balance chip: available + reserved, click to manage funds */}
+        <button
+          type='button'
+          onClick={() => setWalletOpen(true)}
+          className='hover:bg-muted/50 flex items-center gap-3 rounded-md border px-3 py-1.5 text-left transition-colors'
+        >
+          <WalletCards className='text-muted-foreground h-4 w-4 shrink-0' />
+          <div className='leading-tight'>
+            <div className='text-[10px] text-muted-foreground'>{t('Available')}</div>
+            <div className='text-sm font-semibold'>{microsToCurrency(bal?.client_available)}</div>
+          </div>
+          <div className='border-l pl-3 leading-tight'>
+            <div className='text-[10px] text-muted-foreground'>{t('Reserved')}</div>
+            <div className='text-sm font-semibold'>{microsToCurrency(bal?.client_reserved)}</div>
+          </div>
+        </button>
         <Button variant='outline' render={<a href='/aitoken-api-docs' target='_blank' rel='noopener noreferrer' />}>
           <FileCode className='mr-2 h-4 w-4' />{t('API docs')}
         </Button>
@@ -909,44 +928,6 @@ export function AitokenPurchasePage() {
         <Button variant='outline' onClick={loadBalance}>{t('Refresh')}</Button>
       </SectionPageLayout.Actions>
       <SectionPageLayout.Content>
-        {/* Wallet bar */}
-        <div className='mb-4 grid overflow-hidden rounded-lg border sm:grid-cols-2 lg:grid-cols-[minmax(150px,0.75fr)_minmax(280px,1.25fr)_minmax(330px,1.5fr)_minmax(150px,0.75fr)]'>
-          <div className='flex min-h-16 items-center gap-3 p-3'>
-            <WalletCards className='text-muted-foreground h-5 w-5 shrink-0' />
-            <div className='min-w-0'>
-              <div className='text-muted-foreground text-xs'>{t('Available')}</div>
-              <div className='truncate text-lg font-semibold'>{microsToCurrency(bal?.client_available)}</div>
-            </div>
-          </div>
-          <div className='flex min-h-16 items-center gap-2 border-t p-3 sm:border-t-0 sm:border-l'>
-            <div className='min-w-0 flex-1'>
-              <div className='text-xs font-medium'>{t('Recharge')}</div>
-              <div className='text-muted-foreground truncate text-xs'>{t('Wallet balance')}: {walletQuota != null ? formatQuotaWithCurrency(walletQuota) : '--'}</div>
-            </div>
-            <Input className='h-9 w-24' inputMode='decimal' value={rechargeAmt} onChange={(e) => setRechargeAmt(e.target.value)} aria-label={t('Recharge amount')} />
-            <Button className='h-9 w-9 shrink-0 p-0' title={recharging ? t('Recharging...') : t('Recharge')} onClick={onRecharge} disabled={recharging}>
-              <ArrowDownToLine className='h-4 w-4' />
-            </Button>
-          </div>
-          <div className='flex min-h-16 items-center gap-2 border-t p-3 lg:border-t-0 lg:border-l'>
-            <div className='min-w-0 flex-1'>
-              <div className='text-xs font-medium'>{t('Withdraw to wallet')}</div>
-              <div className='text-muted-foreground truncate text-xs'>{t('Minimum 10; 5% fee; wallet receives 95%')}</div>
-            </div>
-            <Input className='h-9 w-24' inputMode='decimal' value={withdrawAmt} onChange={(e) => setWithdrawAmt(e.target.value)} aria-label={t('Withdraw amount')} />
-            <Button className='h-9 w-9 shrink-0 p-0' variant='outline' title={withdrawing ? t('Withdrawing...') : t('Withdraw to wallet')} onClick={onWithdraw} disabled={withdrawing}>
-              <ArrowUpFromLine className='h-4 w-4' />
-            </Button>
-          </div>
-          <div className='flex min-h-16 items-center gap-3 border-t p-3 sm:border-l lg:border-t-0'>
-            <LockKeyhole className='text-muted-foreground h-5 w-5 shrink-0' />
-            <div className='min-w-0'>
-              <div className='text-muted-foreground text-xs'>{t('Reserved')}</div>
-              <div className='truncate text-lg font-semibold'>{microsToCurrency(bal?.client_reserved)}</div>
-            </div>
-          </div>
-        </div>
-
         {/* Two-column layout: form left, task queue right */}
         <div className='grid grid-cols-1 gap-4 lg:grid-cols-[3fr_2fr] lg:items-start'>
           {/* LEFT: configuration form */}
@@ -973,14 +954,25 @@ export function AitokenPurchasePage() {
                 </Button>
               </div>
               {selectedScript?.description && (
-                <div className='bg-muted/30 mt-3 rounded-md border p-3 text-sm whitespace-pre-wrap'>
-                  <div className='text-muted-foreground mb-1 text-xs font-medium'>{t('Script description')}</div>
-                  {selectedScript.description}
+                <div className='bg-muted/30 mt-3 rounded-md border px-3 py-2 text-xs'>
+                  <button
+                    type='button'
+                    className='flex w-full items-start gap-2 text-left'
+                    onClick={() => setDescExpanded((v) => !v)}
+                  >
+                    <span className='text-muted-foreground shrink-0 font-medium'>{t('Script description')}</span>
+                    <span className={descExpanded ? 'flex-1 whitespace-pre-wrap' : 'flex-1 truncate'}>
+                      {selectedScript.description}
+                    </span>
+                    {descExpanded
+                      ? <ChevronUp className='text-muted-foreground mt-0.5 h-3.5 w-3.5 shrink-0' />
+                      : <ChevronDown className='text-muted-foreground mt-0.5 h-3.5 w-3.5 shrink-0' />}
+                  </button>
                 </div>
               )}
               <div className='mt-3'>
-                <div className='text-muted-foreground mb-2 text-xs'>{t('Provider offers (Auto picks the best idle provider, or choose one)')}</div>
-                <div className='relative flex h-11 min-w-0 items-center gap-2 rounded-md border px-2 text-sm'>
+                <div className='text-muted-foreground mb-2 text-[11px]'>{t('Provider offers (Auto picks the best idle provider, or choose one)')}</div>
+                <div className='relative flex h-10 min-w-0 items-center gap-2 rounded-md border px-2 text-xs'>
                   <label className='flex min-w-0 items-center gap-2'>
                     <input type='radio' name='offer' checked={autoSelect} onChange={selectAuto} />
                     <span className='shrink-0 font-medium'>{t('Auto (recommended)')}</span>
@@ -1015,18 +1007,18 @@ export function AitokenPurchasePage() {
                       if (o.busy) statusLabel = t('Busy')
                       else if (o.online) statusLabel = o.concurrency > 1 ? `${t('Online')} (${o.available_slots}/${o.total_slots} ${t('slots')})` : t('Online')
                       return (
-                        <label key={o.node_id} className='flex flex-wrap items-center gap-2 rounded-md border p-2 text-sm'>
+                        <label key={o.node_id} className='flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border p-2 text-[11px]'>
                           <input type='radio' name='offer' checked={!autoSelect && nodeId === o.node_id} disabled={!o.available && o.unavailable_reason !== 'BALANCE_CHECK_EXPIRED'} onChange={() => selectProvider(o.node_id)} />
-                          <span className='font-mono text-xs'>{o.node_id}</span>
-                          {o.provider_group_name && <span className='bg-muted rounded px-1.5 py-0.5 text-xs'>{o.provider_group_name}</span>}
+                          <span className='font-mono'>{o.node_id}</span>
+                          {o.provider_group_name && <span className='bg-muted rounded px-1.5 py-0.5'>{o.provider_group_name}</span>}
                           <span className='font-semibold'>{microsToCurrency(o.price_micros)}</span>
                           <span>{statusLabel}</span>
-                          {o.owned && !o.enabled && <span className='rounded bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-700'>{t('Your node (disabled) — selectable for testing')}</span>}
-                          <span className='text-muted-foreground text-xs'>{t('Success rate')}: {rate}</span>
-                          <span className='text-muted-foreground text-xs'>{t('quota')}: {o.remaining_quota}</span>
-                          {o.concurrency > 1 && <span className='text-muted-foreground text-xs'>{t('slots')}: {o.available_slots}/{o.total_slots}</span>}
+                          {o.owned && !o.enabled && <span className='rounded bg-amber-500/15 px-1.5 py-0.5 text-amber-700'>{t('Your node (disabled) — selectable for testing')}</span>}
+                          <span className='text-muted-foreground'>{t('Success rate')}: {rate}</span>
+                          <span className='text-muted-foreground'>{t('quota')}: {o.remaining_quota}</span>
+                          {o.concurrency > 1 && <span className='text-muted-foreground'>{t('slots')}: {o.available_slots}/{o.total_slots}</span>}
                           {!o.available && o.unavailable_reason !== 'BALANCE_CHECK_EXPIRED' && (
-                            <span className='text-xs text-red-600'>
+                            <span className='text-red-600'>
                               {o.unavailable_reason === 'QUOTA_EXHAUSTED' && t('Quota exhausted')}
                               {o.unavailable_reason === 'NODE_OFFLINE' && t('Node offline')}
                               {o.unavailable_reason === 'NODE_DISABLED' && t('Provider disabled this node')}
@@ -1053,20 +1045,18 @@ export function AitokenPurchasePage() {
               </div>
             </div>
 
-            {/* Consume multiplier */}
-            <div className='rounded-lg border p-4'>
-              <div className='flex flex-wrap items-center justify-between gap-3'>
-                <div>
-                  <div className='text-sm font-medium'>{t('Consume multiplier')}</div>
-                  <div className='text-muted-foreground mt-1 text-xs'>{t('Units of work for one run (min 1). The fee is the base price times this value; the script decides what it means (e.g. seconds of video, number of images).')}</div>
-                </div>
-                <Input className='h-9 w-24' type='number' min={1} step={1} value={consumeMultiplier} onChange={(e) => onMultiplierChange(e.target.value)} aria-label={t('Consume multiplier')} />
-              </div>
+            {/* Consume multiplier — single line: label + hint + input */}
+            <div className='flex items-center gap-3 rounded-lg border px-4 py-2.5'>
+              <span className='shrink-0 text-sm font-medium'>{t('Consume multiplier')}</span>
+              <span className='text-muted-foreground min-w-0 flex-1 truncate text-xs' title={t('Units of work for one run (min 1). Fee = base price × this value.')}>
+                {t('Units of work for one run (min 1). Fee = base price × this value.')}
+              </span>
+              <Input className='h-8 w-20 shrink-0' type='number' min={1} step={1} value={consumeMultiplier} onChange={(e) => onMultiplierChange(e.target.value)} aria-label={t('Consume multiplier')} />
             </div>
 
             {/* Parameters */}
             <div className='rounded-lg border p-4'>
-              <div className='mb-3 flex flex-wrap items-center justify-between gap-2'>
+              <div className='mb-2 flex flex-wrap items-center justify-between gap-2'>
                 <div className='text-sm font-medium'>{t('Parameters')}</div>
                 <div className='flex gap-1' role='group' aria-label={t('Parameters')}>
                   <Button type='button' size='sm' variant={parametersView === 'form' ? 'secondary' : 'ghost'} onClick={() => setParametersView('form')}>
@@ -1084,39 +1074,14 @@ export function AitokenPurchasePage() {
                   try {
                     const config = JSON.parse(configText) as unknown
                     return (
-                      <JsonForm value={config} onChange={(path, value) => setConfigText(JSON.stringify(updateJsonValue(config, path, value), null, 2))} />
+                      <JsonForm value={config} compact onChange={(path, value) => setConfigText(JSON.stringify(updateJsonValue(config, path, value), null, 2))} />
                     )
                   } catch {
                     return <div className='text-destructive rounded-md border p-3 text-sm'>{t('Invalid JSON')}</div>
                   }
                 })()
               )}
-              <div className='text-muted-foreground mt-1 text-xs'>{t('Only the hash of these parameters crosses the control plane; the plaintext travels the encrypted data plane to the provider.')}</div>
-            </div>
-
-            {/* Sticky action bar — subtle tinted background + top accent border to visually separate from form cards above */}
-            <div className='sticky bottom-0 z-10 rounded-lg border border-t-2 border-t-primary/20 bg-muted/30 p-4 shadow-md backdrop-blur-sm'>
-              <div className='flex flex-wrap items-center gap-3'>
-                <Button variant='outline' onClick={onQuote}>{t('Get quote')}</Button>
-                <Button onClick={() => void onPurchase()} disabled={!quote || insufficientBalance}>
-                  {t('Purchase and run')}
-                </Button>
-                {quote && (
-                  <div className='text-sm'>
-                    <span className='text-muted-foreground'>{t('Total')}: </span>
-                    <span className='font-semibold'>{microsToCurrency(quote.MaxCustomerMicros)}</span>
-                    {insufficientBalance && <span className='ml-2 text-xs text-red-600'>{t('Insufficient balance')}</span>}
-                  </div>
-                )}
-              </div>
-              {quote && (
-                <div className='mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground'>
-                  <span>{t('Provider')}: {microsToCurrency(quote.ProviderMicros)}</span>
-                  <span>{t('Author')}: {microsToCurrency(quote.AuthorMicros)}</span>
-                  <span>{t('Platform fee')}: {microsToCurrency(quote.PlatformFeeMicros)}</span>
-                  <span>{t('Risk reserve')}: {microsToCurrency(quote.RiskReserveMicros)}</span>
-                </div>
-              )}
+              <div className='text-muted-foreground mt-1 text-[11px]'>{t('Only the hash of these parameters crosses the control plane; the plaintext travels the encrypted data plane to the provider.')}</div>
             </div>
           </div>
 
@@ -1157,6 +1122,73 @@ export function AitokenPurchasePage() {
             )}
           </div>
         </div>
+
+        {/* Full-width sticky action bar — spans both columns, always visible at viewport bottom */}
+        <div className='sticky bottom-0 z-10 mt-4 rounded-lg border border-t-2 border-t-primary/30 bg-muted/40 px-4 py-3 shadow-lg backdrop-blur-sm'>
+          <div className='flex flex-wrap items-center gap-3'>
+            <Button variant='outline' onClick={onQuote}>{t('Get quote')}</Button>
+            <Button className='min-w-40' onClick={() => void onPurchase()} disabled={!quote || insufficientBalance}>
+              {t('Purchase and run')}
+            </Button>
+            {quote && (
+              <div className='text-sm'>
+                <span className='text-muted-foreground'>{t('Total')}: </span>
+                <span className='font-semibold'>{microsToCurrency(quote.MaxCustomerMicros)}</span>
+                {insufficientBalance && <span className='ml-2 text-xs text-red-600'>{t('Insufficient balance')}</span>}
+              </div>
+            )}
+            {quote && (
+              <div className='ml-auto flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground'>
+                <span>{t('Provider')}: {microsToCurrency(quote.ProviderMicros)}</span>
+                <span>{t('Author')}: {microsToCurrency(quote.AuthorMicros)}</span>
+                <span>{t('Platform fee')}: {microsToCurrency(quote.PlatformFeeMicros)}</span>
+                <span>{t('Risk reserve')}: {microsToCurrency(quote.RiskReserveMicros)}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Wallet dialog — recharge/withdraw between main wallet and marketplace balance */}
+        <Dialog open={walletOpen} onOpenChange={setWalletOpen}>
+          <DialogContent className='sm:max-w-md'>
+            <DialogHeader>
+              <DialogTitle>{t('Manage balance')}</DialogTitle>
+              <DialogDescription>{t('Move funds between your main wallet and the marketplace balance.')}</DialogDescription>
+            </DialogHeader>
+            <div className='space-y-4'>
+              <div className='grid grid-cols-2 gap-3'>
+                <div className='rounded-lg border p-3'>
+                  <div className='text-muted-foreground text-xs'>{t('Available')}</div>
+                  <div className='text-lg font-semibold'>{microsToCurrency(bal?.client_available)}</div>
+                </div>
+                <div className='rounded-lg border p-3'>
+                  <div className='text-muted-foreground text-xs'>{t('Reserved')}</div>
+                  <div className='text-lg font-semibold'>{microsToCurrency(bal?.client_reserved)}</div>
+                </div>
+              </div>
+              <div className='rounded-lg border p-3'>
+                <div className='mb-1 flex items-center gap-2 text-sm font-medium'>
+                  <ArrowDownToLine className='h-4 w-4' />{t('Recharge')}
+                </div>
+                <div className='text-muted-foreground mb-2 text-xs'>{t('Wallet balance')}: {walletQuota != null ? formatQuotaWithCurrency(walletQuota) : '--'}</div>
+                <div className='flex items-center gap-2'>
+                  <Input className='h-9 flex-1' inputMode='decimal' value={rechargeAmt} onChange={(e) => setRechargeAmt(e.target.value)} aria-label={t('Recharge amount')} />
+                  <Button className='h-9' onClick={onRecharge} disabled={recharging}>{recharging ? t('Recharging...') : t('Recharge')}</Button>
+                </div>
+              </div>
+              <div className='rounded-lg border p-3'>
+                <div className='mb-1 flex items-center gap-2 text-sm font-medium'>
+                  <ArrowUpFromLine className='h-4 w-4' />{t('Withdraw to wallet')}
+                </div>
+                <div className='text-muted-foreground mb-2 text-xs'>{t('Minimum 10; 5% fee; wallet receives 95%')}</div>
+                <div className='flex items-center gap-2'>
+                  <Input className='h-9 flex-1' inputMode='decimal' value={withdrawAmt} onChange={(e) => setWithdrawAmt(e.target.value)} aria-label={t('Withdraw amount')} />
+                  <Button className='h-9' variant='outline' onClick={onWithdraw} disabled={withdrawing}>{withdrawing ? t('Withdrawing...') : t('Withdraw')}</Button>
+                </div>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Task records dialog */}
         <Dialog open={recordsOpen} onOpenChange={setRecordsOpen}>
