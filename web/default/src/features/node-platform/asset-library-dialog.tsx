@@ -185,7 +185,7 @@ export function AssetLibraryDialog(props: AssetLibraryDialogProps) {
     )
   } else {
     libraryContent = (
-      <div className='grid grid-cols-1 gap-3 md:grid-cols-2'>
+      <div className='grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'>
         {assets.map((asset) => (
           <div key={asset.id} className='overflow-hidden rounded-md border bg-card'>
             <div className='flex aspect-video items-center justify-center overflow-hidden bg-muted/40'>
@@ -202,14 +202,14 @@ export function AssetLibraryDialog(props: AssetLibraryDialogProps) {
                 </div>
               )}
             </div>
-            <div className='space-y-3 p-3'>
+            <div className='space-y-2.5 p-2.5'>
               <div className='flex min-w-0 items-start gap-2'>
                 {asset.media_type === 'image' && <FileImage className='mt-0.5 h-4 w-4 shrink-0 text-muted-foreground' />}
                 {asset.media_type === 'video' && <Film className='mt-0.5 h-4 w-4 shrink-0 text-muted-foreground' />}
                 {asset.media_type === 'audio' && <FileAudio className='mt-0.5 h-4 w-4 shrink-0 text-muted-foreground' />}
                 <div className='min-w-0 flex-1'>
-                  <div className='truncate text-sm font-medium' title={asset.filename}>{asset.filename}</div>
-                  <div className='mt-0.5 text-xs text-muted-foreground'>
+                  <div className='truncate text-xs font-medium' title={asset.filename}>{asset.filename}</div>
+                  <div className='mt-0.5 truncate text-[11px] text-muted-foreground'>
                     {new Date(asset.created_at * 1000).toLocaleString()} · {formatFileSize(asset.size)}
                   </div>
                 </div>
@@ -240,7 +240,7 @@ export function AssetLibraryDialog(props: AssetLibraryDialogProps) {
 
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
-      <DialogContent className='flex max-h-[88vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl'>
+      <DialogContent className='flex max-h-[90vh] w-[calc(100vw-2rem)] max-w-[1200px] flex-col gap-0 overflow-hidden p-0'>
         <DialogHeader className='border-b px-5 py-4 text-left'>
           <DialogTitle>{t('Resource library')}</DialogTitle>
           <DialogDescription>
@@ -278,7 +278,7 @@ export function AssetLibraryDialog(props: AssetLibraryDialogProps) {
         </div>
         {uploading && <Progress value={uploadProgress} className='h-1 rounded-none' />}
 
-        <div className='min-h-56 flex-1 overflow-y-auto p-5'>
+        <div className='min-h-56 flex-1 overflow-y-auto p-4 sm:p-5'>
           {libraryContent}
         </div>
       </DialogContent>
