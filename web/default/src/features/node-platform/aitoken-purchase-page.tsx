@@ -1373,7 +1373,10 @@ export function AitokenPurchasePage() {
                           type='radio'
                           name='offer'
                           checked={!autoSelect && nodeId === o.node_id}
-                          disabled={!o.available}
+                          disabled={
+                            !o.available &&
+                            o.unavailable_reason !== 'BALANCE_CHECK_EXPIRED'
+                          }
                           onChange={() => selectProvider(o.node_id)}
                         />
                         <span className='font-mono text-xs'>{o.node_id}</span>
@@ -1404,26 +1407,25 @@ export function AitokenPurchasePage() {
                             {t('slots')}: {o.available_slots}/{o.total_slots}
                           </span>
                         )}
-                        {!o.available && (
-                          <span className='text-xs text-red-600'>
-                            {o.unavailable_reason === 'QUOTA_EXHAUSTED' &&
-                              t('Quota exhausted')}
-                            {o.unavailable_reason === 'NODE_OFFLINE' &&
-                              t('Node offline')}
-                            {o.unavailable_reason === 'NODE_DISABLED' &&
-                              t('Provider disabled this node')}
-                            {o.unavailable_reason === 'NODE_BUSY' &&
-                              t('Provider is busy')}
-                            {o.unavailable_reason ===
-                              'CAPABILITY_TEST_EXPIRED' &&
-                              t('Capability test expired')}
-                            {o.unavailable_reason === 'BALANCE_CHECK_EXPIRED' &&
-                              t('Balance check expired')}
-                            {o.unavailable_reason ===
-                              'INSUFFICIENT_NODE_BALANCE' &&
-                              t('Insufficient node balance for this amount')}
-                          </span>
-                        )}
+                        {!o.available &&
+                          o.unavailable_reason !== 'BALANCE_CHECK_EXPIRED' && (
+                            <span className='text-xs text-red-600'>
+                              {o.unavailable_reason === 'QUOTA_EXHAUSTED' &&
+                                t('Quota exhausted')}
+                              {o.unavailable_reason === 'NODE_OFFLINE' &&
+                                t('Node offline')}
+                              {o.unavailable_reason === 'NODE_DISABLED' &&
+                                t('Provider disabled this node')}
+                              {o.unavailable_reason === 'NODE_BUSY' &&
+                                t('Provider is busy')}
+                              {o.unavailable_reason ===
+                                'CAPABILITY_TEST_EXPIRED' &&
+                                t('Capability test expired')}
+                              {o.unavailable_reason ===
+                                'INSUFFICIENT_NODE_BALANCE' &&
+                                t('Insufficient node balance for this amount')}
+                            </span>
+                          )}
                       </label>
                     )
                   })}

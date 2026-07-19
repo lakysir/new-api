@@ -597,7 +597,11 @@ export function NodesConsolePage() {
     const status = (balanceChecks[nodeId] || []).find(
       (item) => item.category_id === categoryId
     )
-    return Boolean(status?.balance_ok && status.expires_at > Date.now() / 1000)
+    // No expiry: a passed check stays valid until the node is explicitly
+    // rechecked. If the node is broken at execution time the order will fail,
+    // which is the only signal we need (periodic re-checks are too burdensome
+    // at scale).
+    return Boolean(status?.balance_ok)
   }
 
   // nodeCanEnable reports whether every active capability on the node has a
@@ -1362,10 +1366,7 @@ export function NodesConsolePage() {
                       const status = (balanceChecks[nodeId] || []).find(
                         (item) => item.category_id === category.id
                       )
-                      const valid = Boolean(
-                        status?.balance_ok &&
-                        status.expires_at > Date.now() / 1000
-                      )
+                      const valid = Boolean(status?.balance_ok)
                       const key = `${nodeId}:${category.id}`
                       return (
                         <div
