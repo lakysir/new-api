@@ -330,6 +330,14 @@ func SetApiRouter(router *gin.Engine) {
 			pluginRoute.POST("/upload", middleware.AdminAuth(), middleware.CriticalRateLimit(), controller.UploadPluginRelease)
 		}
 
+		assetRoute := apiRouter.Group("/user-assets")
+		assetRoute.Use(middleware.UserAuth())
+		{
+			assetRoute.GET("/", controller.ListUserAssets)
+			assetRoute.POST("/", middleware.CriticalRateLimit(), controller.UploadUserAsset)
+			assetRoute.DELETE("/:id", middleware.CriticalRateLimit(), controller.DeleteUserAsset)
+		}
+
 		scriptApiRoute := apiRouter.Group("/script-api")
 		scriptApiRoute.Use(middleware.CORS(), middleware.TokenAuthReadOnly())
 		{

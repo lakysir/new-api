@@ -67,6 +67,7 @@ import {
   type ProviderGroup,
   type ScriptOffer,
 } from './api'
+import { AssetLibraryDialog } from './asset-library-dialog'
 import { ClientRelaySession } from './lib/client-relay-session'
 import { displayToMicros, formatUnix, microsToCurrency } from './lib/format'
 import type {
@@ -105,6 +106,7 @@ type QueuedTask = {
   error?: string
   configText: string
   resultView: ViewMode
+  expanded?: boolean
   // Set once the on-mount reconcile effect has picked up a reload-interrupted
   // task, so it isn't polled again. Absent on live tasks.
   reconciled?: boolean
@@ -496,12 +498,12 @@ async function sha256Hex(text: string): Promise<string> {
 // TaskCard renders one queued task with live status and expandable result.
 type TaskCardProps = {
   task: QueuedTask
-  onResultViewChange: (localId: string, view: ViewMode) => void
+  onChange: (localId: string, patch: Partial<QueuedTask>) => void
   onCancel: (orderId: string) => void
 }
-function TaskCard({ task, onResultViewChange, onCancel }: TaskCardProps) {
+function TaskCard({ task, onChange, onCancel }: TaskCardProps) {
   const { t } = useTranslation()
-  const [expanded, setExpanded] = useState(true)
+  const expanded = task.expanded === true
   const canCancel =
     task.order != null &&
     ['FUNDS_RESERVED', 'MATCHING', 'OFFERED'].includes(task.order.state)
@@ -562,7 +564,7 @@ function TaskCard({ task, onResultViewChange, onCancel }: TaskCardProps) {
         <button
           type='button'
           className='text-muted-foreground hover:text-foreground shrink-0 p-1'
-          onClick={() => setExpanded((v) => !v)}
+          onClick={() => onChange(task.localId, { expanded: !expanded })}
           aria-label={expanded ? t('Collapse') : t('Expand')}
         >
           {expanded ? <ChevronUp className='h-4 w-4' /> : <ChevronDown className='h-4 w-4' />}
@@ -604,14 +606,14 @@ function TaskCard({ task, onResultViewChange, onCancel }: TaskCardProps) {
                   <Button
                     type='button' size='sm'
                     variant={task.resultView === 'form' ? 'secondary' : 'ghost'}
-                    onClick={() => onResultViewChange(task.localId, 'form')}
+                    onClick={() => onChange(task.localId, { resultView: 'form' })}
                   >
                     <ListTree className='mr-1 h-3 w-3' />{t('Visual')}
                   </Button>
                   <Button
                     type='button' size='sm'
                     variant={task.resultView === 'json' ? 'secondary' : 'ghost'}
-                    onClick={() => onResultViewChange(task.localId, 'json')}
+                    onClick={() => onChange(task.localId, { resultView: 'json' })}
                   >
                     <Braces className='mr-1 h-3 w-3' />JSON
                   </Button>
@@ -662,6 +664,7 @@ export function AitokenPurchasePage() {
   const [expandedRecordId, setExpandedRecordId] = useState<string | null>(null)
   // Wallet interactions (recharge/withdraw) live in a dialog to keep the top bar compact.
   const [walletOpen, setWalletOpen] = useState(false)
+  const [assetLibraryOpen, setAssetLibraryOpen] = useState(false)
   // Usage notes are open by default; the user's preference persists across visits.
   const [descExpanded, setDescExpanded] = useState(loadDescriptionExpanded)
 
@@ -1219,7 +1222,7 @@ export function AitokenPurchasePage() {
                   <TaskCard
                     key={task.localId}
                     task={task}
-                    onResultViewChange={(localId, view) => updateTask(localId, { resultView: view })}
+                    onChange={updateTask}
                     onCancel={onCancelTask}
                   />
                 ))}
@@ -1231,33 +1234,50 @@ export function AitokenPurchasePage() {
         {/* Full-width sticky action bar — spans both columns, always visible at viewport bottom */}
         <div className='sticky bottom-0 z-10 mt-4 rounded-lg border border-white/15 bg-black/80 px-4 py-4 text-white shadow-xl backdrop-blur-xl'>
           <div className='grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start'>
-            <div className='min-w-0 space-y-3'>
-              <div className='flex flex-wrap items-center gap-2'>
-                <span className='mr-1 text-sm font-medium'>{t('Script')}</span>
-                <select className='h-9 min-w-[220px] flex-1 rounded-md border border-white/20 bg-white/10 px-2 text-sm text-white outline-none focus:border-white/50 [&>option]:bg-white [&>option]:text-black' value={scriptId} onChange={(e) => void selectScript(Number(e.target.value))}>
-                  <option value={0}>{t('Select a script')}</option>
-                  {scripts.map((s) => (<option key={s.id} value={s.id}>#{s.id} {s.title}</option>))}
-                </select>
-                <select className='h-9 w-28 rounded-md border border-white/20 bg-white/10 px-2 text-sm text-white outline-none focus:border-white/50 disabled:text-white/40 [&>option]:bg-white [&>option]:text-black' value={version} disabled={!scriptId || versions.length === 0} aria-label={t('Version')} onChange={(e) => {
-                  const v = Number(e.target.value); setVersion(v); setOffers([]); setNodeId(''); setAutoSelect(true); setOffersPage(0); setQuote(null)
-                  const sel = availableVersions.find((item) => item.version === v)
-                  setConfigText(configTextFromParams(sel?.script_params))
-                  if (scriptId) void loadOffersFor(scriptId, v)
-                }}>
-                  {versions.map((item) => (<option key={item} value={item}>v{item}</option>))}
-                </select>
-              </div>
-              {selectedScript?.description && (
-                <div className='flex items-start gap-2 rounded-md border border-white/15 bg-white/5 px-3 py-2 text-xs'>
-                  <span className='shrink-0 font-medium text-white/60'>{t('Script description')}</span>
-                  <span className={descExpanded ? 'min-w-0 flex-1 select-text break-words whitespace-pre-wrap' : 'min-w-0 flex-1 select-text truncate'}>{selectedScript.description}</span>
-                  <button type='button' className='shrink-0 rounded p-0.5 text-white/60 hover:bg-white/10 hover:text-white' onClick={() => setDescExpanded((value) => !value)} aria-expanded={descExpanded} aria-label={descExpanded ? t('Collapse') : t('Expand')}>
-                    {descExpanded
-                      ? <ChevronUp className='h-3.5 w-3.5' aria-hidden='true' />
-                      : <ChevronDown className='h-3.5 w-3.5' aria-hidden='true' />}
-                  </button>
+            <div className='grid min-w-0 grid-cols-[3.25rem_minmax(0,1fr)] gap-3'>
+              <button
+                type='button'
+                className='group flex min-h-[5.75rem] w-[3.25rem] items-center justify-center rounded-md border border-white/25 bg-white/[0.06] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_8px_24px_rgba(0,0,0,0.24)] transition-colors hover:border-white/45 hover:bg-white/[0.1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-black'
+                onClick={() => setAssetLibraryOpen(true)}
+                aria-label={t('Open resource library')}
+                title={t('Open resource library')}
+              >
+                <span className='flex h-9 w-9 items-center justify-center rounded-md border border-white/20 bg-black/25 text-white/80 shadow-[0_5px_14px_rgba(0,0,0,0.28)] transition-colors group-hover:border-white/35 group-hover:bg-white/10 group-hover:text-white'>
+                  <Plus className='h-4 w-4' aria-hidden='true' />
+                </span>
+              </button>
+              <div className='min-w-0 space-y-3'>
+                <div className='flex flex-wrap items-center gap-2'>
+                  <span className='mr-1 text-sm font-medium'>{t('Script')}</span>
+                  <select className='h-9 min-w-[220px] flex-1 rounded-md border border-white/20 bg-white/10 px-2 text-sm text-white outline-none focus:border-white/50 [&>option]:bg-white [&>option]:text-black' value={scriptId} onChange={(e) => void selectScript(Number(e.target.value))}>
+                    <option value={0}>{t('Select a script')}</option>
+                    {scripts.map((s) => (<option key={s.id} value={s.id}>#{s.id} {s.title}</option>))}
+                  </select>
+                  <select className='h-9 w-28 rounded-md border border-white/20 bg-white/10 px-2 text-sm text-white outline-none focus:border-white/50 disabled:text-white/40 [&>option]:bg-white [&>option]:text-black' value={version} disabled={!scriptId || versions.length === 0} aria-label={t('Version')} onChange={(e) => {
+                    const v = Number(e.target.value); setVersion(v); setOffers([]); setNodeId(''); setAutoSelect(true); setOffersPage(0); setQuote(null)
+                    const sel = availableVersions.find((item) => item.version === v)
+                    setConfigText(configTextFromParams(sel?.script_params))
+                    if (scriptId) void loadOffersFor(scriptId, v)
+                  }}>
+                    {versions.map((item) => (<option key={item} value={item}>v{item}</option>))}
+                  </select>
                 </div>
-              )}
+                <div className='flex items-start gap-2 rounded-md border border-white/15 bg-white/5 px-3 py-2 text-xs'>
+                  {selectedScript?.description ? (
+                    <>
+                      <span className='shrink-0 font-medium text-white/60'>{t('Script description')}</span>
+                      <span className={descExpanded ? 'min-w-0 flex-1 select-text break-words whitespace-pre-wrap' : 'min-w-0 flex-1 select-text truncate'}>{selectedScript.description}</span>
+                      <button type='button' className='shrink-0 rounded p-0.5 text-white/60 hover:bg-white/10 hover:text-white' onClick={() => setDescExpanded((value) => !value)} aria-expanded={descExpanded} aria-label={descExpanded ? t('Collapse') : t('Expand')}>
+                        {descExpanded
+                          ? <ChevronUp className='h-3.5 w-3.5' aria-hidden='true' />
+                          : <ChevronDown className='h-3.5 w-3.5' aria-hidden='true' />}
+                      </button>
+                    </>
+                  ) : (
+                    <span className='text-white/60'>{t('Upload resources and copy URLs for script parameters')}</span>
+                  )}
+                </div>
+              </div>
             </div>
 
             <div className='flex min-w-64 flex-col items-stretch gap-2 lg:items-end'>
@@ -1323,6 +1343,8 @@ export function AitokenPurchasePage() {
             </div>
           </DialogContent>
         </Dialog>
+
+        <AssetLibraryDialog open={assetLibraryOpen} onOpenChange={setAssetLibraryOpen} />
 
         {/* Task records dialog */}
         <Dialog open={recordsOpen} onOpenChange={setRecordsOpen}>
