@@ -23,6 +23,8 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  Eye,
+  FileAudio,
   FileCode,
   History,
   ListTree,
@@ -32,6 +34,7 @@ import {
   Trash2,
   WalletCards,
   XCircle,
+  ZoomIn,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -90,6 +93,61 @@ type PurchaseDraft = {
   consumeMultiplier: number
 }
 type ViewMode = 'form' | 'json'
+// Result panel adds a 'preview' tab (media) on top of the parameter view modes.
+type ResultView = 'preview' | 'form' | 'json'
+
+type MediaKind = 'image' | 'video' | 'audio'
+type FoundMedia = { kind: MediaKind; url: string }
+
+const MEDIA_EXTENSIONS: Record<MediaKind, string[]> = {
+  image: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'avif'],
+  video: ['mp4', 'webm', 'mov', 'm4v', 'ogv'],
+  audio: ['mp3', 'wav', 'ogg', 'm4a', 'flac', 'aac', 'opus'],
+}
+
+// classifyMediaUrl inspects a string for an http(s)/data URL that points at a
+// supported media file and returns its kind, or null if it isn't media.
+function classifyMediaUrl(raw: string): MediaKind | null {
+  const value = raw.trim()
+  if (!value) return null
+  const dataMatch = /^data:(image|video|audio)\//i.exec(value)
+  if (dataMatch) return dataMatch[1].toLowerCase() as MediaKind
+  if (!/^https?:\/\//i.test(value)) return null
+  let pathname = value
+  try {
+    pathname = new URL(value).pathname
+  } catch {
+    // fall back to the raw string (query strings still get stripped below)
+  }
+  const ext = pathname.split(/[?#]/)[0].split('.').pop()?.toLowerCase() ?? ''
+  for (const kind of ['image', 'video', 'audio'] as MediaKind[]) {
+    if (MEDIA_EXTENSIONS[kind].includes(ext)) return kind
+  }
+  return null
+}
+
+// findFirstMedia walks a parsed result (depth-first, preserving key/array order)
+// and returns the first image/video/audio URL it can find, or null.
+function findFirstMedia(value: unknown): FoundMedia | null {
+  if (typeof value === 'string') {
+    const kind = classifyMediaUrl(value)
+    return kind ? { kind, url: value.trim() } : null
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findFirstMedia(item)
+      if (found) return found
+    }
+    return null
+  }
+  if (value !== null && typeof value === 'object') {
+    for (const item of Object.values(value)) {
+      const found = findFirstMedia(item)
+      if (found) return found
+    }
+  }
+  return null
+}
 
 // QueuedTask tracks one purchase+relay run entirely on the client side.
 // Multiple tasks can be in-flight simultaneously; each is independent.
@@ -105,7 +163,7 @@ type QueuedTask = {
   relayResult: string
   error?: string
   configText: string
-  resultView: ViewMode
+  resultView: ResultView
   expanded?: boolean
   // Set once the on-mount reconcile effect has picked up a reload-interrupted
   // task, so it isn't polled again. Absent on live tasks.
@@ -504,6 +562,8 @@ type TaskCardProps = {
 function TaskCard({ task, onChange, onCancel }: TaskCardProps) {
   const { t } = useTranslation()
   const expanded = task.expanded === true
+  // Fullscreen media preview (image/video) opened from the compact thumbnail.
+  const [mediaOpen, setMediaOpen] = useState(false)
   const canCancel =
     task.order != null &&
     ['FUNDS_RESERVED', 'MATCHING', 'OFFERED'].includes(task.order.state)
@@ -517,12 +577,60 @@ function TaskCard({ task, onChange, onCancel }: TaskCardProps) {
     statusIcon = <XCircle className='h-4 w-4 text-red-500' />
   }
 
-  let resultNode: React.ReactNode = null
+  // Parse the relay result once, then derive both the media preview and the
+  // structured views from it.
+  let parsedResult: unknown
+  let parseOk = false
   if (task.relayResult) {
     try {
-      const parsed = JSON.parse(task.relayResult) as unknown
-      resultNode =
-        task.resultView === 'json' ? (
+      parsedResult = JSON.parse(task.relayResult)
+      parseOk = true
+    } catch {
+      parseOk = false
+    }
+  }
+  const media = parseOk ? findFirstMedia(parsedResult) : null
+  // Fall back off the preview tab if it's selected but there's nothing to show.
+  const resultView: ResultView =
+    task.resultView === 'preview' && !media ? 'form' : task.resultView
+
+  let previewNode: React.ReactNode = null
+  if (media) {
+    previewNode = (
+      <div className='flex flex-col items-center gap-2 rounded-md border bg-muted/10 p-3'>
+        <div className='flex max-w-[220px] items-center justify-center overflow-hidden rounded-md bg-muted/40'>
+          {media.kind === 'image' && (
+            <button
+              type='button'
+              className='group relative block cursor-zoom-in'
+              aria-label={t('Preview image')}
+              onClick={() => setMediaOpen(true)}
+            >
+              <img className='max-h-40 w-auto object-contain' src={media.url} alt='' loading='lazy' />
+              <span className='absolute right-1.5 bottom-1.5 flex h-7 w-7 items-center justify-center rounded-md bg-black/65 text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100'>
+                <ZoomIn className='h-4 w-4' aria-hidden='true' />
+              </span>
+            </button>
+          )}
+          {media.kind === 'video' && (
+            <video className='max-h-40 w-auto object-contain' src={media.url} controls preload='metadata' onClick={() => setMediaOpen(true)} />
+          )}
+          {media.kind === 'audio' && (
+            <div className='flex w-[200px] flex-col items-center gap-2 px-2 py-3'>
+              <FileAudio className='h-7 w-7 text-muted-foreground' />
+              <audio className='h-8 w-full' src={media.url} controls preload='metadata' />
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  let structuredNode: React.ReactNode = null
+  if (task.relayResult) {
+    if (parseOk) {
+      structuredNode =
+        resultView === 'json' ? (
           // whitespace-pre-wrap prevents horizontal overflow; the card stays within its column
           <pre className='bg-muted/30 max-h-60 overflow-auto rounded-md border p-2 text-xs whitespace-pre-wrap break-all'>
             {task.relayResult}
@@ -530,17 +638,23 @@ function TaskCard({ task, onChange, onCancel }: TaskCardProps) {
         ) : (
           // compact + scrollable container — result data can be large
           <div className='max-h-60 overflow-y-auto rounded-md border bg-muted/10 p-2'>
-            <JsonForm value={parsed} compact />
+            <JsonForm value={parsedResult} compact />
           </div>
         )
-    } catch {
-      resultNode = (
+    } else {
+      structuredNode = (
         <pre className='bg-muted/30 max-h-60 overflow-auto rounded-md border p-2 text-xs whitespace-pre-wrap break-all'>
           {task.relayResult}
         </pre>
       )
     }
   }
+
+  const resultNode: React.ReactNode = task.relayResult
+    ? resultView === 'preview'
+      ? previewNode
+      : structuredNode
+    : null
 
   return (
     <div className='rounded-lg border text-sm overflow-hidden'>
@@ -603,16 +717,25 @@ function TaskCard({ task, onChange, onCancel }: TaskCardProps) {
               <div className='mb-2 flex items-center gap-2'>
                 <span className='text-xs font-medium flex-1'>{t('Result')}</span>
                 <div className='flex shrink-0 gap-1' role='group'>
+                  {media && (
+                    <Button
+                      type='button' size='sm'
+                      variant={resultView === 'preview' ? 'secondary' : 'ghost'}
+                      onClick={() => onChange(task.localId, { resultView: 'preview' })}
+                    >
+                      <Eye className='mr-1 h-3 w-3' />{t('Preview')}
+                    </Button>
+                  )}
                   <Button
                     type='button' size='sm'
-                    variant={task.resultView === 'form' ? 'secondary' : 'ghost'}
+                    variant={resultView === 'form' ? 'secondary' : 'ghost'}
                     onClick={() => onChange(task.localId, { resultView: 'form' })}
                   >
                     <ListTree className='mr-1 h-3 w-3' />{t('Visual')}
                   </Button>
                   <Button
                     type='button' size='sm'
-                    variant={task.resultView === 'json' ? 'secondary' : 'ghost'}
+                    variant={resultView === 'json' ? 'secondary' : 'ghost'}
                     onClick={() => onChange(task.localId, { resultView: 'json' })}
                   >
                     <Braces className='mr-1 h-3 w-3' />JSON
@@ -623,6 +746,21 @@ function TaskCard({ task, onChange, onCancel }: TaskCardProps) {
             </div>
           )}
         </div>
+      )}
+
+      {/* Fullscreen preview for image/video — opened by clicking the thumbnail */}
+      {media && (media.kind === 'image' || media.kind === 'video') && (
+        <Dialog open={mediaOpen} onOpenChange={setMediaOpen}>
+          <DialogContent closeLabel={t('Close')} className='flex h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] items-center justify-center overflow-hidden bg-black/95 p-4 text-white sm:max-w-[calc(100vw-2rem)]' aria-label={t('Preview')}>
+            <DialogTitle className='sr-only'>{t('Preview')}</DialogTitle>
+            {media.kind === 'image' ? (
+              <img className='max-h-full max-w-full object-contain' src={media.url} alt='' />
+            ) : (
+              // autoPlay so opening the big view starts playback immediately
+              <video className='max-h-full max-w-full object-contain' src={media.url} controls autoPlay />
+            )}
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   )
@@ -953,7 +1091,15 @@ export function AitokenPurchasePage() {
           throw new Error(typeof scriptError === 'string' && scriptError ? scriptError : describeOrderError('SCRIPT_EXECUTION_FAILED'))
         }
         const resultText = JSON.stringify(result, null, 2)
-        upd({ status: 'success', relayResult: resultText, relayStatus: t('Result received') })
+        // If the result carries an image/video/audio, auto-expand the card and
+        // default it to the media preview tab.
+        const hasMedia = findFirstMedia(result) != null
+        upd({
+          status: 'success',
+          relayResult: resultText,
+          relayStatus: t('Result received'),
+          ...(hasMedia ? { expanded: true, resultView: 'preview' as ResultView } : {}),
+        })
         addTaskRecord({ orderId: o.id, scriptId: taskScriptId, scriptTitle: scripts.find((s) => s.id === taskScriptId)?.title ?? '', version: taskVersion, nodeId: o.chosen_node_id, configText: cleanedConfigText, result: resultText, status: 'SUCCESS', createdAt: Math.floor(Date.now() / 1000) })
         try {
           const resultHash = await sha256Hex(JSON.stringify(result ?? null))
