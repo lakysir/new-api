@@ -232,6 +232,30 @@ func ApplyTransition(orderId, newState string, extra map[string]any) (*Order, er
 	return updated, nil
 }
 
+// FindOrdersByStateOlderThan returns orders currently in any of the given
+// states whose last update is at or before `updatedBefore` (unix seconds),
+// oldest first, capped at `limit`. Used by the stale-order sweep to find orders
+// that got stuck part-way through the lifecycle (e.g. the buyer's page reloaded
+// mid-run so the client receipt never arrived) and need bottom-out settlement
+// or refund. A zero/negative limit falls back to 100.
+func FindOrdersByStateOlderThan(states []string, updatedBefore int64, limit int) ([]Order, error) {
+	if len(states) == 0 {
+		return nil, nil
+	}
+	if limit <= 0 {
+		limit = 100
+	}
+	var orders []Order
+	err := DB.Where("state IN ? AND updated_at <= ?", states, updatedBefore).
+		Order("updated_at asc").
+		Limit(limit).
+		Find(&orders).Error
+	if err != nil {
+		return nil, err
+	}
+	return orders, nil
+}
+
 // GetOrderPriceSnapshot returns the frozen price snapshot for an order.
 func GetOrderPriceSnapshot(orderId string) (*OrderPriceSnapshot, error) {
 	var s OrderPriceSnapshot

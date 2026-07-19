@@ -88,6 +88,55 @@ func TestReconcileMatchSettles(t *testing.T) {
 	}
 }
 
+// TestSettleDeliveredPaysWithoutClientReceipt covers the reported bug: the
+// provider ran the task and submitted its receipt, but the buyer's page reloaded
+// so the client receipt never arrived. The order must still settle — provider
+// and author paid, buyer's remainder released — not stay frozen forever.
+func TestSettleDeliveredPaysWithoutClientReceipt(t *testing.T) {
+	orderId, taskId := setupExecutedOrder(t, 6101, 7101, 8101, "settle-delivered")
+	saveReceipt(t, orderId, taskId, receipt.PartyProvider, "sha256:done")
+
+	// No client receipt: the normal reconcile is still incomplete.
+	if _, err := ReconcileAndSettle(orderId, taskId, 1); err != ErrReceiptsIncomplete {
+		t.Fatalf("expected incomplete without client receipt, got %v", err)
+	}
+
+	res, err := SettleDelivered(orderId, taskId, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Matched || res.Order.State != model.OrderSettled {
+		t.Fatalf("delivered order must settle, got matched=%v state=%s", res.Matched, res.Order.State)
+	}
+	prov, _ := model.GetBalance(model.OwnerProvider, 7101, model.KindPayable, Currency)
+	auth, _ := model.GetBalance(model.OwnerAuthor, 8101, model.KindPayable, Currency)
+	if prov != 100000 || auth != 3000 {
+		t.Fatalf("payout wrong: provider=%d author=%d", prov, auth)
+	}
+	// Buyer's reserved bucket is fully consumed (paid + released remainder).
+	reserved, _ := model.GetBalance(model.OwnerClient, 6101, model.KindReserved, Currency)
+	if reserved != 0 {
+		t.Fatalf("buyer reserved must be released, got %d", reserved)
+	}
+	if err := model.AssertLedgerBalanced(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Idempotent: a second call is a no-op success.
+	if _, err := SettleDelivered(orderId, taskId, 1); err != nil {
+		t.Fatalf("second settle must be idempotent, got %v", err)
+	}
+}
+
+// TestSettleDeliveredRequiresProviderReceipt ensures we never settle on nothing:
+// with no provider receipt there is no proof of execution.
+func TestSettleDeliveredRequiresProviderReceipt(t *testing.T) {
+	orderId, taskId := setupExecutedOrder(t, 6102, 7102, 8102, "settle-noproof")
+	if _, err := SettleDelivered(orderId, taskId, 1); err != ErrReceiptsIncomplete {
+		t.Fatalf("expected incomplete without provider receipt, got %v", err)
+	}
+}
+
 func TestReconcileMismatchDisputes(t *testing.T) {
 	orderId, taskId := setupExecutedOrder(t, 6002, 7002, 8002, "recon-mismatch")
 	saveReceipt(t, orderId, taskId, receipt.PartyProvider, "sha256:aaa")

@@ -104,6 +104,9 @@ type QueuedTask = {
   error?: string
   configText: string
   resultView: ViewMode
+  // Set once the on-mount reconcile effect has picked up a reload-interrupted
+  // task, so it isn't polled again. Absent on live tasks.
+  reconciled?: boolean
 }
 
 // ClientTaskRecord is a locally-kept log of one purchase run. The sent config
@@ -163,7 +166,11 @@ function getTaskQueueStorageKey() {
 
 // loadTaskQueue restores the persisted queue. Any task that was still in-flight
 // (submitting/running) when the page unloaded can't be resumed — its relay
-// socket is gone — so it is restored as failed with an interrupted note.
+// socket is gone — so it is restored as interrupted. The relay result plaintext
+// only ever lived in the old page's memory, so it can't be recovered; but the
+// order itself keeps settling server-side (the provider already ran it), so the
+// on-mount reconcile effect re-queries each order's real terminal state and
+// rewrites the card to success/refunded accordingly.
 function loadTaskQueue(): QueuedTask[] {
   try {
     const saved = JSON.parse(
@@ -774,6 +781,55 @@ export function AitokenPurchasePage() {
   useEffect(() => {
     loadBalance()
     loadScripts()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Reconcile tasks interrupted by a page reload against their real backend
+  // state. The relay result plaintext is gone, but the order keeps settling
+  // server-side: the provider already ran it, so the stale-order sweep pays the
+  // node/author and releases the buyer's remainder (or refunds an abandoned
+  // one). Poll each interrupted order until it reaches a terminal state so the
+  // card stops saying "interrupted" once the money has actually moved.
+  useEffect(() => {
+    const pending = taskQueue.filter(
+      (task) => task.status === 'failed' && task.order?.id && !task.reconciled
+    )
+    if (pending.length === 0) return
+    let cancelled = false
+    // Mark them as reconciling up front so the same tasks aren't re-polled.
+    for (const task of pending) updateTask(task.localId, { reconciled: true })
+
+    async function reconcileOne(localId: string, orderId: string) {
+      // The sweep settles delivered-but-unconfirmed orders ~2min after the
+      // interruption; poll a bit longer than that before giving up.
+      for (let attempt = 0; attempt < 30 && !cancelled; attempt++) {
+        try {
+          const latest = await getOrder(orderId)
+          updateTask(localId, { order: latest })
+          if (latest.state === 'SETTLED') {
+            updateTask(localId, {
+              status: 'success',
+              error: undefined,
+              relayStatus: t('Settled after reload (result not available on this device)'),
+            })
+            await loadBalance()
+            return
+          }
+          if (['REFUNDED', 'CANCELLED', 'TIMED_OUT'].includes(latest.state)) {
+            updateTask(localId, {
+              status: 'failed',
+              error: t('Interrupted by page reload — funds refunded'),
+              relayStatus: '',
+            })
+            await loadBalance()
+            return
+          }
+        } catch { /* transient; keep polling */ }
+        await new Promise((r) => window.setTimeout(r, 6000))
+      }
+    }
+    for (const task of pending) void reconcileOne(task.localId, task.order!.id)
+    return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

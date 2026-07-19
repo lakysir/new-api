@@ -30,6 +30,7 @@ import (
 	"github.com/QuantumNous/new-api/service/authz"
 	"github.com/QuantumNous/new-api/service/dispatch"
 	"github.com/QuantumNous/new-api/service/nodehub"
+	"github.com/QuantumNous/new-api/service/settlement"
 	_ "github.com/QuantumNous/new-api/setting/performance_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
@@ -141,6 +142,14 @@ func main() {
 	// only — it mutates shared lease/node state.
 	if common.IsMasterNode {
 		go dispatch.StartLeaseExpiryLoop(time.Minute, make(chan struct{}))
+
+		// Stale-order sweep: bottom-out orders whose funds would otherwise stay
+		// frozen. When a buyer's page reloads mid-run the client receipt never
+		// arrives, so an order the provider already executed sticks in VERIFYING
+		// with the buyer's funds reserved and the node/author unpaid. This sweep
+		// settles those on the provider receipt, and refunds orders abandoned
+		// before delivery. Master only — it mutates shared order/ledger state.
+		go settlement.StartStaleOrderSweep(time.Minute, make(chan struct{}))
 	}
 
 	// Wire task polling adaptor factory (breaks service -> relay import cycle).

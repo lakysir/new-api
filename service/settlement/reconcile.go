@@ -74,22 +74,88 @@ func ReconcileAndSettle(orderId, taskId string, attempt int) (*ReconcileResult, 
 	if err != nil {
 		return nil, err
 	}
+	alreadySettled := o.State == model.OrderSettled
 	settled, err := Settle(orderId, participants)
-	if err == nil && execNodeId != "" && o.State != model.OrderSettled {
-		// Success: raise the node's scheduling success rate.
-		_ = model.RecordTaskOutcome(execNodeId, true)
-		_ = model.FinalizeTaskAttempt(taskId, attempt, model.AttemptSucceeded)
-		// Update the capability's remaining balance from the script execution
-		// result (if the plugin reported one), then increment the daily counter.
-		if scriptBalance != nil {
-			_ = model.UpdateCapabilityBalance(execNodeId, o.ScriptId, o.Version, *scriptBalance)
-		}
-		_ = model.IncrementDailyUsed(execNodeId, o.ScriptId, o.Version)
-	}
 	if err != nil {
 		return nil, err
 	}
+	if execNodeId != "" && !alreadySettled {
+		recordSettledOutcome(o, taskId, attempt, execNodeId, scriptBalance)
+	}
 	return &ReconcileResult{Matched: true, Order: settled}, nil
+}
+
+// SettleDelivered settles an order that the provider demonstrably executed
+// (a stored provider receipt) but for which the client receipt never arrived —
+// typically because the buyer's browser tab reloaded or lost its relay
+// connection mid-run. The node consumed compute, so the provider and author are
+// paid from the frozen snapshot and any remainder is released back to the
+// client; leaving the funds frozen forever would be the wrong outcome.
+//
+// It bottoms out the state machine to VERIFYING if needed (RESULT_READY carries
+// the same "provider delivered" meaning), settles, and records the success-side
+// node stats exactly as a normal reconciliation would. Idempotent via Settle's
+// ledger key. Returns ErrReceiptsIncomplete if the provider receipt is absent —
+// without proof of execution there is nothing to settle on.
+func SettleDelivered(orderId, taskId string, attempt int) (*ReconcileResult, error) {
+	o, err := model.GetOrder(orderId)
+	if err != nil {
+		return nil, err
+	}
+	if o.State == model.OrderSettled {
+		return &ReconcileResult{Matched: true, Order: o}, nil
+	}
+	providerReceipt, err := model.GetReceipt(taskId, attempt, receipt.PartyProvider)
+	if err != nil {
+		return nil, err
+	}
+	if providerReceipt == nil {
+		return nil, ErrReceiptsIncomplete
+	}
+	// Advance a still-running order into the settleable window. The provider
+	// receipt is the proof of delivery, so the missing client receipt does not
+	// block the transition.
+	if o.State == model.OrderRunning {
+		_, _ = model.ApplyTransition(orderId, model.OrderResultReady, nil)
+	}
+	if refreshed, gerr := model.GetOrder(orderId); gerr == nil {
+		o = refreshed
+	}
+	if o.State == model.OrderResultReady {
+		_, _ = model.ApplyTransition(orderId, model.OrderVerifying, nil)
+	}
+
+	var execNodeId string
+	var scriptBalance *int
+	if ta, _ := model.GetTaskAttempt(taskId, attempt); ta != nil {
+		execNodeId = ta.NodeId
+		scriptBalance = ta.ScriptBalance
+	}
+	participants, err := resolveParticipants(o, taskId, attempt)
+	if err != nil {
+		return nil, err
+	}
+	settled, err := Settle(orderId, participants)
+	if err != nil {
+		return nil, err
+	}
+	if execNodeId != "" {
+		recordSettledOutcome(o, taskId, attempt, execNodeId, scriptBalance)
+	}
+	return &ReconcileResult{Matched: true, Order: settled}, nil
+}
+
+// recordSettledOutcome writes the success-side bookkeeping after an order is
+// paid out: raise the node's scheduling success rate, mark the attempt
+// succeeded, roll the capability's reported balance forward, and bump the daily
+// counter. Each underlying call is idempotent.
+func recordSettledOutcome(o *model.Order, taskId string, attempt int, execNodeId string, scriptBalance *int) {
+	_ = model.RecordTaskOutcome(execNodeId, true)
+	_ = model.FinalizeTaskAttempt(taskId, attempt, model.AttemptSucceeded)
+	if scriptBalance != nil {
+		_ = model.UpdateCapabilityBalance(execNodeId, o.ScriptId, o.Version, *scriptBalance)
+	}
+	_ = model.IncrementDailyUsed(execNodeId, o.ScriptId, o.Version)
 }
 
 // resolveParticipants derives the settle split from the order snapshot, the

@@ -24,6 +24,7 @@ func TestMain(m *testing.M) {
 		&model.Order{}, &model.OrderPriceSnapshot{},
 		&model.LedgerAccount{}, &model.LedgerTransaction{}, &model.LedgerEntry{},
 		&model.ScriptVersion{}, &model.Node{}, &model.TaskAttempt{}, &model.Receipt{}, &model.UserScript{},
+		&model.Lease{},
 	); err != nil {
 		panic(err)
 	}
