@@ -33,6 +33,7 @@ import {
   RefreshCw,
   Trash2,
   WalletCards,
+  X,
   XCircle,
   ZoomIn,
 } from 'lucide-react'
@@ -368,6 +369,88 @@ function cleanEmptyArrayItems(value: unknown): unknown {
   return value
 }
 
+// isMediaUrlArray reports whether an array holds only strings and at least one
+// of them is a media URL — the trigger for the inline preview gallery. Empty
+// strings are allowed so freshly-added slots stay as inputs.
+function isMediaUrlArray(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.every((item) => typeof item === 'string') &&
+    value.some((item) => classifyMediaUrl(item as string) != null)
+  )
+}
+
+// MediaThumb renders one editable media URL as a small preview box. It shows a
+// clear badge (empties the value → the caller restores an input) and, in array
+// context, a delete badge (removes the element). Image/video open a fullscreen
+// zoom. Fixed width keeps the form column from changing size.
+type MediaThumbProps = {
+  url: string
+  kind: MediaKind
+  onClear: () => void
+  onDelete?: () => void
+}
+function MediaThumb({ url, kind, onClear, onDelete }: MediaThumbProps) {
+  const { t } = useTranslation()
+  const [zoomOpen, setZoomOpen] = useState(false)
+  return (
+    <div className={`relative shrink-0 overflow-hidden rounded-md border bg-muted/40 ${kind === 'audio' ? 'w-44' : 'w-28'}`}>
+      <div className='flex h-20 items-center justify-center overflow-hidden'>
+        {kind === 'image' && (
+          <button type='button' className='h-full w-full cursor-zoom-in' aria-label={t('Preview')} onClick={() => setZoomOpen(true)}>
+            <img className='h-full w-full object-cover' src={url} alt='' loading='lazy' />
+          </button>
+        )}
+        {kind === 'video' && (
+          <video className='h-full w-full cursor-zoom-in object-cover' src={url} preload='metadata' muted onClick={() => setZoomOpen(true)} />
+        )}
+        {kind === 'audio' && (
+          <div className='flex w-full flex-col items-center gap-1 px-1.5'>
+            <FileAudio className='h-5 w-5 text-muted-foreground' aria-hidden='true' />
+            <audio className='h-7 w-full' src={url} controls preload='metadata' />
+          </div>
+        )}
+      </div>
+      {/* Action badges: delete element (if array) then clear value */}
+      <div className='absolute right-0.5 top-0.5 flex gap-0.5'>
+        {onDelete && (
+          <button
+            type='button'
+            className='flex h-5 w-5 items-center justify-center rounded bg-black/60 text-white hover:bg-destructive'
+            title={t('Remove item')}
+            aria-label={t('Remove item')}
+            onClick={onDelete}
+          >
+            <Trash2 className='h-3 w-3' aria-hidden='true' />
+          </button>
+        )}
+        <button
+          type='button'
+          className='flex h-5 w-5 items-center justify-center rounded bg-black/60 text-white hover:bg-black/80'
+          title={t('Clear')}
+          aria-label={t('Clear')}
+          onClick={onClear}
+        >
+          <X className='h-3 w-3' aria-hidden='true' />
+        </button>
+      </div>
+      {(kind === 'image' || kind === 'video') && (
+        <Dialog open={zoomOpen} onOpenChange={setZoomOpen}>
+          <DialogContent closeLabel={t('Close')} className='flex h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] items-center justify-center overflow-hidden bg-black/95 p-4 text-white sm:max-w-[calc(100vw-2rem)]' aria-label={t('Preview')}>
+            <DialogTitle className='sr-only'>{t('Preview')}</DialogTitle>
+            {kind === 'image' ? (
+              <img className='max-h-full max-w-full object-contain' src={url} alt='' />
+            ) : (
+              <video className='max-h-full max-w-full object-contain' src={url} controls autoPlay />
+            )}
+          </DialogContent>
+        </Dialog>
+      )}
+    </div>
+  )
+}
+
 type JsonFormProps = {
   value: unknown
   onChange?: (path: (string | number)[], value: unknown) => void
@@ -380,6 +463,68 @@ function JsonForm(props: JsonFormProps) {
   const { t } = useTranslation()
   const path = props.path ?? []
   const compact = props.compact ?? false
+  // Editable array of media URLs: render each entry as an inline preview box
+  // (or an input while it isn't yet a media URL), wrapping in a single row, with
+  // an Add button at the end. min-w-0 keeps it inside the value column.
+  if (props.onChange && !compact && isMediaUrlArray(props.value)) {
+    const items = props.value
+    return (
+      <div className='flex min-w-0 flex-wrap items-center gap-2'>
+        {items.map((item, index) => {
+          const kind = classifyMediaUrl(item)
+          if (kind) {
+            return (
+              <MediaThumb
+                // eslint-disable-next-line react/no-array-index-key
+                key={index}
+                url={item.trim()}
+                kind={kind}
+                onClear={() => props.onChange?.([...path, index], '')}
+                onDelete={() => props.onChange?.(path, removeJsonArrayItem(items, [], index))}
+              />
+            )
+          }
+          return (
+            <div
+              // eslint-disable-next-line react/no-array-index-key
+              key={index}
+              className='flex w-56 items-center gap-1'
+            >
+              <Input
+                className='h-7 min-w-0 flex-1 px-2 text-xs'
+                value={item}
+                onChange={(event) => props.onChange?.([...path, index], event.target.value)}
+              />
+              <Button
+                type='button'
+                size='icon-sm'
+                variant='ghost'
+                className='text-muted-foreground hover:text-destructive shrink-0'
+                title={t('Remove item')}
+                aria-label={t('Remove item {{index}}', { index: index + 1 })}
+                onClick={() => props.onChange?.(path, removeJsonArrayItem(items, [], index))}
+              >
+                <Trash2 className='h-4 w-4' aria-hidden='true' />
+              </Button>
+            </div>
+          )
+        })}
+        <Button
+          type='button'
+          size='sm'
+          variant='outline'
+          className='h-20 w-16 shrink-0 flex-col gap-1 border-dashed'
+          title={t('Add item')}
+          aria-label={t('Add item')}
+          onClick={() => props.onChange?.(path, appendJsonArrayItem(items, []))}
+        >
+          <Plus className='h-4 w-4' />
+          <span className='text-[10px]'>{t('Add')}</span>
+        </Button>
+      </div>
+    )
+  }
+
   if (Array.isArray(props.value)) {
     return (
       <div className='space-y-1'>
@@ -473,6 +618,20 @@ function JsonForm(props: JsonFormProps) {
         onChange={(event) => props.onChange?.(path, event.target.value)}
       />
     )
+  }
+  // A single string field holding a media URL collapses into a preview box;
+  // clearing it (setting it empty) restores the input on the next render.
+  if (!compact && typeof props.value === 'string') {
+    const kind = classifyMediaUrl(props.value)
+    if (kind) {
+      return (
+        <MediaThumb
+          url={props.value.trim()}
+          kind={kind}
+          onClear={() => props.onChange?.(path, '')}
+        />
+      )
+    }
   }
   return (
     <Input
