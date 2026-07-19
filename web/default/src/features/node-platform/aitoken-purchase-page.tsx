@@ -152,6 +152,34 @@ function upsertTaskRecord(
   return [record, ...withoutDup].slice(0, TASK_RECORDS_LIMIT)
 }
 
+// The task queue is persisted to localStorage so a refresh doesn't lose it.
+// Cap it so storage never grows unbounded.
+const TASK_QUEUE_LIMIT = 30
+
+function getTaskQueueStorageKey() {
+  const userId = window.localStorage.getItem('uid') ?? 'anonymous'
+  return `aitoken-task-queue:${userId}`
+}
+
+// loadTaskQueue restores the persisted queue. Any task that was still in-flight
+// (submitting/running) when the page unloaded can't be resumed — its relay
+// socket is gone — so it is restored as failed with an interrupted note.
+function loadTaskQueue(): QueuedTask[] {
+  try {
+    const saved = JSON.parse(
+      window.localStorage.getItem(getTaskQueueStorageKey()) ?? '[]'
+    ) as unknown
+    if (!Array.isArray(saved)) return []
+    return (saved as QueuedTask[]).map((task) =>
+      task.status === 'submitting' || task.status === 'running'
+        ? { ...task, status: 'failed', relayStatus: '', error: task.error || 'Interrupted by page reload' }
+        : task
+    )
+  } catch {
+    return []
+  }
+}
+
 const DEFAULT_CONFIG_TEXT = '{\n  "prompt": "a dog"\n}'
 const OFFERS_PAGE_SIZE = 10
 
@@ -522,6 +550,13 @@ function TaskCard({ task, onResultViewChange, onCancel }: TaskCardProps) {
       {/* Expanded body — min-w-0 + overflow-hidden prevent result content from blowing card width */}
       {expanded && (
         <div className='min-w-0 overflow-hidden border-t px-3 py-3 space-y-3'>
+          {task.error && (
+            // break-words + whitespace-pre-wrap so a long error wraps inside the
+            // card instead of stretching the page.
+            <div className='rounded-md border border-red-200 bg-red-50 p-2 text-xs break-words whitespace-pre-wrap text-red-600 dark:border-red-900/50 dark:bg-red-950/30'>
+              {task.error}
+            </div>
+          )}
           {task.order && (
             <div className='text-xs space-y-1'>
               <div className='font-mono text-muted-foreground truncate'>{task.order.id}</div>
@@ -594,7 +629,7 @@ export function AitokenPurchasePage() {
   const [quote, setQuote] = useState<PriceBreakdown | null>(null)
   const [offersLoading, setOffersLoading] = useState(false)
   // Multi-task queue: each purchase fires independently, results shown in right panel
-  const [taskQueue, setTaskQueue] = useState<QueuedTask[]>([])
+  const [taskQueue, setTaskQueue] = useState<QueuedTask[]>(loadTaskQueue)
   const [walletQuota, setWalletQuota] = useState<number | null>(null)
   const [rechargeAmt, setRechargeAmt] = useState('1')
   const [recharging, setRecharging] = useState(false)
@@ -623,6 +658,16 @@ export function AitokenPurchasePage() {
       window.localStorage.setItem(getTaskRecordsStorageKey(), JSON.stringify(taskRecords))
     } catch { /* best-effort */ }
   }, [taskRecords])
+
+  // Persist the task queue so a refresh doesn't lose it (trimmed to cap).
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        getTaskQueueStorageKey(),
+        JSON.stringify(taskQueue.slice(0, TASK_QUEUE_LIMIT))
+      )
+    } catch { /* best-effort */ }
+  }, [taskQueue])
 
   useEffect(() => {
     try {
@@ -900,7 +945,15 @@ export function AitokenPurchasePage() {
 
   return (
     <SectionPageLayout>
-      <SectionPageLayout.Title>{t('AiToken P2P Marketplace')}</SectionPageLayout.Title>
+      <SectionPageLayout.Title>
+        <span className='inline-flex flex-wrap items-baseline gap-x-2 gap-y-0.5'>
+          {t('AiToken P2P Marketplace')}
+          {/* Refresh drops any in-flight run's encrypted relay connection. */}
+          <span className='text-[11px] font-normal text-red-500'>
+            {t('Do not refresh while running — it interrupts tasks')}
+          </span>
+        </span>
+      </SectionPageLayout.Title>
       <SectionPageLayout.Actions>
         {/* Compact balance chip: available + reserved, click to manage funds */}
         <button

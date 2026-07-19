@@ -421,9 +421,10 @@ export type ScriptOffer = {
   total_slots: number
   remaining_quota: number
   state: string
-  /** Lifetime task attempts (success + failure) on this node. */
+  /** Task attempts (success + failure) on this node for THIS script version,
+   *  from task_attempts — matches the provider console's per-capability stats. */
   executions: number
-  /** Lifetime successful task attempts on this node. */
+  /** Successful task attempts on this node for THIS script version. */
   successes: number
   available: boolean
   unavailable_reason?: string

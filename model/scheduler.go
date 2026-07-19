@@ -44,6 +44,8 @@ type ScriptOffer struct {
 	TotalSlots     int  `json:"total_slots"`
 	RemainingQuota    int    `json:"remaining_quota"`
 	State             string `json:"state"`
+	// Executions/Successes are this node's task-attempt track record for THIS
+	// script version (not node-wide), matching the provider console's stats.
 	Executions        int64  `json:"executions"`
 	Successes         int64  `json:"successes"`
 	Available         bool   `json:"available"`
@@ -161,6 +163,34 @@ func ListOffersForScript(scriptId, version int, providerGroupId string, consumeM
 		nodeTotalByNode[c.NodeId] = c.Total
 	}
 
+	// Per-(node) execution track record for THIS script version, derived from
+	// task attempts (same source as the provider console's capability stats) so
+	// the offer's success rate matches what the provider sees. The node-level
+	// success_count/failure_count columns aggregate all scripts and would be
+	// misleading here, so they are not used.
+	type attemptStat struct {
+		NodeId     string
+		Executions int64
+		Successes  int64
+	}
+	var attemptStats []attemptStat
+	if len(nodeIds) > 0 {
+		DB.Table("task_attempts AS ta").
+			Select(`ta.node_id AS node_id,
+				COUNT(*) AS executions,
+				SUM(CASE WHEN ta.state = ? THEN 1 ELSE 0 END) AS successes`, AttemptSucceeded).
+			Joins("JOIN orders o ON o.id = ta.order_id").
+			Where("ta.node_id IN ? AND o.script_id = ? AND o.version = ?", nodeIds, scriptId, version).
+			Group("ta.node_id").
+			Scan(&attemptStats)
+	}
+	execByNode := make(map[string]int64, len(attemptStats))
+	successByNode := make(map[string]int64, len(attemptStats))
+	for _, s := range attemptStats {
+		execByNode[s.NodeId] = s.Executions
+		successByNode[s.NodeId] = s.Successes
+	}
+
 	offers := make([]ScriptOffer, 0, len(rows))
 	for _, r := range rows {
 		online := r.State != NodeStateOffline && r.LastSeenAt >= cutoff
@@ -226,8 +256,8 @@ func ListOffersForScript(scriptId, version int, providerGroupId string, consumeM
 			TotalSlots:        scriptConcurrency,
 			RemainingQuota:    r.RemainingQuota,
 			State:             r.State,
-			Executions:        r.SuccessCount + r.FailureCount,
-			Successes:         r.SuccessCount,
+			Executions:        execByNode[r.NodeId],
+			Successes:         successByNode[r.NodeId],
 			Available:         available,
 			Enabled:           r.Enabled,
 			Owned:             owned,
