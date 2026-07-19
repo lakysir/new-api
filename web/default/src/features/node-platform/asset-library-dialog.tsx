@@ -240,7 +240,7 @@ export function AssetLibraryDialog(props: AssetLibraryDialogProps) {
 
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
-      <DialogContent className='flex max-h-[90vh] w-[calc(100vw-2rem)] max-w-[1200px] flex-col gap-0 overflow-hidden p-0'>
+      <DialogContent className='flex h-[min(80vh,760px)] w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden p-0 sm:w-[60vw] sm:max-w-[1200px]'>
         <DialogHeader className='border-b px-5 py-4 text-left'>
           <DialogTitle>{t('Resource library')}</DialogTitle>
           <DialogDescription>
