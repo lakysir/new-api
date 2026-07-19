@@ -28,6 +28,7 @@ import {
   ListTree,
   Loader2,
   Plus,
+  RefreshCw,
   Trash2,
   WalletCards,
   XCircle,
@@ -574,7 +575,7 @@ function TaskCard({ task, onResultViewChange, onCancel }: TaskCardProps) {
                 )}
               </div>
               {canCancel && (
-                <Button size='sm' variant='outline' onClick={() => onCancel(task.order!.id)}>
+                <Button size='sm' variant='outline' onClick={() => { if (task.order) onCancel(task.order.id) }}>
                   {t('Cancel order')}
                 </Button>
               )}
@@ -647,8 +648,8 @@ export function AitokenPurchasePage() {
   const [expandedRecordId, setExpandedRecordId] = useState<string | null>(null)
   // Wallet interactions (recharge/withdraw) live in a dialog to keep the top bar compact.
   const [walletOpen, setWalletOpen] = useState(false)
-  // Script description is collapsed to one line by default; expand for the full text.
-  const [descExpanded, setDescExpanded] = useState(false)
+  // Keep usage notes open by default so parameters can be copied while configuring a run.
+  const [descExpanded, setDescExpanded] = useState(true)
 
   function updateTask(localId: string, patch: Partial<QueuedTask>) {
     setTaskQueue((prev) =>
@@ -725,23 +726,26 @@ export function AitokenPurchasePage() {
 
   async function loadOffersFor(
     selectedScriptId: number, selectedVersion: number,
-    groupId = groupFilterId, multiplier = consumeMultiplier
+    groupId = groupFilterId, multiplier = consumeMultiplier,
+    preserveSelection = false
   ) {
-    setOffersLoading(true); setOffersPage(0)
+    setOffersLoading(true); setOffersPage(0); setQuote(null)
     try {
       const loaded = await listScriptOffers(selectedScriptId, selectedVersion, groupId || undefined, multiplier)
       const sorted = [...loaded].sort((a, b) => Number(b.owned) - Number(a.owned))
-      setOffers(sorted); setAutoSelect(true); setNodeId('')
+      const selectedNodeId = preserveSelection && !autoSelect && loaded.some((offer) => offer.node_id === nodeId) ? nodeId : ''
+      setOffers(sorted)
+      if (!selectedNodeId) { setAutoSelect(true); setNodeId('') }
       try {
-        const priced = await quoteOrder({ script_id: selectedScriptId, version: selectedVersion, provider_group_id: groupId || undefined, consume_multiplier: multiplier })
+        const priced = await quoteOrder({ script_id: selectedScriptId, version: selectedVersion, node_id: selectedNodeId || undefined, provider_group_id: selectedNodeId ? undefined : groupId || undefined, consume_multiplier: multiplier })
         setQuote(priced.breakdown)
       } catch { setQuote(null) }
-      if (loaded.length === 0) toast.info(t('No provider offers yet for this version'))
+      if (loaded.length === 0) { toast.info(t('No provider offers yet for this version')) }
     } finally { setOffersLoading(false) }
   }
 
   async function selectScript(value: number, preferredVersion?: number, fallbackVersion?: number, loadParams = true) {
-    setScriptId(value); setOffers([]); setNodeId(''); setAutoSelect(true); setOffersPage(0); setQuote(null)
+    setScriptId(value); setOffers([]); setNodeId(''); setAutoSelect(true); setOffersPage(0); setQuote(null); setDescExpanded(true)
     if (!value) { setAvailableVersions([]); return }
     try {
       const available = await listAvailableScriptVersions(value)
@@ -772,6 +776,8 @@ export function AitokenPurchasePage() {
       const savedScript = list.find((item) => item.id === initialDraft.scriptId)
       if (savedScript) {
         await selectScript(initialDraft.scriptId, initialDraft.version, savedScript.latest_version, false)
+      } else if (list[0]) {
+        await selectScript(list[0].id, undefined, list[0].latest_version)
       } else if (initialDraft.scriptId) {
         setScriptId(0)
       }
@@ -828,7 +834,9 @@ export function AitokenPurchasePage() {
         await new Promise((r) => window.setTimeout(r, 6000))
       }
     }
-    for (const task of pending) void reconcileOne(task.localId, task.order!.id)
+    for (const task of pending) {
+      if (task.order?.id) void reconcileOne(task.localId, task.order.id)
+    }
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -840,17 +848,8 @@ export function AitokenPurchasePage() {
     if (scriptId) void loadOffersFor(scriptId, version, groupFilterId, next)
   }
 
-  async function onQuote() {
-    if (!scriptId) { toast.error(t('Select a script first')); return }
-    try {
-      const q = await quoteOrder({ script_id: scriptId, version, node_id: autoSelect ? undefined : nodeId || undefined, provider_group_id: autoSelect ? groupFilterId || undefined : undefined, consume_multiplier: consumeMultiplier })
-      setQuote(q.breakdown)
-      if (!autoSelect && q.chosen_node_id) setNodeId(q.chosen_node_id)
-    } catch (e) { toast.error(String((e as Error).message)) }
-  }
-
   function selectAuto() {
-    setAutoSelect(true); setNodeId('')
+    setAutoSelect(true); setNodeId(''); setQuote(null)
     if (scriptId) {
       void quoteOrder({ script_id: scriptId, version, provider_group_id: groupFilterId || undefined, consume_multiplier: consumeMultiplier })
         .then((p) => setQuote(p.breakdown)).catch(() => setQuote(null))
@@ -858,7 +857,7 @@ export function AitokenPurchasePage() {
   }
 
   function selectProvider(selectedNodeId: string) {
-    setAutoSelect(false); setNodeId(selectedNodeId)
+    setAutoSelect(false); setNodeId(selectedNodeId); setQuote(null)
     void quoteOrder({ script_id: scriptId, version, node_id: selectedNodeId, consume_multiplier: consumeMultiplier })
       .then((p) => setQuote(p.breakdown)).catch(() => setQuote(null))
   }
@@ -998,6 +997,7 @@ export function AitokenPurchasePage() {
   }
 
   const insufficientBalance = quote != null && quote.MaxCustomerMicros > (bal?.client_available ?? 0)
+  const runningTaskCount = taskQueue.filter((task) => task.status === 'running' || task.status === 'submitting').length
 
   return (
     <SectionPageLayout>
@@ -1045,45 +1045,19 @@ export function AitokenPurchasePage() {
           {/* LEFT: configuration form */}
           <div className='flex min-w-0 flex-col gap-4'>
 
-            {/* Script & Provider card */}
+            {/* Provider selection card */}
             <div className='rounded-lg border p-4'>
-              <div className='mb-2 text-sm font-medium'>{t('Choose script & provider')}</div>
-              <div className='flex flex-wrap items-center gap-2'>
-                <select className='h-9 min-w-[220px] rounded-md border px-2 text-sm' value={scriptId} onChange={(e) => void selectScript(Number(e.target.value))}>
-                  <option value={0}>{t('Select a script')}</option>
-                  {scripts.map((s) => (<option key={s.id} value={s.id}>#{s.id} {s.title}</option>))}
-                </select>
-                <select className='h-9 w-28 rounded-md border px-2 text-sm' value={version} onChange={(e) => {
-                  const v = Number(e.target.value); setVersion(v); setOffers([]); setNodeId(''); setAutoSelect(true); setOffersPage(0); setQuote(null)
-                  const sel = availableVersions.find((item) => item.version === v)
-                  setConfigText(configTextFromParams(sel?.script_params))
-                  if (scriptId) void loadOffersFor(scriptId, v)
-                }}>
-                  {versions.map((item) => (<option key={item} value={item}>v{item}</option>))}
-                </select>
-                <Button variant='outline' onClick={() => { if (!scriptId) { toast.error(t('Select a script first')); return }; void loadOffersFor(scriptId, version) }} disabled={offersLoading}>
-                  {offersLoading ? t('Loading...') : t('View offers')}
+              <div className='mb-2 flex flex-wrap items-center justify-between gap-2'>
+                <div className='text-sm font-medium'>{t('Provider offers (Auto picks the best idle provider, or choose one)')}</div>
+                <Button type='button' variant='outline' size='sm' onClick={() => {
+                  if (!scriptId) { toast.error(t('Select a script first')); return }
+                  void loadOffersFor(scriptId, version, groupFilterId, consumeMultiplier, true)
+                }} disabled={offersLoading}>
+                  <RefreshCw className={`mr-2 h-4 w-4 ${offersLoading ? 'animate-spin' : ''}`} aria-hidden='true' />
+                  {t('Refresh')}
                 </Button>
               </div>
-              {selectedScript?.description && (
-                <div className='bg-muted/30 mt-3 rounded-md border px-3 py-2 text-xs'>
-                  <button
-                    type='button'
-                    className='flex w-full items-start gap-2 text-left'
-                    onClick={() => setDescExpanded((v) => !v)}
-                  >
-                    <span className='text-muted-foreground shrink-0 font-medium'>{t('Script description')}</span>
-                    <span className={descExpanded ? 'min-w-0 flex-1 break-words whitespace-pre-wrap' : 'min-w-0 flex-1 truncate'}>
-                      {selectedScript.description}
-                    </span>
-                    {descExpanded
-                      ? <ChevronUp className='text-muted-foreground mt-0.5 h-3.5 w-3.5 shrink-0' />
-                      : <ChevronDown className='text-muted-foreground mt-0.5 h-3.5 w-3.5 shrink-0' />}
-                  </button>
-                </div>
-              )}
-              <div className='mt-3'>
-                <div className='text-muted-foreground mb-2 text-[11px]'>{t('Provider offers (Auto picks the best idle provider, or choose one)')}</div>
+              <div>
                 <div className='relative flex h-10 min-w-0 items-center gap-2 rounded-md border px-2 text-xs'>
                   <label className='flex min-w-0 items-center gap-2'>
                     <input type='radio' name='offer' checked={autoSelect} onChange={selectAuto} />
@@ -1204,7 +1178,7 @@ export function AitokenPurchasePage() {
               {taskQueue.length > 0 && (
                 <div className='flex items-center gap-2'>
                   <span className='text-muted-foreground text-xs'>
-                    {taskQueue.filter((t) => t.status === 'running' || t.status === 'submitting').length > 0 && (
+                    {runningTaskCount > 0 && (
                       <>{taskQueue.filter((tk) => tk.status === 'running' || tk.status === 'submitting').length} {t('running')} · </>
                     )}
                     {taskQueue.length} {t('total')}
@@ -1218,7 +1192,7 @@ export function AitokenPurchasePage() {
             {taskQueue.length === 0 ? (
               <div className='rounded-lg border border-dashed p-8 text-center'>
                 <div className='text-muted-foreground text-sm'>{t('No tasks yet')}</div>
-                <div className='text-muted-foreground mt-1 text-xs'>{t('Get a quote then click "Purchase and run" to start')}</div>
+                <div className='text-muted-foreground mt-1 text-xs'>{t('Select a script and provider, then click "Purchase and run" to start')}</div>
               </div>
             ) : (
               <div className='flex flex-col gap-2 max-h-[calc(100vh-16rem)] overflow-y-auto'>
@@ -1236,27 +1210,56 @@ export function AitokenPurchasePage() {
         </div>
 
         {/* Full-width sticky action bar — spans both columns, always visible at viewport bottom */}
-        <div className='sticky bottom-0 z-10 mt-4 rounded-lg border border-t-2 border-t-primary/30 bg-muted/40 px-4 py-3 shadow-lg backdrop-blur-sm'>
-          <div className='flex flex-wrap items-center gap-3'>
-            <Button variant='outline' onClick={onQuote}>{t('Get quote')}</Button>
-            <Button className='min-w-40' onClick={() => void onPurchase()} disabled={!quote || insufficientBalance}>
-              {t('Purchase and run')}
-            </Button>
-            {quote && (
-              <div className='text-sm'>
-                <span className='text-muted-foreground'>{t('Total')}: </span>
-                <span className='font-semibold'>{microsToCurrency(quote.MaxCustomerMicros)}</span>
-                {insufficientBalance && <span className='ml-2 text-xs text-red-600'>{t('Insufficient balance')}</span>}
+        <div className='sticky bottom-0 z-10 mt-4 rounded-lg border bg-card px-4 py-4 shadow-lg'>
+          <div className='grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start'>
+            <div className='min-w-0 space-y-3'>
+              <div className='flex flex-wrap items-center gap-2'>
+                <span className='mr-1 text-sm font-medium'>{t('Script')}</span>
+                <select className='h-9 min-w-[220px] flex-1 rounded-md border bg-background px-2 text-sm' value={scriptId} onChange={(e) => void selectScript(Number(e.target.value))}>
+                  <option value={0}>{t('Select a script')}</option>
+                  {scripts.map((s) => (<option key={s.id} value={s.id}>#{s.id} {s.title}</option>))}
+                </select>
+                <select className='h-9 w-28 rounded-md border bg-background px-2 text-sm' value={version} disabled={!scriptId || versions.length === 0} aria-label={t('Version')} onChange={(e) => {
+                  const v = Number(e.target.value); setVersion(v); setOffers([]); setNodeId(''); setAutoSelect(true); setOffersPage(0); setQuote(null)
+                  const sel = availableVersions.find((item) => item.version === v)
+                  setConfigText(configTextFromParams(sel?.script_params))
+                  if (scriptId) void loadOffersFor(scriptId, v)
+                }}>
+                  {versions.map((item) => (<option key={item} value={item}>v{item}</option>))}
+                </select>
               </div>
-            )}
-            {quote && (
-              <div className='ml-auto flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground'>
-                <span>{t('Provider')}: {microsToCurrency(quote.ProviderMicros)}</span>
-                <span>{t('Author')}: {microsToCurrency(quote.AuthorMicros)}</span>
-                <span>{t('Platform fee')}: {microsToCurrency(quote.PlatformFeeMicros)}</span>
-                <span>{t('Risk reserve')}: {microsToCurrency(quote.RiskReserveMicros)}</span>
+              {selectedScript?.description && (
+                <div className='rounded-md border bg-background px-3 py-2 text-xs'>
+                  <button type='button' className='flex w-full items-start gap-2 text-left' onClick={() => setDescExpanded((value) => !value)} aria-expanded={descExpanded}>
+                    <span className='text-muted-foreground shrink-0 font-medium'>{t('Script description')}</span>
+                    <span className={descExpanded ? 'min-w-0 flex-1 break-words whitespace-pre-wrap' : 'min-w-0 flex-1 truncate'}>{selectedScript.description}</span>
+                    {descExpanded
+                      ? <ChevronUp className='text-muted-foreground mt-0.5 h-3.5 w-3.5 shrink-0' aria-hidden='true' />
+                      : <ChevronDown className='text-muted-foreground mt-0.5 h-3.5 w-3.5 shrink-0' aria-hidden='true' />}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className='flex min-w-64 flex-col items-stretch gap-2 lg:items-end'>
+              <div className='flex flex-wrap items-center justify-between gap-x-4 gap-y-2 lg:justify-end'>
+                <div className='text-sm'>
+                  <span className='text-muted-foreground'>{t('Total')}: </span>
+                  <span className='text-lg font-semibold'>{quote ? microsToCurrency(quote.MaxCustomerMicros) : '-'}</span>
+                </div>
+                <Button className='min-w-40' onClick={() => void onPurchase()} disabled={!quote || insufficientBalance}>
+                  {t('Purchase and run')}
+                </Button>
               </div>
-            )}
+              {insufficientBalance && <div className='text-xs text-red-600'>{t('Insufficient balance')}</div>}
+              {quote && (
+                <div className='flex flex-wrap justify-end gap-x-4 gap-y-1 text-xs text-muted-foreground'>
+                  <span>{t('Provider')}: {microsToCurrency(quote.ProviderMicros)}</span>
+                  <span>{t('Author')}: {microsToCurrency(quote.AuthorMicros)}</span>
+                  <span>{t('Platform fee')}: {microsToCurrency(quote.PlatformFeeMicros)}</span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -1354,12 +1357,6 @@ export function AitokenPurchasePage() {
     </SectionPageLayout>
   )
 }
-
-
-
-
-
-
 
 
 
