@@ -928,10 +928,13 @@ export function AitokenPurchasePage() {
         <Button variant='outline' onClick={loadBalance}>{t('Refresh')}</Button>
       </SectionPageLayout.Actions>
       <SectionPageLayout.Content>
-        {/* Two-column layout: form left, task queue right */}
+        {/* Two-column layout: form left, task queue right.
+            min-w-0 on both columns is required — grid tracks default to
+            min-width:auto, so long text/URLs would otherwise blow a column
+            past its fr share and squeeze the other. */}
         <div className='grid grid-cols-1 gap-4 lg:grid-cols-[3fr_2fr] lg:items-start'>
           {/* LEFT: configuration form */}
-          <div className='flex flex-col gap-4'>
+          <div className='flex min-w-0 flex-col gap-4'>
 
             {/* Script & Provider card */}
             <div className='rounded-lg border p-4'>
@@ -961,7 +964,7 @@ export function AitokenPurchasePage() {
                     onClick={() => setDescExpanded((v) => !v)}
                   >
                     <span className='text-muted-foreground shrink-0 font-medium'>{t('Script description')}</span>
-                    <span className={descExpanded ? 'flex-1 whitespace-pre-wrap' : 'flex-1 truncate'}>
+                    <span className={descExpanded ? 'min-w-0 flex-1 break-words whitespace-pre-wrap' : 'min-w-0 flex-1 truncate'}>
                       {selectedScript.description}
                     </span>
                     {descExpanded
@@ -1086,7 +1089,7 @@ export function AitokenPurchasePage() {
           </div>
 
           {/* RIGHT: Task queue panel — sticky, shows all in-flight and completed tasks */}
-          <div className='sticky top-4 flex flex-col gap-3'>
+          <div className='sticky top-4 flex min-w-0 flex-col gap-3'>
             <div className='flex items-center justify-between'>
               <div className='text-sm font-medium'>{t('Task queue')}</div>
               {taskQueue.length > 0 && (
