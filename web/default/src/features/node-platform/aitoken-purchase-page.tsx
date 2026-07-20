@@ -1517,7 +1517,7 @@ export function AitokenPurchasePage() {
   const runningTaskCount = taskQueue.filter((task) => task.status === 'running' || task.status === 'submitting').length
 
   return (
-    <SectionPageLayout>
+    <SectionPageLayout fixedContent>
       <SectionPageLayout.Title>
         <span className='inline-flex flex-wrap items-baseline gap-x-2 gap-y-0.5'>
           {t('AiToken P2P Marketplace')}
@@ -1553,13 +1553,19 @@ export function AitokenPurchasePage() {
         <Button variant='outline' onClick={loadBalance}>{t('Refresh')}</Button>
       </SectionPageLayout.Actions>
       <SectionPageLayout.Content>
+        {/* Fixed-height content: a scrollable body over a pinned action bar.
+            The parent content region is overflow-hidden (fixedContent), so this
+            column owns the height and hands scrolling to each panel below. On
+            mobile the whole body scrolls as one; on lg each column scrolls
+            independently so a long task queue never hides behind the bar. */}
+        <div className='flex h-full min-h-0 flex-col gap-4'>
         {/* Two-column layout: form left, task queue right.
             min-w-0 on both columns is required — grid tracks default to
             min-width:auto, so long text/URLs would otherwise blow a column
             past its fr share and squeeze the other. */}
-        <div className='grid grid-cols-1 gap-4 lg:grid-cols-[3fr_2fr] lg:items-start'>
-          {/* LEFT: configuration form */}
-          <div className='flex min-w-0 flex-col gap-4'>
+        <div className='grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto lg:grid-cols-[3fr_2fr] lg:grid-rows-[minmax(0,1fr)] lg:items-stretch lg:overflow-hidden'>
+          {/* LEFT: configuration form — scrolls on its own at lg */}
+          <div className='flex min-w-0 flex-col gap-4 lg:min-h-0 lg:overflow-y-auto lg:pr-1'>
 
             {/* Provider selection card */}
             <div className='rounded-lg border p-4'>
@@ -1687,9 +1693,10 @@ export function AitokenPurchasePage() {
             </div>
           </div>
 
-          {/* RIGHT: Task queue panel — sticky, shows all in-flight and completed tasks */}
-          <div className='sticky top-4 flex min-w-0 flex-col gap-3'>
-            <div className='flex flex-wrap items-center justify-between gap-2'>
+          {/* RIGHT: Task queue panel — owns its own scroll at lg so a long
+              queue scrolls inside the panel instead of behind the action bar */}
+          <div className='flex min-w-0 flex-col gap-3 lg:min-h-0'>
+            <div className='flex shrink-0 flex-wrap items-center justify-between gap-2'>
               <div className='inline-flex flex-wrap items-baseline gap-x-2 gap-y-0.5'>
                 <span className='text-sm font-medium'>{t('Task queue')}</span>
                 {/* Refresh drops any in-flight run's encrypted relay connection. */}
@@ -1717,7 +1724,7 @@ export function AitokenPurchasePage() {
                 <div className='text-muted-foreground mt-1 text-xs'>{t('Select a script and provider, then click "Purchase and run" to start')}</div>
               </div>
             ) : (
-              <div className='flex flex-col gap-2 max-h-[calc(100vh-16rem)] overflow-y-auto'>
+              <div className='flex flex-col gap-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-1'>
                 {taskQueue.map((task) => (
                   <TaskCard
                     key={task.localId}
@@ -1731,8 +1738,9 @@ export function AitokenPurchasePage() {
           </div>
         </div>
 
-        {/* Full-width sticky action bar — spans both columns, always visible at viewport bottom */}
-        <div className='sticky bottom-0 z-10 mt-4 rounded-lg border border-white/15 bg-black/80 px-4 py-4 text-white shadow-xl backdrop-blur-xl'>
+        {/* Full-width action bar — pinned below the scrollable body as a flex
+            sibling (shrink-0), so it's always visible without overlapping. */}
+        <div className='shrink-0 rounded-lg border border-white/15 bg-black/80 px-4 py-4 text-white shadow-xl backdrop-blur-xl'>
           <div className='grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start'>
             <div className='grid min-w-0 grid-cols-[6rem_minmax(0,1fr)] gap-3'>
               <button
@@ -1803,6 +1811,7 @@ export function AitokenPurchasePage() {
               )}
             </div>
           </div>
+        </div>
         </div>
 
         {/* Wallet dialog — recharge/withdraw between main wallet and marketplace balance */}
