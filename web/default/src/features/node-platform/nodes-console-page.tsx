@@ -1129,6 +1129,16 @@ export function NodesConsolePage() {
                 <Settings2 className='size-4' />
                 {t('Capabilities')}
               </Button>
+              {!nodeOnline(node) && (
+                <Button
+                  size='icon-sm'
+                  variant='ghost'
+                  title={t('Delete')}
+                  onClick={() => onDeleteNode(node.id)}
+                >
+                  <Trash2 className='size-4' />
+                </Button>
+              )}
             </div>
           ))}
           {visibleDevices.length === 0 && ungroupedNodes.length === 0 && (
