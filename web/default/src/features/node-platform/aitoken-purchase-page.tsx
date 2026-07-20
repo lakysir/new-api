@@ -399,7 +399,8 @@ function MediaThumb({ url, kind, onClear, onDelete, size = 'md' }: MediaThumbPro
   const { t } = useTranslation()
   const [zoomOpen, setZoomOpen] = useState(false)
   const small = size === 'sm'
-  const boxWidth = kind === 'audio' ? (small ? 'w-36' : 'w-44') : small ? 'w-20' : 'w-28'
+  let boxWidth = small ? 'w-20' : 'w-28'
+  if (kind === 'audio') boxWidth = small ? 'w-36' : 'w-44'
   const boxHeight = small ? 'h-14' : 'h-20'
   return (
     <div className={`relative shrink-0 overflow-hidden rounded-md border bg-muted/40 ${boxWidth}`}>
@@ -864,11 +865,10 @@ function TaskCard({ task, onChange, onCancel }: TaskCardProps) {
     }
   }
 
-  const resultNode: React.ReactNode = task.relayResult
-    ? resultView === 'preview'
-      ? previewNode
-      : structuredNode
-    : null
+  let resultNode: React.ReactNode = null
+  if (task.relayResult) {
+    resultNode = resultView === 'preview' ? previewNode : structuredNode
+  }
 
   // Sent parameters — parsed once for the visual view; falls back to raw text.
   let paramsParsed: unknown
@@ -883,7 +883,7 @@ function TaskCard({ task, onChange, onCancel }: TaskCardProps) {
   }
 
   return (
-    <div className='rounded-lg border text-sm overflow-hidden'>
+    <div className='shrink-0 overflow-hidden rounded-lg border text-sm'>
       {/* Header */}
       <div className='flex items-center gap-2 px-3 py-2.5 bg-card'>
         {statusIcon}
@@ -1392,6 +1392,21 @@ export function AitokenPurchasePage() {
         upd({ status: 'failed', error: t('Provider rejected; funds refunded'), relayStatus: '' })
         await loadBalance(); return
       }
+      // No provider matched: dispatch found no idle candidate (all providers busy
+      // or offline), so the order stays in a pre-offer state with no chosen node.
+      // A dispatched order is OFFERED or beyond by now (the backend waits briefly
+      // for the provider to accept). Fail fast with a clear message and refund
+      // immediately, rather than connecting the relay and waiting out the provider
+      // handshake — which would otherwise surface as a confusing "handshake timeout".
+      if ((o.state === 'MATCHING' || o.state === 'FUNDS_RESERVED') && !o.chosen_node_id) {
+        try { upd({ order: await cancelOrder(o.id) }) } catch { /* already terminal; refund still lands */ }
+        upd({
+          status: 'failed',
+          error: t('No idle provider available right now (all providers are busy or offline). Please try again shortly.'),
+          relayStatus: '',
+        })
+        await loadBalance(); return
+      }
       await loadBalance()
       const config = JSON.parse(cleanedConfigText)
       // Optional per-task result timeout (ms), e.g. 240000. Falls back to the
@@ -1724,7 +1739,7 @@ export function AitokenPurchasePage() {
                 <div className='text-muted-foreground mt-1 text-xs'>{t('Select a script and provider, then click "Purchase and run" to start')}</div>
               </div>
             ) : (
-              <div className='flex flex-col gap-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-1'>
+              <div className='flex flex-col gap-2 lg:h-0 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain lg:pr-1'>
                 {taskQueue.map((task) => (
                   <TaskCard
                     key={task.localId}

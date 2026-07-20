@@ -141,6 +141,18 @@ func CreateOrder(c *gin.Context) {
 			common.ApiErrorMsg(c, dispatchErr.Error())
 			return
 		}
+		if errors.Is(dispatchErr, dispatch.ErrNoCandidates) {
+			// No idle provider matched (all busy or offline). The order is left in
+			// MATCHING with funds reserved; nothing re-dispatches it, so it would
+			// only sit frozen until the stale-order sweep refunds it ~10min later,
+			// while the client waits out a confusing relay handshake timeout. Cancel
+			// and refund now, and tell the caller plainly.
+			if _, terr := model.ApplyTransition(o.Id, model.OrderCancelled, nil); terr == nil {
+				_, _ = settlement.Refund(o.Id)
+			}
+			common.ApiErrorMsg(c, "no idle provider available right now (all providers are busy or offline); reserved funds were refunded")
+			return
+		}
 		if result != nil {
 			// Fast path: deliver this order's offer immediately. The transactional
 			// Outbox remains the retry source if the socket disappears mid-send.

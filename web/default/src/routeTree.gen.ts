@@ -18,8 +18,8 @@ import { Route as SetupIndexRouteImport } from './routes/setup/index'
 import { Route as ScriptsIndexRouteImport } from './routes/scripts/index'
 import { Route as RankingsIndexRouteImport } from './routes/rankings/index'
 import { Route as PricingIndexRouteImport } from './routes/pricing/index'
-import { Route as AboutIndexRouteImport } from './routes/about/index'
 import { Route as AitokenApiDocsIndexRouteImport } from './routes/aitoken-api-docs/index'
+import { Route as AboutIndexRouteImport } from './routes/about/index'
 import { Route as OauthProviderRouteImport } from './routes/oauth/$provider'
 import { Route as ConsoleTopupRouteImport } from './routes/console/topup'
 import { Route as ConsoleLogRouteImport } from './routes/console/log'
@@ -121,14 +121,14 @@ const PricingIndexRoute = PricingIndexRouteImport.update({
   path: '/pricing/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AboutIndexRoute = AboutIndexRouteImport.update({
-  id: '/about/',
-  path: '/about/',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AitokenApiDocsIndexRoute = AitokenApiDocsIndexRouteImport.update({
   id: '/aitoken-api-docs/',
   path: '/aitoken-api-docs/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AboutIndexRoute = AboutIndexRouteImport.update({
+  id: '/about/',
+  path: '/about/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OauthProviderRoute = OauthProviderRouteImport.update({
@@ -955,18 +955,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PricingIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/about/': {
-      id: '/about/'
-      path: '/about'
-      fullPath: '/about/'
-      preLoaderRoute: typeof AboutIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/aitoken-api-docs/': {
       id: '/aitoken-api-docs/'
       path: '/aitoken-api-docs'
       fullPath: '/aitoken-api-docs/'
       preLoaderRoute: typeof AitokenApiDocsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/about/': {
+      id: '/about/'
+      path: '/about'
+      fullPath: '/about/'
+      preLoaderRoute: typeof AboutIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/oauth/$provider': {

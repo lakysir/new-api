@@ -5286,6 +5286,7 @@
     "Send & run": "发送并运行",
     "Connecting to relay...": "正在连接 relay…",
     "Waiting for provider handshake...": "等待 Provider 握手…",
+    "No idle provider available right now (all providers are busy or offline). Please try again shortly.": "当前没有空闲的 Provider（所有 Provider 都在忙或已离线），请稍后重试。",
     "Sending config, waiting for result...": "发送 config，等待结果…",
     "Result received": "已收到结果",
     "Author share": "作者分成",

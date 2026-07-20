@@ -76,6 +76,14 @@ func (a *TaskAdaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, req
 			_, _ = settlement.Refund(o.Id)
 			return nil, fmt.Errorf("dispatch failed: %w", dispatchErr)
 		}
+		if errors.Is(dispatchErr, dispatch.ErrNoCandidates) {
+			// No idle provider matched (all busy or offline). Cancel and refund now
+			// rather than launching a relay session that would hang until timeout.
+			if _, terr := model.ApplyTransition(o.Id, model.OrderCancelled, nil); terr == nil {
+				_, _ = settlement.Refund(o.Id)
+			}
+			return nil, errors.New("no idle provider available right now (all providers are busy or offline); funds refunded")
+		}
 		if result != nil {
 			if publishErr := dispatch.PublishEvent(nodehub.Default, result.EventId); publishErr != nil {
 				if ta, _ := model.GetTaskAttempt(o.Id, 1); ta != nil {
