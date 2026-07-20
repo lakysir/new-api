@@ -187,11 +187,13 @@ export class ClientRelaySession {
   }
 
   /**
-   * Await the provider's encrypted result. Defaults to a 15-minute limit so
-   * long-running scripts (video/audio generation, etc.) aren't cut off; pass
-   * timeoutMs (e.g. 240000) to override per task.
+   * Await the provider's encrypted result. Defaults to a 60-minute limit so
+   * long-running scripts (video/audio generation, etc.) aren't cut off.
+   * The timeout is fixed server-side and must not be driven by user-supplied
+   * config — a caller-controlled short timeout would allow a client to force a
+   * refund while the provider has already executed the task.
    */
-  waitForResult(timeoutMs = 900000): Promise<unknown> {
+  waitForResult(timeoutMs = 3600000): Promise<unknown> {
     return Promise.race([
       this.#resultPromise,
       new Promise((_, rej) =>
