@@ -1160,15 +1160,21 @@ export function AitokenPurchasePage() {
     catch { /* best-effort */ }
   }, [descExpanded])
 
-  // Re-quote whenever the user edits parameters — so the displayed price always
-  // reflects the current param values (e.g. switching model or resolution).
-  // Only fires when there are pricing rules; flat-rate scripts skip this.
+  // Re-quote when rules become available or any pricing input changes. On a
+  // refresh, the saved params exist before the version metadata is loaded.
   useEffect(() => {
     if (!scriptId) return
     const scriptVer = availableVersions.find((v) => v.version === version)
     if (!scriptVer?.pricing_rules?.length) return
     let cancelled = false
-    const mult = getEffectiveMultiplier()
+    let mult = 1
+    try {
+      const config = JSON.parse(configText) as unknown
+      mult = Math.max(
+        1,
+        Math.round(computeParamsMultiplier(config, scriptVer.pricing_rules))
+      )
+    } catch { /* invalid JSON uses the base price */ }
     void quoteOrder({
       script_id: scriptId, version,
       node_id: !autoSelect && nodeId ? nodeId : undefined,
@@ -1178,8 +1184,15 @@ export function AitokenPurchasePage() {
       .then((p) => { if (!cancelled) setQuote(p.breakdown) })
       .catch(() => { if (!cancelled) setQuote(null) })
     return () => { cancelled = true }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [configText])
+  }, [
+    scriptId,
+    version,
+    availableVersions,
+    configText,
+    autoSelect,
+    nodeId,
+    groupFilterId,
+  ])
 
   async function loadBalance() {
     try {
@@ -1217,7 +1230,8 @@ export function AitokenPurchasePage() {
   async function loadOffersFor(
     selectedScriptId: number, selectedVersion: number,
     groupId = groupFilterId,
-    preserveSelection = false
+    preserveSelection = false,
+    multiplierOverride?: number
   ) {
     setOffersLoading(true); setOffersPage(0); setQuote(null)
     try {
@@ -1227,7 +1241,7 @@ export function AitokenPurchasePage() {
       setOffers(sorted)
       if (!selectedNodeId) { setAutoSelect(true); setNodeId('') }
       try {
-        const mult = getEffectiveMultiplier()
+        const mult = multiplierOverride ?? getEffectiveMultiplier()
         const priced = await quoteOrder({
           script_id: selectedScriptId, version: selectedVersion,
           node_id: selectedNodeId || undefined,
@@ -1269,11 +1283,27 @@ export function AitokenPurchasePage() {
         (preferredVersion && values.includes(preferredVersion) ? preferredVersion : undefined) ??
         values[0] ?? fallbackVersion ?? 1
       setVersion(selectedVersion)
+      const selected = available.find((item) => item.version === selectedVersion)
+      let selectedConfigText = configText
       if (loadParams) {
-        const selected = available.find((item) => item.version === selectedVersion)
-        setConfigText(configTextFromParams(selected?.script_params))
+        selectedConfigText = configTextFromParams(selected?.script_params)
+        setConfigText(selectedConfigText)
       }
-      await loadOffersFor(value, selectedVersion)
+      let multiplier = 1
+      if (selected?.pricing_rules?.length) {
+        try {
+          multiplier = Math.max(
+            1,
+            Math.round(
+              computeParamsMultiplier(
+                JSON.parse(selectedConfigText) as unknown,
+                selected.pricing_rules
+              )
+            )
+          )
+        } catch { /* invalid JSON uses the base price */ }
+      }
+      await loadOffersFor(value, selectedVersion, groupFilterId, false, multiplier)
     } catch (e) { toast.error(String((e as Error).message)) }
   }
 
@@ -1794,15 +1824,22 @@ export function AitokenPurchasePage() {
               <div className='min-w-0 space-y-3'>
                 <div className='flex flex-wrap items-center gap-2'>
                   <span className='mr-1 text-sm font-medium'>{t('Script')}</span>
-                  <select className='h-9 min-w-[220px] flex-1 rounded-md border border-white/20 bg-white/10 px-2 text-sm text-white outline-none focus:border-white/50 [&>option]:bg-white [&>option]:text-black' value={scriptId} onChange={(e) => void selectScript(Number(e.target.value))}>
+                  <select className='h-9 w-64 max-w-full min-w-0 shrink rounded-md border border-white/20 bg-white/10 px-2 text-sm text-white outline-none focus:border-white/50 [&>option]:bg-white [&>option]:text-black' value={scriptId} onChange={(e) => void selectScript(Number(e.target.value))}>
                     <option value={0}>{t('Select a script')}</option>
                     {scripts.map((s) => (<option key={s.id} value={s.id}>#{s.id} {s.title}</option>))}
                   </select>
                   <select className='h-9 w-28 rounded-md border border-white/20 bg-white/10 px-2 text-sm text-white outline-none focus:border-white/50 disabled:text-white/40 [&>option]:bg-white [&>option]:text-black' value={version} disabled={!scriptId || versions.length === 0} aria-label={t('Version')} onChange={(e) => {
                     const v = Number(e.target.value); setVersion(v); setOffers([]); setNodeId(''); setAutoSelect(true); setOffersPage(0); setQuote(null)
                     const sel = availableVersions.find((item) => item.version === v)
-                    setConfigText(configTextFromParams(sel?.script_params))
-                    if (scriptId) void loadOffersFor(scriptId, v)
+                    const nextConfigText = configTextFromParams(sel?.script_params)
+                    setConfigText(nextConfigText)
+                    let multiplier = 1
+                    if (sel?.pricing_rules?.length) {
+                      try {
+                        multiplier = Math.max(1, Math.round(computeParamsMultiplier(JSON.parse(nextConfigText) as unknown, sel.pricing_rules)))
+                      } catch { /* invalid JSON uses the base price */ }
+                    }
+                    if (scriptId) void loadOffersFor(scriptId, v, groupFilterId, false, multiplier)
                   }}>
                     {versions.map((item) => (<option key={item} value={item}>v{item}</option>))}
                   </select>
