@@ -127,6 +127,71 @@ function classifyMediaUrl(raw: string): MediaKind | null {
   return null
 }
 
+function collectUrlCandidates(value: unknown, candidates: string[] = []): string[] {
+  if (typeof value === 'string') {
+    const url = value.trim()
+    if (/^(https?:\/\/|data:(image|video|audio)\/)/i.test(url)) {
+      candidates.push(url)
+    }
+    return candidates
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectUrlCandidates(item, candidates)
+    return candidates
+  }
+  if (value !== null && typeof value === 'object') {
+    for (const item of Object.values(value)) collectUrlCandidates(item, candidates)
+  }
+  return candidates
+}
+
+// Probe extensionless signed URLs with native media elements. This does not
+// require reading cross-origin response headers, so it also works without CORS.
+function probeMediaUrl(url: string): Promise<MediaKind | null> {
+  return new Promise((resolve) => {
+    const media = document.createElement('video')
+    const image = new Image()
+    let pending = 2
+    let settled = false
+
+    function finish(kind: MediaKind | null) {
+      if (settled) return
+      if (kind == null && --pending > 0) return
+      settled = true
+      window.clearTimeout(timeoutId)
+      media.removeAttribute('src')
+      media.load()
+      image.src = ''
+      resolve(kind)
+    }
+
+    media.preload = 'metadata'
+    media.addEventListener(
+      'loadedmetadata',
+      () => finish(media.videoWidth > 0 || media.videoHeight > 0 ? 'video' : 'audio'),
+      { once: true }
+    )
+    media.addEventListener('error', () => finish(null), { once: true })
+    image.addEventListener('load', () => finish('image'), { once: true })
+    image.addEventListener('error', () => finish(null), { once: true })
+    const timeoutId = window.setTimeout(() => {
+      pending = 1
+      finish(null)
+    }, 8000)
+    media.src = url
+    image.src = url
+  })
+}
+
+async function detectFirstMedia(value: unknown): Promise<FoundMedia | null> {
+  for (const url of collectUrlCandidates(value)) {
+    const knownKind = classifyMediaUrl(url)
+    const kind = knownKind ?? await probeMediaUrl(url)
+    if (kind) return { kind, url }
+  }
+  return null
+}
+
 // findFirstMedia walks a parsed result (depth-first, preserving key/array order)
 // and returns the first image/video/audio URL it can find, or null.
 function findFirstMedia(value: unknown): FoundMedia | null {
@@ -764,12 +829,14 @@ type TaskCardProps = {
   task: QueuedTask
   onChange: (localId: string, patch: Partial<QueuedTask>) => void
   onCancel: (orderId: string) => void
+  onDelete: (localId: string) => void
 }
-function TaskCard({ task, onChange, onCancel }: TaskCardProps) {
+function TaskCard({ task, onChange, onCancel, onDelete }: TaskCardProps) {
   const { t } = useTranslation()
   const expanded = task.expanded === true
   // Fullscreen media preview (image/video) opened from the compact thumbnail.
   const [mediaOpen, setMediaOpen] = useState(false)
+  const [detectedMedia, setDetectedMedia] = useState<FoundMedia | null>(null)
   // Expanded body is split into two top-level tabs: Result (default) and
   // Parameters. The Parameters tab has its own visual/JSON sub-toggle.
   const [activeTab, setActiveTab] = useState<'result' | 'params'>('result')
@@ -799,7 +866,24 @@ function TaskCard({ task, onChange, onCancel }: TaskCardProps) {
       parseOk = false
     }
   }
-  const media = parseOk ? findFirstMedia(parsedResult) : null
+  const knownMedia = parseOk ? findFirstMedia(parsedResult) : null
+  const media = knownMedia ?? detectedMedia
+
+  useEffect(() => {
+    setDetectedMedia(null)
+    if (!parseOk || knownMedia) return
+    let cancelled = false
+    void detectFirstMedia(parsedResult).then((found) => {
+      if (cancelled) return
+      setDetectedMedia(found)
+      if (found) {
+        onChange(task.localId, { expanded: true, resultView: 'preview' })
+      }
+    })
+    return () => { cancelled = true }
+    // parsedResult and knownMedia are derived from this serialized value.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [task.relayResult])
   // Fall back off the preview tab if it's selected but there's nothing to show.
   const resultView: ResultView =
     task.resultView === 'preview' && !media ? 'form' : task.resultView
@@ -896,6 +980,17 @@ function TaskCard({ task, onChange, onCancel }: TaskCardProps) {
         <div className='text-muted-foreground shrink-0 text-xs'>
           {new Date(task.submittedAt).toLocaleTimeString()}
         </div>
+        {task.status !== 'submitting' && task.status !== 'running' && (
+          <button
+            type='button'
+            className='text-muted-foreground shrink-0 p-1 hover:text-destructive'
+            onClick={() => onDelete(task.localId)}
+            aria-label={t('Delete task')}
+            title={t('Delete task')}
+          >
+            <Trash2 className='h-4 w-4' aria-hidden='true' />
+          </button>
+        )}
         <button
           type='button'
           className='text-muted-foreground hover:text-foreground shrink-0 p-1'
@@ -1500,8 +1595,8 @@ export function AitokenPurchasePage() {
           throw new Error(typeof scriptError === 'string' && scriptError ? scriptError : describeOrderError('SCRIPT_EXECUTION_FAILED'))
         }
         const resultText = JSON.stringify(result, null, 2)
-        // If the result carries an image/video/audio, auto-expand the card and
-        // default it to the media preview tab.
+        // Known extensions can switch to preview immediately. TaskCard probes
+        // extensionless signed URLs in the background after showing the result.
         const hasMedia = findFirstMedia(result) != null
         upd({
           status: 'success',
@@ -1795,6 +1890,11 @@ export function AitokenPurchasePage() {
                     task={task}
                     onChange={updateTask}
                     onCancel={onCancelTask}
+                    onDelete={(localId) => {
+                      setTaskQueue((current) =>
+                        current.filter((item) => item.localId !== localId)
+                      )
+                    }}
                   />
                 ))}
               </div>
