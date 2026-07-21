@@ -96,7 +96,7 @@ type PublishedScript = {
 type EnableFormValue = {
   scriptId: string
   version: string
-  price: string
+  priceMultiplier: string   // 0.5–10, default "1.0"
   dailyLimit: string
 }
 type NodesConsoleDraft = {
@@ -109,7 +109,7 @@ type NodesConsoleDraft = {
 const DEFAULT_ENABLE_FORM: EnableFormValue = {
   scriptId: '',
   version: '1',
-  price: '0.1',
+  priceMultiplier: '1.0',
   dailyLimit: '100',
 }
 
@@ -131,10 +131,10 @@ function loadNodesConsoleDraft(): NodesConsoleDraft {
       Object.entries(saved.enableForm ?? {}).flatMap(([nodeId, value]) => {
         if (!value || typeof value !== 'object') return []
         const form = value as Partial<EnableFormValue>
-        let price = form.price || DEFAULT_ENABLE_FORM.price
+        let priceMultiplier = (form as any).priceMultiplier || DEFAULT_ENABLE_FORM.priceMultiplier
         let dailyLimit = form.dailyLimit || DEFAULT_ENABLE_FORM.dailyLimit
         if (usesCurrentDefaults) {
-          if (typeof form.price === 'string') price = form.price
+          if (typeof (form as any).priceMultiplier === 'string') priceMultiplier = (form as any).priceMultiplier
           if (typeof form.dailyLimit === 'string') dailyLimit = form.dailyLimit
         } else if (form.dailyLimit === '0') {
           dailyLimit = DEFAULT_ENABLE_FORM.dailyLimit
@@ -145,7 +145,7 @@ function loadNodesConsoleDraft(): NodesConsoleDraft {
             {
               scriptId: typeof form.scriptId === 'string' ? form.scriptId : '',
               version: typeof form.version === 'string' ? form.version : '',
-              price,
+              priceMultiplier,
               dailyLimit,
             },
           ] as const,
@@ -409,9 +409,10 @@ export function NodesConsolePage() {
     // node once all its capabilities pass.
     try {
       const test = await createCapabilityTest(nodeId, scriptId, version)
+      const multiplier = Math.min(10, Math.max(0.5, Number(f.priceMultiplier || '1')))
       await enableCapability(nodeId, scriptId, {
         version,
-        price_micros: displayToMicros(f.price || '0'),
+        price_multiplier: Number.isFinite(multiplier) ? multiplier : 1.0,
         daily_limit: Number(f.dailyLimit || '0'),
         test_expires_at: test.test_expires_at,
       })
@@ -726,12 +727,17 @@ export function NodesConsolePage() {
               </select>
             </label>
             <label className='text-muted-foreground space-y-1 text-xs'>
-              {t('Price')}
+              {t('Price Multiplier')}
               <Input
+                type='number'
+                min={0.5}
+                max={10}
+                step={0.1}
                 disabled={listingLocked}
-                value={enableForm[node.id]?.price ?? DEFAULT_ENABLE_FORM.price}
-                onChange={(e) => setForm(node.id, { price: e.target.value })}
+                value={enableForm[node.id]?.priceMultiplier ?? DEFAULT_ENABLE_FORM.priceMultiplier}
+                onChange={(e) => setForm(node.id, { priceMultiplier: e.target.value })}
               />
+              <span className='text-[10px] opacity-60'>{t('0.5× – 10×, default 1.0')}</span>
             </label>
             <label className='text-muted-foreground space-y-1 text-xs'>
               {t('Daily limit')}
@@ -768,7 +774,7 @@ export function NodesConsolePage() {
                   <TableHead>{t('Script')}</TableHead>
                   <TableHead>{t('Version')}</TableHead>
                   <TableHead>{t('Concurrency')}</TableHead>
-                  <TableHead>{t('Price')}</TableHead>
+                  <TableHead>{t('Multiplier')}</TableHead>
                   <TableHead>{t('Balance')}</TableHead>
                   <TableHead>{t('Today')}</TableHead>
                   <TableHead>{t('Success rate')}</TableHead>
@@ -817,7 +823,14 @@ export function NodesConsolePage() {
                       </TableCell>
                       <TableCell>v{c.version}</TableCell>
                       <TableCell>{c.concurrency ?? 1}</TableCell>
-                      <TableCell>{microsToCurrency(c.price_micros)}</TableCell>
+                      <TableCell>
+                        {c.price_multiplier ?? 1.0}×
+                        {c.min_interval_seconds > 0 && (
+                          <div className='text-muted-foreground text-[10px]'>
+                            {t('interval')}: {c.min_interval_seconds}s
+                          </div>
+                        )}
+                      </TableCell>
                       <TableCell>{c.remaining_quota}</TableCell>
                       <TableCell>{daily}</TableCell>
                       <TableCell>{rate}</TableCell>

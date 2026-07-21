@@ -36,7 +36,19 @@ type ScriptVersion struct {
 	// Concurrency is the max simultaneous executions this script supports per
 	// node — snapshotted from UserScript.Concurrency at publish time so version
 	// semantics are immutable after publish. Defaults to 1.
-	Concurrency    int    `json:"concurrency" gorm:"default:1;not null"`
+	Concurrency int `json:"concurrency" gorm:"default:1;not null"`
+	// MinIntervalSeconds is the minimum gap in seconds between two consecutive
+	// task submissions for this script on the same node. Snapshotted from the
+	// author's draft at publish time. The scheduler enforces this interval;
+	// 0 means no gap is required.
+	MinIntervalSeconds int `json:"min_interval_seconds" gorm:"default:30;not null"`
+	// BasePriceMicros is the author-set base price per execution unit in micro-USD
+	// (1 USD = 1,000,000). Node providers multiply this by their PriceMultiplier.
+	BasePriceMicros int64 `json:"base_price_micros" gorm:"default:0"`
+	// PricingRules is a JSON array of PricingRule objects that describe how
+	// individual task parameters map to price multipliers. Stored as text so it
+	// is human-readable and survives schema-free evolution. Empty means flat rate.
+	PricingRules string `json:"pricing_rules,omitempty" gorm:"type:text"`
 	Code           string `json:"code,omitempty" gorm:"type:mediumtext"`
 	CodeSha256     string `json:"code_sha256" gorm:"type:varchar(80);index"`
 	SignatureKeyId string `json:"signature_key_id" gorm:"type:varchar(64)"`

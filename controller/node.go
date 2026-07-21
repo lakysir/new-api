@@ -108,17 +108,17 @@ func CreateCapabilityTest(c *gin.Context) {
 }
 
 type enableCapabilityRequest struct {
-	Version       int    `json:"version"`
-	PriceMicros   int64  `json:"price_micros"`
-	DailyLimit    int    `json:"daily_limit"`
-	WorkWindow    string `json:"work_window"`
-	TestExpiresAt int64  `json:"test_expires_at"`
+	Version         int     `json:"version"`
+	PriceMultiplier float64 `json:"price_multiplier"` // 0.5–10, default 1.0
+	DailyLimit      int     `json:"daily_limit"`
+	WorkWindow      string  `json:"work_window"`
+	TestExpiresAt   int64   `json:"test_expires_at"`
 }
 
-// EnableCapability lists a script version on a node with price and daily limit.
-// Requires a valid test window (from CreateCapabilityTest) and an executable
-// version. The initial balance defaults to 10 on first listing and is updated
-// from actual execution results thereafter — the provider does not set it.
+// EnableCapability lists a script version on a node with a price multiplier and
+// daily limit. Requires a valid test window (from CreateCapabilityTest) and an
+// executable version. The initial balance defaults to 100 on first listing and
+// is updated from actual execution results — the provider does not set it.
 func EnableCapability(c *gin.Context) {
 	nodeId, scriptId, _, ok := parseCapabilityParams(c)
 	if !ok {
@@ -133,15 +133,26 @@ func EnableCapability(c *gin.Context) {
 		common.ApiErrorMsg(c, "version is required")
 		return
 	}
+	// Clamp the multiplier to the allowed range [0.5, 10]; default to 1.0 if unset.
+	mult := req.PriceMultiplier
+	if mult <= 0 {
+		mult = 1.0
+	}
+	if mult < 0.5 {
+		mult = 0.5
+	}
+	if mult > 10 {
+		mult = 10
+	}
 	cap := &model.NodeCapability{
-		NodeId:        nodeId,
-		ScriptId:      scriptId,
-		Version:       req.Version,
-		UserId:        c.GetInt("id"),
-		PriceMicros:   req.PriceMicros,
-		DailyLimit:    req.DailyLimit,
-		WorkWindow:    req.WorkWindow,
-		TestExpiresAt: req.TestExpiresAt,
+		NodeId:          nodeId,
+		ScriptId:        scriptId,
+		Version:         req.Version,
+		UserId:          c.GetInt("id"),
+		PriceMultiplier: mult,
+		DailyLimit:      req.DailyLimit,
+		WorkWindow:      req.WorkWindow,
+		TestExpiresAt:   req.TestExpiresAt,
 	}
 	if err := model.EnableCapability(cap); err != nil {
 		common.ApiErrorMsg(c, err.Error())

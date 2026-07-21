@@ -71,6 +71,7 @@ import {
   type ProviderGroup,
   type ScriptOffer,
 } from './api'
+import { computeParamsMultiplier } from './pricing-rules-editor'
 import { AssetLibraryDialog } from './asset-library-dialog'
 import { ClientRelaySession } from './lib/client-relay-session'
 import { displayToMicros, formatUnix, microsToCurrency } from './lib/format'
@@ -91,7 +92,6 @@ type PurchaseDraft = {
   scriptId: number
   version: number
   configText: string
-  consumeMultiplier: number
 }
 type ViewMode = 'form' | 'json'
 // Result panel adds a 'preview' tab (media) on top of the parameter view modes.
@@ -719,14 +719,9 @@ function loadPurchaseDraft(): PurchaseDraft {
         typeof saved.configText === 'string'
           ? saved.configText
           : DEFAULT_CONFIG_TEXT,
-      consumeMultiplier:
-        Number.isInteger(saved.consumeMultiplier) &&
-        (saved.consumeMultiplier ?? 0) >= 1
-          ? (saved.consumeMultiplier ?? 1)
-          : 1,
     }
   } catch {
-    return { scriptId: 0, version: 1, configText: DEFAULT_CONFIG_TEXT, consumeMultiplier: 1 }
+    return { scriptId: 0, version: 1, configText: DEFAULT_CONFIG_TEXT }
   }
 }
 
@@ -1101,7 +1096,6 @@ export function AitokenPurchasePage() {
   const [groupFilterName, setGroupFilterName] = useState('')
   const [offersPage, setOffersPage] = useState(0)
   const [configText, setConfigText] = useState(initialDraft.configText)
-  const [consumeMultiplier, setConsumeMultiplier] = useState(initialDraft.consumeMultiplier)
   const [parametersView, setParametersView] = useState<ViewMode>(() => loadViewMode('parameters'))
   const [quote, setQuote] = useState<PriceBreakdown | null>(null)
   const [offersLoading, setOffersLoading] = useState(false)
@@ -1151,10 +1145,10 @@ export function AitokenPurchasePage() {
     try {
       window.localStorage.setItem(
         getDraftStorageKey(),
-        JSON.stringify({ scriptId, version, configText, consumeMultiplier } satisfies PurchaseDraft)
+        JSON.stringify({ scriptId, version, configText } satisfies PurchaseDraft)
       )
     } catch { /* best-effort */ }
-  }, [scriptId, version, configText, consumeMultiplier])
+  }, [scriptId, version, configText])
 
   useEffect(() => {
     try { window.localStorage.setItem(getViewModeStorageKey('parameters'), parametersView) }
@@ -1165,6 +1159,27 @@ export function AitokenPurchasePage() {
     try { window.localStorage.setItem(getDescriptionExpandedStorageKey(), String(descExpanded)) }
     catch { /* best-effort */ }
   }, [descExpanded])
+
+  // Re-quote whenever the user edits parameters — so the displayed price always
+  // reflects the current param values (e.g. switching model or resolution).
+  // Only fires when there are pricing rules; flat-rate scripts skip this.
+  useEffect(() => {
+    if (!scriptId) return
+    const scriptVer = availableVersions.find((v) => v.version === version)
+    if (!scriptVer?.pricing_rules?.length) return
+    let cancelled = false
+    const mult = getEffectiveMultiplier()
+    void quoteOrder({
+      script_id: scriptId, version,
+      node_id: !autoSelect && nodeId ? nodeId : undefined,
+      provider_group_id: autoSelect ? groupFilterId || undefined : undefined,
+      consume_multiplier: mult,
+    })
+      .then((p) => { if (!cancelled) setQuote(p.breakdown) })
+      .catch(() => { if (!cancelled) setQuote(null) })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [configText])
 
   async function loadBalance() {
     try {
@@ -1201,18 +1216,24 @@ export function AitokenPurchasePage() {
 
   async function loadOffersFor(
     selectedScriptId: number, selectedVersion: number,
-    groupId = groupFilterId, multiplier = consumeMultiplier,
+    groupId = groupFilterId,
     preserveSelection = false
   ) {
     setOffersLoading(true); setOffersPage(0); setQuote(null)
     try {
-      const loaded = await listScriptOffers(selectedScriptId, selectedVersion, groupId || undefined, multiplier)
+      const loaded = await listScriptOffers(selectedScriptId, selectedVersion, groupId || undefined)
       const sorted = [...loaded].sort((a, b) => Number(b.owned) - Number(a.owned))
       const selectedNodeId = preserveSelection && !autoSelect && loaded.some((offer) => offer.node_id === nodeId) ? nodeId : ''
       setOffers(sorted)
       if (!selectedNodeId) { setAutoSelect(true); setNodeId('') }
       try {
-        const priced = await quoteOrder({ script_id: selectedScriptId, version: selectedVersion, node_id: selectedNodeId || undefined, provider_group_id: selectedNodeId ? undefined : groupId || undefined, consume_multiplier: multiplier })
+        const mult = getEffectiveMultiplier()
+        const priced = await quoteOrder({
+          script_id: selectedScriptId, version: selectedVersion,
+          node_id: selectedNodeId || undefined,
+          provider_group_id: selectedNodeId ? undefined : groupId || undefined,
+          consume_multiplier: mult,
+        })
         setQuote(priced.breakdown)
       } catch { setQuote(null) }
       if (loaded.length === 0) { toast.info(t('No provider offers yet for this version')) }
@@ -1222,10 +1243,10 @@ export function AitokenPurchasePage() {
   // Mirrors the currently-displayed selection so an async task that finishes
   // long after it was fired can tell whether the offers panel still shows the
   // same script/version before refreshing it (the user may have switched away).
-  const viewedSelectionRef = useRef({ scriptId, version, groupFilterId, consumeMultiplier })
+  const viewedSelectionRef = useRef({ scriptId, version, groupFilterId })
   useEffect(() => {
-    viewedSelectionRef.current = { scriptId, version, groupFilterId, consumeMultiplier }
-  }, [scriptId, version, groupFilterId, consumeMultiplier])
+    viewedSelectionRef.current = { scriptId, version, groupFilterId }
+  }, [scriptId, version, groupFilterId])
 
   // refreshOffersAfterTask re-fetches provider offers for a task's script once it
   // settles, so availability (busy/idle, remaining quota, free slots) reflects
@@ -1234,7 +1255,7 @@ export function AitokenPurchasePage() {
   function refreshOffersAfterTask(taskScriptId: number, taskVersion: number) {
     const viewed = viewedSelectionRef.current
     if (viewed.scriptId !== taskScriptId || viewed.version !== taskVersion) return
-    void loadOffersFor(viewed.scriptId, viewed.version, viewed.groupFilterId, viewed.consumeMultiplier, true)
+    void loadOffersFor(viewed.scriptId, viewed.version, viewed.groupFilterId, true)
   }
 
   async function selectScript(value: number, preferredVersion?: number, fallbackVersion?: number, loadParams = true) {
@@ -1334,24 +1355,29 @@ export function AitokenPurchasePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  function onMultiplierChange(raw: string) {
-    const parsed = Math.floor(Number(raw))
-    const next = Number.isFinite(parsed) && parsed >= 1 ? parsed : 1
-    setConsumeMultiplier(next); setQuote(null)
-    if (scriptId) void loadOffersFor(scriptId, version, groupFilterId, next)
+  // getEffectiveMultiplier computes the combined params multiplier from the
+  // current configText and the selected script version's pricing rules.
+  // Returns 1 when there are no rules or the config is invalid JSON.
+  function getEffectiveMultiplier(): number {
+    const scriptVer = availableVersions.find((v) => v.version === version)
+    if (!scriptVer?.pricing_rules?.length) return 1
+    try {
+      const cfg = JSON.parse(configText) as unknown
+      return Math.max(1, Math.round(computeParamsMultiplier(cfg, scriptVer.pricing_rules)))
+    } catch { return 1 }
   }
 
   function selectAuto() {
     setAutoSelect(true); setNodeId(''); setQuote(null)
     if (scriptId) {
-      void quoteOrder({ script_id: scriptId, version, provider_group_id: groupFilterId || undefined, consume_multiplier: consumeMultiplier })
+      void quoteOrder({ script_id: scriptId, version, provider_group_id: groupFilterId || undefined, consume_multiplier: getEffectiveMultiplier() })
         .then((p) => setQuote(p.breakdown)).catch(() => setQuote(null))
     }
   }
 
   function selectProvider(selectedNodeId: string) {
     setAutoSelect(false); setNodeId(selectedNodeId); setQuote(null)
-    void quoteOrder({ script_id: scriptId, version, node_id: selectedNodeId, consume_multiplier: consumeMultiplier })
+    void quoteOrder({ script_id: scriptId, version, node_id: selectedNodeId, consume_multiplier: getEffectiveMultiplier() })
       .then((p) => setQuote(p.breakdown)).catch(() => setQuote(null))
   }
 
@@ -1484,8 +1510,9 @@ export function AitokenPurchasePage() {
   async function onPurchase() {
     if (!scriptId) { toast.error(t('Select a script first')); return }
     let inputHash = '', cleanedConfigText = ''
+    let config: unknown
     try {
-      const config = cleanEmptyArrayItems(JSON.parse(configText))
+      config = cleanEmptyArrayItems(JSON.parse(configText))
       cleanedConfigText = JSON.stringify(config, null, 2)
       setConfigText(cleanedConfigText)
       inputHash = await sha256Hex(JSON.stringify(config))
@@ -1494,7 +1521,11 @@ export function AitokenPurchasePage() {
     const capturedAutoSelect = autoSelect
     const capturedNodeId = nodeId
     const capturedGroupFilterId = groupFilterId
-    const capturedMultiplier = consumeMultiplier
+    // Compute effective multiplier from pricing rules
+    const scriptVer = availableVersions.find((v) => v.version === version)
+    const capturedMultiplier = scriptVer?.pricing_rules?.length
+      ? Math.max(1, Math.round(computeParamsMultiplier(config, scriptVer.pricing_rules)))
+      : 1
     const localId = `task-${Date.now()}-${Math.random().toString(36).slice(2)}`
     setTaskQueue((prev) => [
       {
@@ -1511,7 +1542,7 @@ export function AitokenPurchasePage() {
     // Refresh offers now that a run is starting — the chosen provider will show
     // as busy / with reduced free slots. Preserve the current selection so the
     // quote and picked provider aren't reset out from under the user.
-    void loadOffersFor(scriptId, version, groupFilterId, consumeMultiplier, true)
+    void loadOffersFor(scriptId, version, groupFilterId, true)
   }
 
   async function onCancelTask(orderId: string) {
@@ -1585,7 +1616,7 @@ export function AitokenPurchasePage() {
                 <div className='text-sm font-medium'>{t('Provider offers (Auto picks the best idle provider, or choose one)')}</div>
                 <Button type='button' variant='outline' size='sm' onClick={() => {
                   if (!scriptId) { toast.error(t('Select a script first')); return }
-                  void loadOffersFor(scriptId, version, groupFilterId, consumeMultiplier, true)
+                  void loadOffersFor(scriptId, version, groupFilterId, true)
                 }} disabled={offersLoading}>
                   <RefreshCw className={`mr-2 h-4 w-4 ${offersLoading ? 'animate-spin' : ''}`} aria-hidden='true' />
                   {t('Refresh')}
@@ -1663,15 +1694,6 @@ export function AitokenPurchasePage() {
                   </div>
                 )}
               </div>
-            </div>
-
-            {/* Consume multiplier — single line: label + hint + input */}
-            <div className='flex items-center gap-3 rounded-lg border px-4 py-2.5'>
-              <span className='shrink-0 text-sm font-medium'>{t('Consume multiplier')}</span>
-              <span className='text-muted-foreground min-w-0 flex-1 truncate text-xs' title={t('Units of work for one run (min 1). Fee = base price × this value.')}>
-                {t('Units of work for one run (min 1). Fee = base price × this value.')}
-              </span>
-              <Input className='h-8 w-20 shrink-0' type='number' min={1} step={1} value={consumeMultiplier} onChange={(e) => onMultiplierChange(e.target.value)} aria-label={t('Consume multiplier')} />
             </div>
 
             {/* Parameters */}
@@ -1819,6 +1841,20 @@ export function AitokenPurchasePage() {
                   <span>{t('Provider')}: {microsToCurrency(quote.ProviderMicros)}</span>
                   <span>{t('Author')}: {microsToCurrency(quote.AuthorMicros)}</span>
                   <span>{t('Platform fee')}: {microsToCurrency(quote.PlatformFeeMicros)}</span>
+                  {(() => {
+                    const scriptVer = availableVersions.find((v) => v.version === version)
+                    if (!scriptVer?.pricing_rules?.length) return null
+                    try {
+                      const cfg = JSON.parse(configText)
+                      const mult = computeParamsMultiplier(cfg, scriptVer.pricing_rules)
+                      if (mult <= 1) return null
+                      return (
+                        <span className='text-white/80 font-medium'>
+                          {t('Params')}: ×{mult.toFixed(1)}
+                        </span>
+                      )
+                    } catch { return null }
+                  })()}
                 </div>
               )}
             </div>

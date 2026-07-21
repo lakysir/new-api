@@ -140,7 +140,15 @@ type NodeCapability struct {
 	Version    int    `json:"version" gorm:"index:idx_node_cap,unique;not null"`
 	CategoryId int    `json:"category_id" gorm:"index;default:0"` // denormalized from the script
 	UserId     int    `json:"user_id" gorm:"index;not null"`
-	PriceMicros int64 `json:"price_micros" gorm:"default:0"`
+	// PriceMicros is deprecated — kept for backward-compat reads from old rows.
+	// New listings use PriceMultiplier × ScriptVersion.BasePriceMicros instead.
+	PriceMicros    int64   `json:"price_micros,omitempty" gorm:"default:0"`
+	// PriceMultiplier is the provider's markup on the script's base price.
+	// Range: 0.5–10. Default 1.0 (pass-through).
+	PriceMultiplier float64 `json:"price_multiplier" gorm:"default:1.0;not null"`
+	// MinIntervalSeconds is denormalized from ScriptVersion.MinIntervalSeconds
+	// so the scheduler can enforce the gap without an extra join.
+	MinIntervalSeconds int `json:"min_interval_seconds" gorm:"default:30;not null"`
 	// Concurrency is the maximum simultaneous executions for this script on this
 	// node — denormalized from ScriptVersion.Concurrency at listing time so the
 	// scheduler can compute per-node total capacity without joining versions.
@@ -331,14 +339,20 @@ func EnableCapability(cap *NodeCapability) error {
 	if !cap.IsTestValid() {
 		return ErrCapabilityTestRequired
 	}
-	// Denormalize category and concurrency from the script version so scheduling
-	// queries can compute node capacity without an extra join.
+	// Denormalize category, concurrency and interval from the script version so
+	// scheduling queries can compute node capacity without an extra join.
 	cap.CategoryId = sv.CategoryId
 	concurrency := sv.Concurrency
 	if concurrency < 1 {
 		concurrency = 1
 	}
 	cap.Concurrency = concurrency
+	cap.MinIntervalSeconds = sv.MinIntervalSeconds
+	// Compute the effective price_micros cache: base × multiplier.
+	// The scheduler reads this column directly so it never needs a join.
+	if sv.BasePriceMicros > 0 {
+		cap.PriceMicros = int64(float64(sv.BasePriceMicros) * cap.PriceMultiplier)
+	}
 	cap.Status = CapabilityStatusActive
 	return DB.Transaction(func(tx *gorm.DB) error {
 		var existing NodeCapability
@@ -355,14 +369,16 @@ func EnableCapability(cap *NodeCapability) error {
 		// Re-listing: update listing metadata including the latest concurrency.
 		// Preserve the existing balance and daily counters so history is kept.
 		return tx.Model(&NodeCapability{}).Where("id = ?", existing.Id).Updates(map[string]any{
-			"category_id":     cap.CategoryId,
-			"concurrency":     cap.Concurrency,
-			"price_micros":    cap.PriceMicros,
-			"daily_quota":     cap.DailyLimit,
-			"work_window":     cap.WorkWindow,
-			"status":          CapabilityStatusActive,
-			"suspend_reason":  "",
-			"test_expires_at": cap.TestExpiresAt,
+			"category_id":          cap.CategoryId,
+			"concurrency":          cap.Concurrency,
+			"min_interval_seconds": cap.MinIntervalSeconds,
+			"price_multiplier":     cap.PriceMultiplier,
+			"price_micros":         cap.PriceMicros, // cached: base × multiplier
+			"daily_quota":          cap.DailyLimit,
+			"work_window":          cap.WorkWindow,
+			"status":               CapabilityStatusActive,
+			"suspend_reason":       "",
+			"test_expires_at":      cap.TestExpiresAt,
 		}).Error
 	})
 }

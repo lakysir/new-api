@@ -16,6 +16,7 @@ import { Route as authRouteRouteImport } from './routes/(auth)/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SetupIndexRouteImport } from './routes/setup/index'
 import { Route as ScriptsIndexRouteImport } from './routes/scripts/index'
+import { Route as ScriptCreatorGuideIndexRouteImport } from './routes/script-creator-guide/index'
 import { Route as RankingsIndexRouteImport } from './routes/rankings/index'
 import { Route as PricingIndexRouteImport } from './routes/pricing/index'
 import { Route as AitokenApiDocsIndexRouteImport } from './routes/aitoken-api-docs/index'
@@ -109,6 +110,11 @@ const SetupIndexRoute = SetupIndexRouteImport.update({
 const ScriptsIndexRoute = ScriptsIndexRouteImport.update({
   id: '/scripts/',
   path: '/scripts/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ScriptCreatorGuideIndexRoute = ScriptCreatorGuideIndexRouteImport.update({
+  id: '/script-creator-guide/',
+  path: '/script-creator-guide/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RankingsIndexRoute = RankingsIndexRouteImport.update({
@@ -479,6 +485,7 @@ export interface FileRoutesByFullPath {
   '/pricing/': typeof PricingIndexRoute
   '/rankings/': typeof RankingsIndexRoute
   '/scripts/': typeof ScriptsIndexRoute
+  '/script-creator-guide/': typeof ScriptCreatorGuideIndexRoute
   '/setup/': typeof SetupIndexRoute
   '/user/reset': typeof authUserResetRoute
   '/chat/$chatId': typeof AuthenticatedChatChatIdRoute
@@ -546,6 +553,7 @@ export interface FileRoutesByTo {
   '/pricing': typeof PricingIndexRoute
   '/rankings': typeof RankingsIndexRoute
   '/scripts': typeof ScriptsIndexRoute
+  '/script-creator-guide': typeof ScriptCreatorGuideIndexRoute
   '/setup': typeof SetupIndexRoute
   '/user/reset': typeof authUserResetRoute
   '/chat/$chatId': typeof AuthenticatedChatChatIdRoute
@@ -886,6 +894,7 @@ export interface RootRouteChildren {
   PricingIndexRoute: typeof PricingIndexRoute
   RankingsIndexRoute: typeof RankingsIndexRoute
   ScriptsIndexRoute: typeof ScriptsIndexRoute
+  ScriptCreatorGuideIndexRoute: typeof ScriptCreatorGuideIndexRoute
   SetupIndexRoute: typeof SetupIndexRoute
   PricingModelIdIndexRoute: typeof PricingModelIdIndexRoute
 }
@@ -1534,6 +1543,7 @@ const rootRouteChildren: RootRouteChildren = {
   PricingIndexRoute: PricingIndexRoute,
   RankingsIndexRoute: RankingsIndexRoute,
   ScriptsIndexRoute: ScriptsIndexRoute,
+  ScriptCreatorGuideIndexRoute: ScriptCreatorGuideIndexRoute,
   SetupIndexRoute: SetupIndexRoute,
   PricingModelIdIndexRoute: PricingModelIdIndexRoute,
 }

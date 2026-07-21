@@ -44,11 +44,16 @@ async function unwrap<T>(p: Promise<{ data: ApiEnvelope<T> }>): Promise<T> {
 
 // --- Script versions (author + admin) --------------------------------------
 
-// Author proposes their share (ppm of provider price) and target-site category
-// when submitting for review.
+// Author proposes their share (ppm of provider price), target-site category,
+// base price, and pricing rules when submitting for review.
 export function submitScriptForReview(
   scriptId: number,
-  opts?: { author_share_rate_ppm?: number; category_id?: number }
+  opts?: {
+    author_share_rate_ppm?: number
+    category_id?: number
+    base_price_micros?: number
+    pricing_rules?: import('./types').PricingRule[]
+  }
 ) {
   return unwrap(
     api.post(`/api/scripts/mine/${scriptId}/submit-review`, opts ?? {})
@@ -168,6 +173,12 @@ export function listPendingScripts() {
       previous_code?: string
       review_status: string
       latest_version?: number
+      author_share_rate_ppm?: number
+      category_id?: number
+      concurrency?: number
+      min_interval_seconds?: number
+      base_price_micros?: number
+      pricing_rules?: import('./types').PricingRule[]
     }>
   >(api.get('/api/scripts/pending'))
 }
@@ -394,14 +405,15 @@ export function createCapabilityTest(
 }
 
 // enableCapability lists a script version on a node with the provider's price
-// and daily execution limit. The initial balance defaults to 10 on first
-// listing and is updated from actual execution results — providers do not set it.
+// multiplier and daily execution limit. The initial balance defaults to 10 on
+// first listing and is updated from actual execution results.
+// price_multiplier: 0.5–10, applied on top of the script's base_price_micros.
 export function enableCapability(
   nodeId: string,
   scriptId: number,
   body: {
     version: number
-    price_micros: number
+    price_multiplier: number
     daily_limit: number
     test_expires_at: number
   }

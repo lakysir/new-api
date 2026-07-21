@@ -57,7 +57,11 @@ import {
   type ScriptModelBinding,
 } from './api'
 import { EarningsSummary } from './earnings-summary'
-import { formatUnix } from './lib/format'
+import { formatUnix, microsToCurrency } from './lib/format'
+import {
+  PricingRulesEditor,
+  extractParamNames,
+} from './pricing-rules-editor'
 import type { ScriptVersion } from './types'
 
 // ppm helpers: 10000 ppm = 1%.
@@ -86,6 +90,9 @@ type PendingScript = {
   category_id?: number
   /** Max simultaneous executions per node this script supports. */
   concurrency?: number
+  min_interval_seconds?: number
+  base_price_micros?: number
+  pricing_rules?: import('./types').PricingRule[]
 }
 
 type DiffLine = {
@@ -193,6 +200,8 @@ export function ScriptReviewConsolePage() {
   const [savingVersionId, setSavingVersionId] = useState(0)
   // Operator sets the platform fee (%) per pending script on approval.
   const [platformFees, setPlatformFees] = useState<Record<number, string>>({})
+  // Pricing rules preview for a pending script.
+  const [pricingPreview, setPricingPreview] = useState<PendingScript | null>(null)
   // Category management state.
   const [categories, setCategories] = useState<ScriptCategory[]>([])
   const [newCatName, setNewCatName] = useState('')
@@ -717,6 +726,9 @@ export function ScriptReviewConsolePage() {
               <TableHead>{t('Category')}</TableHead>
               <TableHead>{t('Author share')}</TableHead>
               <TableHead>{t('Concurrency')}</TableHead>
+              <TableHead>{t('Min Interval')}</TableHead>
+              <TableHead>{t('Base Price')}</TableHead>
+              <TableHead>{t('Pricing Rules')}</TableHead>
               <TableHead>{t('Platform fee %')}</TableHead>
               <TableHead>{t('View Code')}</TableHead>
               <TableHead>{t('Note')}</TableHead>
@@ -734,6 +746,25 @@ export function ScriptReviewConsolePage() {
                 </TableCell>
                 <TableCell>{ppmToPercent(s.author_share_rate_ppm)}%</TableCell>
                 <TableCell>{s.concurrency ?? 1}</TableCell>
+                <TableCell>{s.min_interval_seconds ?? 30}s</TableCell>
+                <TableCell>
+                  {s.base_price_micros
+                    ? microsToCurrency(s.base_price_micros)
+                    : <span className='text-muted-foreground text-xs'>{t('Not set')}</span>}
+                </TableCell>
+                <TableCell>
+                  {s.pricing_rules && s.pricing_rules.length > 0 ? (
+                    <Button
+                      size='sm'
+                      variant='outline'
+                      onClick={() => setPricingPreview(s)}
+                    >
+                      {t('View')} ({s.pricing_rules.length})
+                    </Button>
+                  ) : (
+                    <span className='text-muted-foreground text-xs'>{t('None')}</span>
+                  )}
+                </TableCell>
                 <TableCell>
                   <Input
                     className='h-8 w-20'
@@ -785,7 +816,7 @@ export function ScriptReviewConsolePage() {
             {pending.length === 0 && (
               <TableRow>
                 <TableCell
-                  colSpan={9}
+                  colSpan={12}
                   className='text-muted-foreground text-center'
                 >
                   {loading ? t('Loading...') : t('No pending scripts')}
@@ -1140,6 +1171,28 @@ export function ScriptReviewConsolePage() {
           </div>
         </div>
 
+        {/* Pricing rules preview dialog */}
+        <Dialog
+          open={!!pricingPreview}
+          onOpenChange={(open) => { if (!open) setPricingPreview(null) }}
+          title={pricingPreview ? `${t('Pricing Rules')} — ${pricingPreview.title}` : ''}
+          description={
+            pricingPreview?.base_price_micros
+              ? `${t('Base price')}: ${microsToCurrency(pricingPreview.base_price_micros)}`
+              : t('No base price set')
+          }
+          contentClassName='sm:max-w-2xl'
+          contentHeight='420px'
+        >
+          {pricingPreview && (
+            <PricingRulesEditor
+              value={pricingPreview.pricing_rules ?? []}
+              availableParams={extractParamNames(pricingPreview.script_params ?? '')}
+              readonly
+            />
+          )}
+        </Dialog>
+
         <Dialog
           open={historyScriptId > 0}
           onOpenChange={(open) => {
@@ -1200,6 +1253,21 @@ export function ScriptReviewConsolePage() {
                     />
                   </label>
                 </div>
+                {version.pricing_rules && version.pricing_rules.length > 0 && (
+                  <div className='mt-2'>
+                    <div className='text-muted-foreground mb-1 text-xs font-medium'>
+                      {t('Pricing Rules')}
+                      {version.base_price_micros ? (
+                        <span className='ml-2'>{t('Base')}: {microsToCurrency(version.base_price_micros)}</span>
+                      ) : null}
+                    </div>
+                    <PricingRulesEditor
+                      value={version.pricing_rules}
+                      availableParams={[]}
+                      readonly
+                    />
+                  </div>
+                )}
                 <div className='flex flex-wrap justify-end gap-2'>
                   <Button
                     size='sm'

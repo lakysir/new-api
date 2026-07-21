@@ -31,6 +31,25 @@ export type ApiEnvelope<T> = {
 
 export type ScriptReviewStatus = 'draft' | 'pending' | 'approved' | 'rejected'
 
+// PricingRule defines how one script parameter affects the execution price.
+// The final price multiplier is the product of all matched rule multipliers.
+//
+// enum_multiplier: each discrete value maps to a fixed multiplier.
+//   e.g. model="vision" -> 5×, model="mini_lite" -> 1×
+// linear_range: a numeric value multiplied by unit_multiplier.
+//   e.g. duration=10s with unit_multiplier=1 -> 10× base units
+export type PricingRule = {
+  param: string           // parameter key in the script's config object
+  type: 'enum_multiplier' | 'linear_range'
+  label?: string          // human-readable label for the UI
+  // enum_multiplier fields
+  values?: Record<string, number>
+  // linear_range fields
+  unit_multiplier?: number   // price units per 1 increment of the param value
+  min?: number
+  max?: number
+}
+
 export type ScriptVersion = {
   id: number
   script_id: number
@@ -55,6 +74,12 @@ export type ScriptVersion = {
   author_share_rate_ppm?: number
   platform_fee_rate_ppm?: number
   concurrency?: number
+  /** Minimum seconds between consecutive task submissions (API rate limit). */
+  min_interval_seconds?: number
+  /** Base price per execution unit in micro-USD, set by the script author. */
+  base_price_micros?: number
+  /** Structured pricing rules mapping param values to price multipliers. */
+  pricing_rules?: PricingRule[]
 }
 
 // --- Devices & nodes (Stage C) ---------------------------------------------
@@ -89,7 +114,11 @@ export type NodeCapability = {
   version: number
   /** Denormalized target-site category; 0 when the script has no category. */
   category_id: number
-  price_micros: number
+  /** Provider's price multiplier applied on top of the script's base price.
+   *  Range 0.5–10, default 1.0. Replaces the old flat price_micros field. */
+  price_multiplier: number
+  /** @deprecated Use price_multiplier. Kept for backend transition compatibility. */
+  price_micros?: number
   /** Max simultaneous executions for this script on this node (from script version). */
   concurrency: number
   /** Max executions per day; 0 = unlimited. Resets at midnight CST (UTC+8). */
@@ -100,6 +129,8 @@ export type NodeCapability = {
   daily_reset_at: number
   /** Balance on the target-site account as reported by the last successful execution. */
   remaining_quota: number
+  /** Minimum seconds between consecutive tasks, read from the script version. */
+  min_interval_seconds: number
   work_window: string
   status: string
   test_expires_at: number

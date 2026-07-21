@@ -49,14 +49,21 @@ func SubmitScriptForReview(c *gin.Context) {
 	if !ok {
 		return
 	}
-	// The author proposes their share (ppm) and assigns a target-site category.
+	// The author proposes their share (ppm), target-site category, base price,
+	// pricing rules and min interval when submitting for review.
 	var body struct {
-		AuthorShareRatePpm int64 `json:"author_share_rate_ppm"`
-		CategoryId         int   `json:"category_id"`
+		AuthorShareRatePpm int64  `json:"author_share_rate_ppm"`
+		CategoryId         int    `json:"category_id"`
+		BasePriceMicros    int64  `json:"base_price_micros"`
+		PricingRules       string `json:"pricing_rules"`
 	}
 	_ = c.ShouldBindJSON(&body)
 	if body.AuthorShareRatePpm < 0 || body.AuthorShareRatePpm > 50_000 {
 		common.ApiErrorMsg(c, "author_share_rate_ppm must be within [0, 50000]")
+		return
+	}
+	if body.BasePriceMicros < 0 {
+		common.ApiErrorMsg(c, "base_price_micros must be non-negative")
 		return
 	}
 	if body.CategoryId > 0 {
@@ -99,10 +106,19 @@ func SubmitScriptForReview(c *gin.Context) {
 	script.ReviewNote = ""
 	script.AuthorShareRatePpm = body.AuthorShareRatePpm
 	script.CategoryId = body.CategoryId
+	if body.BasePriceMicros > 0 {
+		script.BasePriceMicros = body.BasePriceMicros
+	}
+	if body.PricingRules != "" {
+		script.PricingRules = body.PricingRules
+	}
 	if err := model.DB.Model(script).Updates(map[string]any{
-		"review_status": script.ReviewStatus, "review_note": "",
+		"review_status":        script.ReviewStatus,
+		"review_note":          "",
 		"author_share_rate_ppm": body.AuthorShareRatePpm,
-		"category_id":           body.CategoryId,
+		"category_id":          body.CategoryId,
+		"base_price_micros":    script.BasePriceMicros,
+		"pricing_rules":        script.PricingRules,
 	}).Error; err != nil {
 		common.ApiError(c, err)
 		return
@@ -338,18 +354,25 @@ func PublishScriptVersion(c *gin.Context) {
 		TimeoutSeconds:    180,
 		CategoryId:        script.CategoryId,
 		PricingTemplateId: templateId,
-		// Snapshot the concurrency value so this version's scheduling semantics
-		// are immutable even if the author later changes the draft concurrency.
+		// Snapshot execution semantics so they are immutable per version.
 		Concurrency: func() int {
 			if script.Concurrency < 1 {
 				return 1
 			}
 			return script.Concurrency
 		}(),
-		Code:         normalized,
-		CodeSha256:   codeSha256,
-		ReviewStatus: model.ScriptVersionApproved,
-		PublishedAt:  common.GetTimestamp(),
+		MinIntervalSeconds: func() int {
+			if script.MinIntervalSeconds < 0 {
+				return 0
+			}
+			return script.MinIntervalSeconds
+		}(),
+		BasePriceMicros: script.BasePriceMicros,
+		PricingRules:    script.PricingRules,
+		Code:            normalized,
+		CodeSha256:      codeSha256,
+		ReviewStatus:    model.ScriptVersionApproved,
+		PublishedAt:     common.GetTimestamp(),
 	}
 	claim := model.DB.Model(&model.UserScript{}).
 		Where("id = ? AND user_id = ? AND review_status = ?", script.Id, script.UserId, model.ScriptReviewApproved).

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { BookOpen } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Dialog } from '@/components/dialog'
@@ -30,7 +31,8 @@ import {
 } from '@/features/node-platform/api'
 import { EarningsSummary } from '@/features/node-platform/earnings-summary'
 import { formatUnix } from '@/features/node-platform/lib/format'
-import type { ScriptVersion } from '@/features/node-platform/types'
+import { PricingRulesEditor, extractParamNames } from '@/features/node-platform/pricing-rules-editor'
+import type { PricingRule, ScriptVersion } from '@/features/node-platform/types'
 import { api } from '@/lib/api'
 
 type UserScript = {
@@ -48,6 +50,9 @@ type UserScript = {
   preview_truncated?: boolean
   /** Max simultaneous executions this script supports on a single node. Default 1. */
   concurrency?: number
+  min_interval_seconds?: number
+  base_price_micros?: number
+  pricing_rules?: PricingRule[]
   review_status?:
     | 'draft'
     | 'pending'
@@ -80,6 +85,10 @@ const emptyForm = {
   ),
   draft_code: '',
   concurrency: 1,
+  min_interval_seconds: 30,
+  base_price_micros: 0,
+  base_price: '',       // display string for the input
+  pricing_rules: [] as PricingRule[],
 }
 
 // EXAMPLE_SCRIPT is the complete reference implementation shown in the editor
@@ -580,6 +589,32 @@ export function MyScriptsPage() {
 
   async function openMineEditor(id: number) {
     const script = await unwrap<UserScript>(api.get(`/api/scripts/mine/${id}`))
+
+    // Pre-fill pricing from the last published version so the author
+    // doesn't have to re-enter everything on every revision.
+    let prefillPricing = {
+      min_interval_seconds: 30,
+      base_price: '',
+      pricing_rules: [] as PricingRule[],
+    }
+    if (script.latest_version) {
+      try {
+        const { listAvailableScriptVersions } = await import('@/features/node-platform/api')
+        const { microsToCurrency } = await import('@/features/node-platform/lib/format')
+        const versions = await listAvailableScriptVersions(id)
+        const latest = versions.find((v) => v.version === script.latest_version)
+        if (latest) {
+          prefillPricing = {
+            min_interval_seconds: latest.min_interval_seconds ?? 30,
+            base_price: latest.base_price_micros
+              ? microsToCurrency(latest.base_price_micros).replace(/[^0-9.]/g, '')
+              : '',
+            pricing_rules: latest.pricing_rules ?? [],
+          }
+        }
+      } catch { /* best-effort */ }
+    }
+
     setEditing({
       id: script.id,
       title: script.title || '',
@@ -587,6 +622,8 @@ export function MyScriptsPage() {
       script_params: script.script_params || '',
       draft_code: script.draft_code || '',
       concurrency: script.concurrency ?? 1,
+      ...prefillPricing,
+      base_price_micros: 0,
     })
     setEditorOpen(true)
   }
@@ -647,11 +684,18 @@ export function MyScriptsPage() {
       toast.error(t('Your share must be between 0% and 5%.'))
       return
     }
+    const basePriceMicros = Math.round(Number(editing.base_price || 0) * 1_000_000)
+    if (editing.base_price && basePriceMicros <= 0) {
+      toast.error(t('Base price must be greater than 0'))
+      return
+    }
     setBusyId(id)
     try {
       await submitScriptForReview(id, {
         author_share_rate_ppm: Math.round(sharePercent * 10000),
         category_id: submitCategory ? Number(submitCategory) : 0,
+        base_price_micros: basePriceMicros || undefined,
+        pricing_rules: editing.pricing_rules?.length ? editing.pricing_rules : undefined,
       })
       toast.success(t('Submitted for review'))
       setSubmitTarget(0)
@@ -688,6 +732,14 @@ export function MyScriptsPage() {
     <SectionPageLayout fixedContent>
       <SectionPageLayout.Title>{t('My Scripts')}</SectionPageLayout.Title>
       <SectionPageLayout.Actions>
+        <Button
+          type='button'
+          variant='outline'
+          render={<a href='/script-creator-guide' target='_blank' rel='noopener noreferrer' />}
+        >
+          <BookOpen className='mr-2 h-4 w-4' />
+          {t('Creator Guide')}
+        </Button>
         <Button
           type='button'
           variant='outline'
@@ -967,32 +1019,63 @@ export function MyScriptsPage() {
               }
             />
 
-            {/* Concurrency: how many tasks this script can run simultaneously on a
-                single node. Matches the target site's parallel task capacity. */}
-            <div className='flex items-center gap-3'>
-              <div className='min-w-0 flex-1'>
+            {/* Execution settings: three columns */}
+            <div className='grid gap-3 sm:grid-cols-3'>
+              {/* Concurrency */}
+              <div className='space-y-1'>
                 <div className='text-sm font-medium'>{t('Concurrency')}</div>
-                <div className='text-muted-foreground mt-0.5 text-xs'>
-                  {t(
-                    'Max simultaneous executions on one node (matches target site capacity, default 1)'
-                  )}
+                <div className='text-muted-foreground text-xs'>
+                  {t('Max simultaneous executions on one node')}
                 </div>
+                <Input
+                  type='number'
+                  min={1}
+                  step={1}
+                  className='h-9'
+                  value={editing.concurrency ?? 1}
+                  onChange={(e) => {
+                    const n = Math.max(1, Math.floor(Number(e.target.value)))
+                    setEditing((prev) => ({ ...prev, concurrency: n }))
+                  }}
+                  aria-label={t('Concurrency')}
+                />
               </div>
-              <Input
-                type='number'
-                min={1}
-                step={1}
-                className='h-9 w-24'
-                value={editing.concurrency ?? 1}
-                onChange={(event) => {
-                  const parsed = Math.floor(Number(event.target.value))
-                  setEditing((prev) => ({
-                    ...prev,
-                    concurrency: Number.isFinite(parsed) && parsed >= 1 ? parsed : 1,
-                  }))
-                }}
-                aria-label={t('Concurrency')}
-              />
+              {/* Min Interval */}
+              <div className='space-y-1'>
+                <div className='text-sm font-medium'>{t('Min Interval (s)')}</div>
+                <div className='text-muted-foreground text-xs'>
+                  {t('Seconds between consecutive tasks (API rate limit)')}
+                </div>
+                <Input
+                  type='number'
+                  min={0}
+                  step={1}
+                  className='h-9'
+                  value={editing.min_interval_seconds ?? 30}
+                  onChange={(e) => {
+                    const n = Math.max(0, Math.floor(Number(e.target.value)))
+                    setEditing((prev) => ({ ...prev, min_interval_seconds: n }))
+                  }}
+                  aria-label={t('Min Interval')}
+                />
+              </div>
+              {/* Base Price */}
+              <div className='space-y-1'>
+                <div className='text-sm font-medium'>{t('Base Price (USD)')}</div>
+                <div className='text-muted-foreground text-xs'>
+                  {t('Price per unit before provider multiplier')}
+                </div>
+                <Input
+                  type='number'
+                  min={0}
+                  step={0.001}
+                  placeholder='0.01'
+                  className='h-9'
+                  value={editing.base_price ?? ''}
+                  onChange={(e) => setEditing((prev) => ({ ...prev, base_price: e.target.value }))}
+                  aria-label={t('Base Price')}
+                />
+              </div>
             </div>
 
             {/* ── Collapsible reference example ───────────────────────── */}
@@ -1097,6 +1180,31 @@ export function MyScriptsPage() {
               )}
             </div>
             {/* ────────────────────────────────────────────────────────── */}
+
+            {/* Pricing Rules */}
+            <div className='space-y-1'>
+              <div className='flex items-center justify-between'>
+                <div>
+                  <div className='text-sm font-medium'>{t('Pricing Rules')}</div>
+                  <div className='text-muted-foreground text-xs'>
+                    {t('Define which parameters affect the price and by how much')}
+                  </div>
+                </div>
+                <a
+                  href='/script-creator-guide#pricing-rules'
+                  target='_blank'
+                  rel='noopener noreferrer'
+                  className='text-muted-foreground hover:text-foreground text-xs underline-offset-2 hover:underline'
+                >
+                  {t('How does pricing work?')}
+                </a>
+              </div>
+              <PricingRulesEditor
+                value={editing.pricing_rules ?? []}
+                onChange={(rules) => setEditing((prev) => ({ ...prev, pricing_rules: rules }))}
+                availableParams={extractParamNames(editing.script_params)}
+              />
+            </div>
 
             <div>
               <div className='text-muted-foreground mb-1 text-xs'>

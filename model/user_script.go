@@ -40,6 +40,16 @@ type UserScript struct {
 	// parallel for this script. The value is snapshotted into ScriptVersion at
 	// publish time so older versions keep their original concurrency semantics.
 	Concurrency int `json:"concurrency" gorm:"default:1;not null"`
+	// MinIntervalSeconds is the minimum gap between consecutive task submissions
+	// on the same node, reflecting target-API rate limits. Default 30 s.
+	// Snapshotted into ScriptVersion at publish time.
+	MinIntervalSeconds int `json:"min_interval_seconds" gorm:"default:30;not null"`
+	// BasePriceMicros is the author-set base price per execution unit (micro-USD).
+	// Providers multiply it by their PriceMultiplier. Snapshotted at publish.
+	BasePriceMicros int64 `json:"base_price_micros" gorm:"default:0"`
+	// PricingRules is a JSON array describing how task parameters map to price
+	// multipliers. Snapshotted into ScriptVersion at publish time.
+	PricingRules string `json:"pricing_rules,omitempty" gorm:"type:text"`
 	// AuthorShareRatePpm: the author's cut, proposed at submit-review (ppm of the
 	// provider execution price). PlatformFeeRatePpm: platform service fee, set by
 	// the operator at review. Both feed the immutable pricing_template at publish.
