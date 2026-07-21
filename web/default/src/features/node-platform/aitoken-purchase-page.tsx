@@ -1216,6 +1216,16 @@ export function AitokenPurchasePage() {
   const [configText, setConfigText] = useState(initialDraft.configText)
   const [parametersView, setParametersView] = useState<ViewMode>(() => loadViewMode('parameters'))
   const [quote, setQuote] = useState<PriceBreakdown | null>(null)
+  // Auto-mode price range (total customer micros). null in chosen-node mode or
+  // before a quote. When set, the UI shows "min ~ max" and an editable cap.
+  const [quoteRange, setQuoteRange] = useState<{ min: number; max: number } | null>(null)
+  // Buyer's editable ceiling on the TOTAL customer amount (micros). Defaults to
+  // the computed max; the buyer may lower it to exclude pricier providers. Sent
+  // as max_amount_micros on create and used for the insufficient-balance check.
+  const [maxCapMicros, setMaxCapMicros] = useState<number | null>(null)
+  // The text shown in the editable cap input (display units), kept separate so a
+  // half-typed value doesn't clobber maxCapMicros until it parses.
+  const [maxCapText, setMaxCapText] = useState('')
   const [offersLoading, setOffersLoading] = useState(false)
   // Multi-task queue: each purchase fires independently, results shown in right panel
   const [taskQueue, setTaskQueue] = useState<QueuedTask[]>(loadTaskQueue)
@@ -1299,8 +1309,8 @@ export function AitokenPurchasePage() {
       provider_group_id: autoSelect ? groupFilterId || undefined : undefined,
       consume_multiplier: mult,
     })
-      .then((p) => { if (!cancelled) setQuote(p.breakdown) })
-      .catch(() => { if (!cancelled) setQuote(null) })
+      .then((p) => { if (!cancelled) applyQuote(p) })
+      .catch(() => { if (!cancelled) clearQuote() })
     return () => { cancelled = true }
   }, [
     scriptId,
@@ -1351,7 +1361,7 @@ export function AitokenPurchasePage() {
     preserveSelection = false,
     multiplierOverride?: number
   ) {
-    setOffersLoading(true); setOffersPage(0); setQuote(null)
+    setOffersLoading(true); setOffersPage(0); clearQuote()
     try {
       const loaded = await listScriptOffers(selectedScriptId, selectedVersion, groupId || undefined)
       const sorted = [...loaded].sort((a, b) => Number(b.owned) - Number(a.owned))
@@ -1366,8 +1376,8 @@ export function AitokenPurchasePage() {
           provider_group_id: selectedNodeId ? undefined : groupId || undefined,
           consume_multiplier: mult,
         })
-        setQuote(priced.breakdown)
-      } catch { setQuote(null) }
+        applyQuote(priced)
+      } catch { clearQuote() }
       if (loaded.length === 0) { toast.info(t('No provider offers yet for this version')) }
     } finally { setOffersLoading(false) }
   }
@@ -1394,7 +1404,7 @@ export function AitokenPurchasePage() {
   }
 
   async function selectScript(value: number, preferredVersion?: number, fallbackVersion?: number, loadParams = true) {
-    setScriptId(value); setOffers([]); setNodeId(''); setAutoSelect(true); setOffersPage(0); setQuote(null)
+    setScriptId(value); setOffers([]); setNodeId(''); setAutoSelect(true); setOffersPage(0); clearQuote()
     if (!value) { setAvailableVersions([]); return }
     try {
       const available = await listAvailableScriptVersions(value)
@@ -1518,18 +1528,41 @@ export function AitokenPurchasePage() {
     } catch { return 1 }
   }
 
+  // applyQuote stores a quote result and derives the auto-mode range + default
+  // editable cap. In chosen-node mode min == max so no range is shown. The cap
+  // defaults to the computed max total and is reset on every re-quote so a stale
+  // manual value never leaks across script/provider/params changes.
+  type QuoteResult = {
+    breakdown: PriceBreakdown
+    breakdown_min: PriceBreakdown
+    breakdown_max: PriceBreakdown
+    chosen_node_id: string
+  }
+  function applyQuote(p: QuoteResult) {
+    setQuote(p.breakdown)
+    const min = p.breakdown_min?.MaxCustomerMicros ?? p.breakdown.MaxCustomerMicros
+    const max = p.breakdown_max?.MaxCustomerMicros ?? p.breakdown.MaxCustomerMicros
+    const hasRange = max > min
+    setQuoteRange(hasRange ? { min, max } : null)
+    setMaxCapMicros(max)
+    setMaxCapText(microsToCurrency(max))
+  }
+  function clearQuote() {
+    setQuote(null); setQuoteRange(null); setMaxCapMicros(null); setMaxCapText('')
+  }
+
   function selectAuto() {
-    setAutoSelect(true); setNodeId(''); setQuote(null)
+    setAutoSelect(true); setNodeId(''); clearQuote()
     if (scriptId) {
       void quoteOrder({ script_id: scriptId, version, provider_group_id: groupFilterId || undefined, consume_multiplier: getEffectiveMultiplier() })
-        .then((p) => setQuote(p.breakdown)).catch(() => setQuote(null))
+        .then(applyQuote).catch(clearQuote)
     }
   }
 
   function selectProvider(selectedNodeId: string) {
-    setAutoSelect(false); setNodeId(selectedNodeId); setQuote(null)
+    setAutoSelect(false); setNodeId(selectedNodeId); clearQuote()
     void quoteOrder({ script_id: scriptId, version, node_id: selectedNodeId, consume_multiplier: getEffectiveMultiplier() })
-      .then((p) => setQuote(p.breakdown)).catch(() => setQuote(null))
+      .then(applyQuote).catch(clearQuote)
   }
 
   async function onSearchGroups() {
@@ -1608,7 +1641,8 @@ export function AitokenPurchasePage() {
     localId: string, taskScriptId: number, taskVersion: number,
     cleanedConfigText: string, inputHash: string,
     capturedAutoSelect: boolean, capturedNodeId: string,
-    capturedGroupFilterId: string, capturedMultiplier: number
+    capturedGroupFilterId: string, capturedMultiplier: number,
+    capturedMaxCap: number
   ) {
     const upd = (patch: Partial<QueuedTask>) => updateTask(localId, patch)
     try {
@@ -1620,6 +1654,7 @@ export function AitokenPurchasePage() {
         node_id: capturedAutoSelect ? undefined : capturedNodeId || undefined,
         provider_group_id: capturedAutoSelect ? capturedGroupFilterId || undefined : undefined,
         input_hash: inputHash, consume_multiplier: capturedMultiplier,
+        max_amount_micros: capturedMaxCap > 0 ? capturedMaxCap : undefined,
       }, key)
       let o = created
       // Every eligible node is within the script's min-interval cooldown. The
@@ -1745,6 +1780,9 @@ export function AitokenPurchasePage() {
     const capturedMultiplier = scriptVer?.pricing_rules?.length
       ? Math.max(1, Math.round(computeParamsMultiplier(config, scriptVer.pricing_rules)))
       : 1
+    // The buyer's editable ceiling on the total customer amount (0 = use the
+    // computed max across offers). Captured before async state changes.
+    const capturedMaxCap = maxCapMicros ?? 0
     const localId = `task-${Date.now()}-${Math.random().toString(36).slice(2)}`
     setTaskQueue((prev) => [
       {
@@ -1757,7 +1795,7 @@ export function AitokenPurchasePage() {
     ])
     // Fire and forget — doesn't block the UI for further submissions
     void runTask(localId, scriptId, version, cleanedConfigText, inputHash,
-      capturedAutoSelect, capturedNodeId, capturedGroupFilterId, capturedMultiplier)
+      capturedAutoSelect, capturedNodeId, capturedGroupFilterId, capturedMultiplier, capturedMaxCap)
     // Refresh offers now that a run is starting — the chosen provider will show
     // as busy / with reduced free slots. Preserve the current selection so the
     // quote and picked provider aren't reset out from under the user.
@@ -1790,7 +1828,10 @@ export function AitokenPurchasePage() {
     } catch (e) { toast.error(String((e as Error).message)) }
   }
 
-  const insufficientBalance = quote != null && quote.MaxCustomerMicros > (bal?.client_available ?? 0)
+  // The amount actually reserved is the editable cap (defaults to the computed
+  // max total), so the affordability check uses it, not the quote's raw max.
+  const reserveMicros = maxCapMicros ?? quote?.MaxCustomerMicros ?? 0
+  const insufficientBalance = quote != null && reserveMicros > (bal?.client_available ?? 0)
   const runningTaskCount = taskQueue.filter((task) => task.status === 'running' || task.status === 'submitting' || task.status === 'queued').length
 
   return (
@@ -2038,7 +2079,7 @@ export function AitokenPurchasePage() {
                     {scripts.map((s) => (<option key={s.id} value={s.id}>#{s.id} {s.title}</option>))}
                   </select>
                   <select className='h-9 w-28 rounded-md border border-white/20 bg-white/10 px-2 text-sm text-white outline-none focus:border-white/50 disabled:text-white/40 [&>option]:bg-white [&>option]:text-black' value={version} disabled={!scriptId || versions.length === 0} aria-label={t('Version')} onChange={(e) => {
-                    const v = Number(e.target.value); setVersion(v); setOffers([]); setNodeId(''); setAutoSelect(true); setOffersPage(0); setQuote(null)
+                    const v = Number(e.target.value); setVersion(v); setOffers([]); setNodeId(''); setAutoSelect(true); setOffersPage(0); clearQuote()
                     const sel = availableVersions.find((item) => item.version === v)
                     const nextConfigText = configTextFromParams(sel?.script_params)
                     setConfigText(nextConfigText)
@@ -2075,8 +2116,47 @@ export function AitokenPurchasePage() {
               <div className='flex flex-wrap items-center justify-between gap-x-4 gap-y-2 lg:justify-end'>
                 <div className='text-sm'>
                   <span className='text-white/60'>{t('Total')}: </span>
-                  <span className='text-lg font-semibold'>{quote ? microsToCurrency(quote.MaxCustomerMicros) : '-'}</span>
+                  {/* Auto mode with differing provider multipliers shows the
+                      range; the reserved (frozen) amount is the editable cap. */}
+                  {quote && quoteRange ? (
+                    <span className='text-lg font-semibold'>
+                      {microsToCurrency(quoteRange.min)} ~ {microsToCurrency(quoteRange.max)}
+                    </span>
+                  ) : (
+                    <span className='text-lg font-semibold'>{quote ? microsToCurrency(quote.MaxCustomerMicros) : '-'}</span>
+                  )}
                 </div>
+                {/* Editable ceiling on the total the buyer will pay. Only shown
+                    in auto mode where the price spans multiple providers. Lower
+                    it to exclude pricier providers; dispatch skips any node whose
+                    total exceeds it, and the unused reserve is refunded. */}
+                {quote && quoteRange && (
+                  <div className='flex items-center gap-1 text-xs'>
+                    <span className='text-white/60'>{t('Max price')}: </span>
+                    <input
+                      type='text'
+                      inputMode='decimal'
+                      className='w-24 rounded border border-white/20 bg-transparent px-1.5 py-0.5 text-right text-white'
+                      value={maxCapText}
+                      onChange={(e) => {
+                        const text = e.target.value
+                        setMaxCapText(text)
+                        const parsed = displayToMicros(text)
+                        if (Number.isFinite(parsed) && parsed > 0) setMaxCapMicros(parsed)
+                      }}
+                      onBlur={() => {
+                        // Snap back to a valid value if left blank/invalid, and
+                        // clamp into [range.min, range.max].
+                        const parsed = displayToMicros(maxCapText)
+                        const clamped = !Number.isFinite(parsed) || parsed <= 0
+                          ? quoteRange.max
+                          : Math.min(Math.max(parsed, quoteRange.min), quoteRange.max)
+                        setMaxCapMicros(clamped)
+                        setMaxCapText(microsToCurrency(clamped))
+                      }}
+                    />
+                  </div>
+                )}
                 <Button className='min-w-40 bg-white text-black hover:bg-white/90 disabled:bg-white/20 disabled:text-white/40' onClick={() => void onPurchase()} disabled={!quote || insufficientBalance}>
                   {t('Purchase and run')}
                 </Button>

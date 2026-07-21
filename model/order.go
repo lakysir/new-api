@@ -265,5 +265,20 @@ func GetOrderPriceSnapshot(orderId string) (*OrderPriceSnapshot, error) {
 	return &s, nil
 }
 
+// UpdateOrderPriceSettledAmounts corrects the bid-derived lines of a price
+// snapshot to what was actually paid at settlement. In auto mode the snapshot is
+// reserved against the max candidate price, but the scheduler may run a cheaper
+// node; settlement recomputes the split at the executing node and calls this so
+// revenue reporting (which sums provider_amount_micros) matches the real payout.
+// Relay/storage/risk reserves are unchanged (usage-based, not bid-derived).
+func UpdateOrderPriceSettledAmounts(orderId string, providerMicros, authorMicros, platformMicros, riskMicros int64) error {
+	return DB.Model(&OrderPriceSnapshot{}).Where("order_id = ?", orderId).Updates(map[string]any{
+		"provider_amount_micros": providerMicros,
+		"author_amount_micros":   authorMicros,
+		"platform_fee_micros":    platformMicros,
+		"risk_reserve_micros":    riskMicros,
+	}).Error
+}
+
 // NewOrderId returns a new order id.
 func NewOrderId() string { return "ord_" + common.GetUUID() }

@@ -82,7 +82,12 @@ func QuoteOrder(c *gin.Context) {
 		common.ApiErrorMsg(c, err.Error())
 		return
 	}
-	common.ApiSuccess(c, gin.H{"breakdown": q.Breakdown, "chosen_node_id": q.ChosenNodeId})
+	common.ApiSuccess(c, gin.H{
+		"breakdown":     q.Breakdown,
+		"breakdown_min": q.BreakdownMin,
+		"breakdown_max": q.BreakdownMax,
+		"chosen_node_id": q.ChosenNodeId,
+	})
 }
 
 type createOrderRequest struct {
@@ -94,6 +99,10 @@ type createOrderRequest struct {
 	RelayGB           float64 `json:"relay_gb"`
 	StorageGBHours    float64 `json:"storage_gb_hours"`
 	ConsumeMultiplier int64   `json:"consume_multiplier"` // units of work; min 1
+	// MaxAmountMicros is the buyer's optional ceiling on the TOTAL customer amount.
+	// Zero uses the computed max across available offers. Dispatch only picks nodes
+	// whose total cost stays within it; settlement releases the unused remainder.
+	MaxAmountMicros int64 `json:"max_amount_micros"`
 }
 
 // CreateOrder creates an idempotent order. The Idempotency-Key header dedupes
@@ -121,6 +130,7 @@ func CreateOrder(c *gin.Context) {
 		RelayGB:           req.RelayGB,
 		StorageGBHours:    req.StorageGBHours,
 		ConsumeMultiplier: normalizeConsumeMultiplier(req.ConsumeMultiplier),
+		MaxAmountMicros:   req.MaxAmountMicros,
 	})
 	if err != nil {
 		if errors.Is(err, order.ErrScriptNotExecutable) {

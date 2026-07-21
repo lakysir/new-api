@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service/order"
 	"github.com/QuantumNous/new-api/service/receipt"
 )
 
@@ -182,12 +183,41 @@ func resolveParticipants(o *model.Order, taskId string, attempt int) (SettlePart
 	if err != nil {
 		return SettleParticipants{}, err
 	}
+
+	// Default to the frozen snapshot amounts. In chosen-node mode these already
+	// reflect the executing node. In auto mode the snapshot was reserved against
+	// the MAX candidate, but the scheduler may have picked a cheaper node — so
+	// recompute the bid-derived split at the ACTUAL node's price and correct the
+	// snapshot, both to pay the provider its true price and to keep revenue
+	// reporting (which sums provider_amount_micros) accurate. The unused reserve
+	// remainder is released back to the buyer by Settle.
+	providerMicros := snap.ProviderAmountMicros
+	authorMicros := snap.AuthorAmountMicros
+	platformMicros := snap.PlatformFeeMicros
+	riskMicros := snap.RiskReserveMicros
+	if price, ok, perr := model.GetCapabilityPrice(ta.NodeId, o.ScriptId, o.Version); perr == nil && ok {
+		if bd, berr := order.NodeTotalMicros(
+			o.ScriptId, o.Version, price, o.ConsumeMultiplier,
+			snap.RelayFeeReservedMicros, snap.StorageFeeReservedMicros,
+		); berr == nil {
+			providerMicros = bd.ProviderMicros
+			authorMicros = bd.AuthorMicros
+			platformMicros = bd.PlatformFeeMicros
+			// Risk reserve is also bid-derived; recompute it so a cheaper node's
+			// smaller reserve is released to the buyer rather than kept.
+			riskMicros = bd.RiskReserveMicros
+			// Persist the corrected bid-derived amounts so revenue reporting (which
+			// sums provider_amount_micros) matches the actual payout.
+			_ = model.UpdateOrderPriceSettledAmounts(o.Id, providerMicros, authorMicros, platformMicros, riskMicros)
+		}
+	}
+
 	return SettleParticipants{
 		ProviderId:           node.UserId,
 		AuthorId:             sv.AuthorId,
-		ProviderMicros:       snap.ProviderAmountMicros,
-		AuthorMicros:         snap.AuthorAmountMicros,
-		PlatformMicros:       snap.PlatformFeeMicros,
-		NetworkReserveMicros: snap.RelayFeeReservedMicros + snap.StorageFeeReservedMicros + snap.RiskReserveMicros,
+		ProviderMicros:       providerMicros,
+		AuthorMicros:         authorMicros,
+		PlatformMicros:       platformMicros,
+		NetworkReserveMicros: snap.RelayFeeReservedMicros + snap.StorageFeeReservedMicros + riskMicros,
 	}, nil
 }

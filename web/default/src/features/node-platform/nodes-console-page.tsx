@@ -1576,6 +1576,16 @@ export function NodesConsolePage() {
                         dailyLimit > 0
                           ? `${dailyUsed}/${dailyLimit}`
                           : `${dailyUsed}/∞`
+                      // Prefer the balance reported by the capability's category
+                      // balance check (probed on demand), falling back to the
+                      // balance carried on the last execution result.
+                      const balanceCheck = (balanceChecks[nodeId] || []).find(
+                        (item) => item.category_id === c.category_id
+                      )
+                      const balanceDisplay =
+                        balanceCheck && balanceCheck.checked_at > 0
+                          ? balanceCheck.balance_micros
+                          : c.remaining_quota
                       return (
                         <TableRow key={c.id}>
                           <TableCell>
@@ -1588,9 +1598,13 @@ export function NodesConsolePage() {
                             {microsToCurrency(c.price_micros)}
                           </TableCell>
                           <TableCell
-                            title={t('Balance from last execution result')}
+                            title={t(
+                              balanceCheck && balanceCheck.checked_at > 0
+                                ? 'Balance from last balance check'
+                                : 'Balance from last execution result'
+                            )}
                           >
-                            {c.remaining_quota}
+                            {balanceDisplay}
                           </TableCell>
                           <TableCell
                             title={t(

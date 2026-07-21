@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service/order"
 	"gorm.io/gorm"
 )
 
@@ -125,6 +126,35 @@ func Dispatch(orderId string, attempt int) (*Result, error) {
 		return nil, err
 	}
 	if len(candidates) == 0 {
+		return nil, noCandidateErr(o.ScriptId, o.Version, o.ProviderGroupId, o.ChosenNodeId, o.ClientId)
+	}
+	// Enforce the buyer's total-amount cap authoritatively. ScheduleCandidates only
+	// prefilters on the provider per-unit price (cap.price_micros <= MaxAmountMicros),
+	// which is necessary but not sufficient once author/platform/reserve lines are
+	// added on top. Drop any candidate whose full TOTAL customer cost at its own
+	// price exceeds what the buyer reserved, so settlement (paid at the actual node
+	// price) can never exceed the frozen amount. Relay/storage reserves come from
+	// the frozen snapshot; a missing snapshot leaves them zero (best-effort).
+	var relayMicros, storageMicros int64
+	if snap, serr := model.GetOrderPriceSnapshot(orderId); serr == nil && snap != nil {
+		relayMicros = snap.RelayFeeReservedMicros
+		storageMicros = snap.StorageFeeReservedMicros
+	}
+	affordable := candidates[:0]
+	for _, cnd := range candidates {
+		bd, cerr := order.NodeTotalMicros(o.ScriptId, o.Version, cnd.PriceMicros, o.ConsumeMultiplier, relayMicros, storageMicros)
+		if cerr != nil {
+			// Pricing error for this candidate: skip it rather than risk an
+			// over-reservation settlement failure later.
+			continue
+		}
+		if bd.MaxCustomerMicros <= o.MaxAmountMicros {
+			affordable = append(affordable, cnd)
+		}
+	}
+	candidates = affordable
+	if len(candidates) == 0 {
+		// Every eligible node's total exceeds the buyer's cap.
 		return nil, noCandidateErr(o.ScriptId, o.Version, o.ProviderGroupId, o.ChosenNodeId, o.ClientId)
 	}
 	// Build the ordered list of candidates to attempt. In auto mode we try the

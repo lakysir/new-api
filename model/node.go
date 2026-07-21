@@ -289,11 +289,38 @@ func RecordBalanceCheck(s *NodeSiteStatus) error {
 	if err != nil {
 		return err
 	}
-	return DB.Model(&NodeSiteStatus{}).Where("id = ?", existing.Id).Updates(map[string]any{
+	if err := DB.Model(&NodeSiteStatus{}).Where("id = ?", existing.Id).Updates(map[string]any{
 		"balance_ok": s.BalanceOk, "balance_micros": s.BalanceMicros,
 		"tier": s.Tier, "checked_at": s.CheckedAt, "expires_at": s.ExpiresAt,
 		"error_message": s.ErrorMessage,
-	}).Error
+	}).Error; err != nil {
+		return err
+	}
+	// A balance check is the freshest reading of the provider's on-site account
+	// balance, so mirror it onto every capability in this category. The scheduler
+	// gates dispatch on cap.remaining_quota (RemainingQuota > consumeMultiplier)
+	// and the console shows the same column, so without this write both would
+	// keep using the stale seed/last-execution value instead of the just-probed
+	// balance. Only a passing check overwrites it — a failed probe must not zero
+	// out a known-good balance.
+	if s.BalanceOk {
+		syncCapabilityQuotaToBalance(s.NodeId, s.CategoryId, s.BalanceMicros)
+	}
+	return nil
+}
+
+// syncCapabilityQuotaToBalance copies a category's freshly probed balance onto
+// the RemainingQuota of every capability the node lists under that category, so
+// the scheduler gate and the console balance column read the same number. Errors
+// are non-fatal: the balance check itself already succeeded, and the scheduler
+// falls back to the previous quota until the next probe.
+func syncCapabilityQuotaToBalance(nodeId string, categoryId int, balanceMicros int64) {
+	if categoryId <= 0 {
+		return
+	}
+	_ = DB.Model(&NodeCapability{}).
+		Where("node_id = ? AND category_id = ?", nodeId, categoryId).
+		UpdateColumn("remaining_quota", balanceMicros).Error
 }
 
 // HasValidBalanceCheck reports whether a node has a passing, unexpired probe for

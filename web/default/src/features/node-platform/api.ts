@@ -519,9 +519,15 @@ export function quoteOrder(body: {
   storage_gb_hours?: number
   consume_multiplier?: number
 }) {
-  return unwrap<{ breakdown: PriceBreakdown; chosen_node_id: string }>(
-    api.post('/api/orders/quote', body)
-  )
+  // breakdown carries the default reservation (computed max total across offers).
+  // breakdown_min / breakdown_max bracket the range in auto mode (equal in
+  // chosen-node mode) so the UI can show a range and default the editable cap.
+  return unwrap<{
+    breakdown: PriceBreakdown
+    breakdown_min: PriceBreakdown
+    breakdown_max: PriceBreakdown
+    chosen_node_id: string
+  }>(api.post('/api/orders/quote', body))
 }
 
 export function createOrder(
@@ -534,6 +540,9 @@ export function createOrder(
     relay_gb?: number
     storage_gb_hours?: number
     consume_multiplier?: number
+    // Optional buyer ceiling on the TOTAL customer amount (micros). Zero/omitted
+    // uses the computed max across offers.
+    max_amount_micros?: number
   },
   idempotencyKey: string
 ) {
