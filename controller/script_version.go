@@ -52,10 +52,12 @@ func SubmitScriptForReview(c *gin.Context) {
 	// The author proposes their share (ppm), target-site category, base price,
 	// pricing rules and min interval when submitting for review.
 	var body struct {
-		AuthorShareRatePpm int64  `json:"author_share_rate_ppm"`
-		CategoryId         int    `json:"category_id"`
-		BasePriceMicros    int64  `json:"base_price_micros"`
-		PricingRules       string `json:"pricing_rules"`
+		AuthorShareRatePpm int64           `json:"author_share_rate_ppm"`
+		CategoryId         int             `json:"category_id"`
+		BasePriceMicros    int64           `json:"base_price_micros"`
+		// PricingRules is sent by the frontend as a JSON array; accept as RawMessage
+		// so it decodes correctly regardless of the backing string storage.
+		PricingRules       json.RawMessage `json:"pricing_rules"`
 	}
 	_ = c.ShouldBindJSON(&body)
 	if body.AuthorShareRatePpm < 0 || body.AuthorShareRatePpm > 50_000 {
@@ -109,16 +111,16 @@ func SubmitScriptForReview(c *gin.Context) {
 	if body.BasePriceMicros > 0 {
 		script.BasePriceMicros = body.BasePriceMicros
 	}
-	if body.PricingRules != "" {
-		script.PricingRules = body.PricingRules
+	if len(body.PricingRules) > 0 && string(body.PricingRules) != "null" {
+		script.PricingRules = string(body.PricingRules)
 	}
 	if err := model.DB.Model(script).Updates(map[string]any{
-		"review_status":        script.ReviewStatus,
-		"review_note":          "",
+		"review_status":         script.ReviewStatus,
+		"review_note":           "",
 		"author_share_rate_ppm": body.AuthorShareRatePpm,
-		"category_id":          body.CategoryId,
-		"base_price_micros":    script.BasePriceMicros,
-		"pricing_rules":        script.PricingRules,
+		"category_id":           body.CategoryId,
+		"base_price_micros":     script.BasePriceMicros,
+		"pricing_rules":         script.PricingRules,
 	}).Error; err != nil {
 		common.ApiError(c, err)
 		return

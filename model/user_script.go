@@ -209,7 +209,7 @@ func ListUserScripts(userId int) ([]UserScript, error) {
 func ListScriptsByReviewStatus(status string) ([]UserScript, error) {
 	var scripts []UserScript
 	err := DB.Table("user_scripts").
-		Select("user_scripts.id,user_scripts.user_id,user_scripts.title,user_scripts.description,user_scripts.script_params,user_scripts.draft_code,user_scripts.review_status,user_scripts.review_note,user_scripts.latest_version,user_scripts.concurrency,user_scripts.author_share_rate_ppm,user_scripts.platform_fee_rate_ppm,user_scripts.category_id,user_scripts.published,user_scripts.published_at,user_scripts.created_at,user_scripts.updated_at").
+		Select("user_scripts.id,user_scripts.user_id,user_scripts.title,user_scripts.description,user_scripts.script_params,user_scripts.draft_code,user_scripts.review_status,user_scripts.review_note,user_scripts.latest_version,user_scripts.concurrency,user_scripts.min_interval_seconds,user_scripts.base_price_micros,user_scripts.pricing_rules,user_scripts.author_share_rate_ppm,user_scripts.platform_fee_rate_ppm,user_scripts.category_id,user_scripts.published,user_scripts.published_at,user_scripts.created_at,user_scripts.updated_at").
 		Where("user_scripts.review_status = ?", status).
 		Order("user_scripts.updated_at desc,user_scripts.id desc").
 		Find(&scripts).Error
@@ -272,13 +272,19 @@ func GetUserScriptById(id int, userId int) (*UserScript, error) {
 	return &script, nil
 }
 
-func UpsertUserScriptDraft(userId int, id int, title string, description string, scriptParams string, code string, concurrency int) (*UserScript, error) {
+func UpsertUserScriptDraft(userId int, id int, title string, description string, scriptParams string, code string, concurrency int, minIntervalSeconds int, basePriceMicros int64, pricingRules string) (*UserScript, error) {
 	title, description, scriptParams, code, err := NormalizeUserScriptInput(title, description, scriptParams, code)
 	if err != nil {
 		return nil, err
 	}
 	if concurrency < 1 {
 		concurrency = 1
+	}
+	if minIntervalSeconds < 0 {
+		minIntervalSeconds = 0
+	}
+	if basePriceMicros < 0 {
+		basePriceMicros = 0
 	}
 	if id > 0 {
 		script, err := GetUserScriptById(id, userId)
@@ -293,6 +299,11 @@ func UpsertUserScriptDraft(userId int, id int, title string, description string,
 		script.ScriptParams = scriptParams
 		script.DraftCode = code
 		script.Concurrency = concurrency
+		script.MinIntervalSeconds = minIntervalSeconds
+		script.BasePriceMicros = basePriceMicros
+		if pricingRules != "" {
+			script.PricingRules = pricingRules
+		}
 		if draftChanged {
 			script.ReviewStatus = ScriptReviewDraft
 			script.ReviewNote = ""
@@ -303,12 +314,15 @@ func UpsertUserScriptDraft(userId int, id int, title string, description string,
 		return script, nil
 	}
 	script := &UserScript{
-		UserId:       userId,
-		Title:        title,
-		Description:  description,
-		ScriptParams: scriptParams,
-		DraftCode:    code,
-		Concurrency:  concurrency,
+		UserId:             userId,
+		Title:              title,
+		Description:        description,
+		ScriptParams:       scriptParams,
+		DraftCode:          code,
+		Concurrency:        concurrency,
+		MinIntervalSeconds: minIntervalSeconds,
+		BasePriceMicros:    basePriceMicros,
+		PricingRules:       pricingRules,
 	}
 	if err := DB.Create(script).Error; err != nil {
 		return nil, err

@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -21,7 +22,12 @@ type userScriptSaveRequest struct {
 	// Concurrency is the maximum simultaneous executions this script supports
 	// on a single node (default 1). Authors set this to match the target site's
 	// capacity; providers and buyers see it when browsing the marketplace.
-	Concurrency int `json:"concurrency"`
+	Concurrency        int             `json:"concurrency"`
+	MinIntervalSeconds int             `json:"min_interval_seconds"`
+	BasePriceMicros    int64           `json:"base_price_micros"`
+	// PricingRules is sent by the frontend as a JSON array; we accept it as
+	// RawMessage so it survives the decode regardless of Go field type.
+	PricingRules       json.RawMessage `json:"pricing_rules"`
 }
 
 type publishedScriptListItem struct {
@@ -135,7 +141,15 @@ func SaveMyScriptDraft(c *gin.Context) {
 	if concurrency < 1 {
 		concurrency = 1
 	}
-	script, err := model.UpsertUserScriptDraft(c.GetInt("id"), id, req.Title, req.Description, req.ScriptParams, scriptCodeFromRequest(req), concurrency)
+	minInterval := req.MinIntervalSeconds
+	if minInterval < 0 {
+		minInterval = 0
+	}
+	pricingRules := ""
+	if len(req.PricingRules) > 0 && string(req.PricingRules) != "null" {
+		pricingRules = string(req.PricingRules)
+	}
+	script, err := model.UpsertUserScriptDraft(c.GetInt("id"), id, req.Title, req.Description, req.ScriptParams, scriptCodeFromRequest(req), concurrency, minInterval, req.BasePriceMicros, pricingRules)
 	if err != nil {
 		common.ApiError(c, err)
 		return

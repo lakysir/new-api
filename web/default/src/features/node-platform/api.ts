@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { api } from '@/lib/api'
+import { api, type ApiRequestConfig } from '@/lib/api'
 
 import type {
   ApiEnvelope,
@@ -349,8 +349,8 @@ export function listMyDevices() {
   return unwrap<Device[]>(api.get('/api/devices/mine'))
 }
 
-export function listMyNodes() {
-  return unwrap<NodeInfo[]>(api.get('/api/nodes/mine'))
+export function listMyNodes(config?: ApiRequestConfig) {
+  return unwrap<NodeInfo[]>(api.get('/api/nodes/mine', config))
 }
 
 export function revokeDevice(deviceId: string) {

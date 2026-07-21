@@ -114,6 +114,8 @@ const DEFAULT_ENABLE_FORM: EnableFormValue = {
 }
 
 const ENABLE_FORM_DEFAULTS_VERSION = 1
+const NODE_REFRESH_INTERVAL_MS = 15_000
+const NODE_REFRESH_RATE_LIMIT_BACKOFF_MS = 60_000
 
 function getDraftStorageKey() {
   const userId = window.localStorage.getItem('uid') ?? 'anonymous'
@@ -466,13 +468,46 @@ export function NodesConsolePage() {
   }, [])
 
   useEffect(() => {
-    const refreshNodes = () => {
-      void listMyNodes()
-        .then((list) => setNodes(Array.isArray(list) ? list : []))
-        .catch(() => {})
+    let timer: number | undefined
+    let stopped = false
+    let refreshing = false
+
+    const scheduleRefresh = (delay: number) => {
+      if (stopped) return
+      if (timer !== undefined) window.clearTimeout(timer)
+      timer = window.setTimeout(refreshNodes, delay)
     }
-    const timer = window.setInterval(refreshNodes, 3000)
-    return () => window.clearInterval(timer)
+
+    const refreshNodes = async () => {
+      timer = undefined
+      if (stopped || refreshing || document.visibilityState !== 'visible') return
+
+      refreshing = true
+      let nextRefresh = NODE_REFRESH_INTERVAL_MS
+      try {
+        const list = await listMyNodes({ skipErrorHandler: true })
+        if (!stopped) setNodes(Array.isArray(list) ? list : [])
+      } catch (error) {
+        const status = (error as { response?: { status?: number } }).response
+          ?.status
+        if (status === 429) nextRefresh = NODE_REFRESH_RATE_LIMIT_BACKOFF_MS
+      } finally {
+        refreshing = false
+        scheduleRefresh(nextRefresh)
+      }
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && !refreshing) scheduleRefresh(0)
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    scheduleRefresh(NODE_REFRESH_INTERVAL_MS)
+    return () => {
+      stopped = true
+      if (timer !== undefined) window.clearTimeout(timer)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
   }, [])
 
   useEffect(() => {

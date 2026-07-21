@@ -34,6 +34,7 @@ import { formatUnix } from '@/features/node-platform/lib/format'
 import { PricingRulesEditor, extractParamNames } from '@/features/node-platform/pricing-rules-editor'
 import type { PricingRule, ScriptVersion } from '@/features/node-platform/types'
 import { api } from '@/lib/api'
+import { getCurrencyLabel } from '@/lib/currency'
 
 type UserScript = {
   id: number
@@ -587,20 +588,35 @@ export function MyScriptsPage() {
     setPreviewScript(script)
   }
 
+  // pricing_rules is stored as a JSON string in the DB and arrives from the API
+  // as a string value (not an array). Parse it wherever we read from the API.
+  function parsePricingRules(raw: unknown): PricingRule[] {
+    if (!raw) return []
+    if (Array.isArray(raw)) return raw as PricingRule[]
+    if (typeof raw === 'string') {
+      try { return JSON.parse(raw) as PricingRule[] } catch { return [] }
+    }
+    return []
+  }
+
   async function openMineEditor(id: number) {
     const script = await unwrap<UserScript>(api.get(`/api/scripts/mine/${id}`))
+    const { microsToCurrency } = await import('@/features/node-platform/lib/format')
 
-    // Pre-fill pricing from the last published version so the author
-    // doesn't have to re-enter everything on every revision.
+    // Start with pricing values already saved on the draft itself.
     let prefillPricing = {
-      min_interval_seconds: 30,
-      base_price: '',
-      pricing_rules: [] as PricingRule[],
+      min_interval_seconds: script.min_interval_seconds ?? 30,
+      base_price: script.base_price_micros
+        ? microsToCurrency(script.base_price_micros).replace(/[^0-9.]/g, '')
+        : '',
+      pricing_rules: parsePricingRules(script.pricing_rules),
     }
-    if (script.latest_version) {
+
+    // If the draft has no pricing yet but there's a published version,
+    // fall back to that so the author doesn't have to re-enter everything.
+    if (!script.base_price_micros && !parsePricingRules(script.pricing_rules).length && script.latest_version) {
       try {
         const { listAvailableScriptVersions } = await import('@/features/node-platform/api')
-        const { microsToCurrency } = await import('@/features/node-platform/lib/format')
         const versions = await listAvailableScriptVersions(id)
         const latest = versions.find((v) => v.version === script.latest_version)
         if (latest) {
@@ -609,7 +625,7 @@ export function MyScriptsPage() {
             base_price: latest.base_price_micros
               ? microsToCurrency(latest.base_price_micros).replace(/[^0-9.]/g, '')
               : '',
-            pricing_rules: latest.pricing_rules ?? [],
+            pricing_rules: parsePricingRules(latest.pricing_rules),
           }
         }
       } catch { /* best-effort */ }
@@ -635,12 +651,16 @@ export function MyScriptsPage() {
         throw new Error(t('Script Params must be a JSON object.'))
       }
     }
+    const basePriceMicros = Math.round(Number(editing.base_price || 0) * 1_000_000)
     const payload = {
       title: editing.title,
       description: editing.description,
       script_params: editing.script_params,
       code: editing.draft_code,
       concurrency: editing.concurrency ?? 1,
+      min_interval_seconds: editing.min_interval_seconds ?? 30,
+      base_price_micros: basePriceMicros || undefined,
+      pricing_rules: editing.pricing_rules?.length ? editing.pricing_rules : undefined,
     }
     if (editing.id) {
       await unwrap(api.put(`/api/scripts/mine/${editing.id}`, payload))
@@ -662,6 +682,8 @@ export function MyScriptsPage() {
 
   // Open the submit dialog (collect category + author share before submitting).
   // Category and share % are persisted to localStorage so they survive reopens.
+  // Also loads the script's current pricing into editing so confirmSubmitReview
+  // sends the right base_price and pricing_rules even when the editor was never opened.
   async function openSubmitDialog(id: number) {
     setSubmitTarget(id)
     setSubmitCategory(localStorage.getItem('script_submit_category') ?? '')
@@ -671,6 +693,20 @@ export function MyScriptsPage() {
     } catch {
       /* categories optional */
     }
+    try {
+      const script = await unwrap<UserScript>(api.get(`/api/scripts/mine/${id}`))
+      const { microsToCurrency } = await import('@/features/node-platform/lib/format')
+      setEditing((prev) => ({
+        ...prev,
+        min_interval_seconds: script.min_interval_seconds ?? prev.min_interval_seconds,
+        base_price: script.base_price_micros
+          ? microsToCurrency(script.base_price_micros).replace(/[^0-9.]/g, '')
+          : prev.base_price,
+        pricing_rules: parsePricingRules(script.pricing_rules).length
+          ? parsePricingRules(script.pricing_rules)
+          : prev.pricing_rules,
+      }))
+    } catch { /* best-effort */ }
   }
 
   async function confirmSubmitReview() {
@@ -1061,7 +1097,9 @@ export function MyScriptsPage() {
               </div>
               {/* Base Price */}
               <div className='space-y-1'>
-                <div className='text-sm font-medium'>{t('Base Price (USD)')}</div>
+                <div className='text-sm font-medium'>
+                  {t('Base Price')} ({getCurrencyLabel() === 'Tokens' ? 'USD' : getCurrencyLabel()})
+                </div>
                 <div className='text-muted-foreground text-xs'>
                   {t('Price per unit before provider multiplier')}
                 </div>
