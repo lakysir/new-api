@@ -537,7 +537,15 @@ export function createOrder(
   },
   idempotencyKey: string
 ) {
-  return unwrap<{ order: Order; created: boolean }>(
+  return unwrap<{
+    order: Order
+    created: boolean
+    // Set when every eligible node is within the script's min-interval cooldown.
+    // The order stays queued in MATCHING with funds reserved; retry_after_secs is
+    // the seconds until the soonest node is dispatchable again.
+    cooling_down?: boolean
+    retry_after_secs?: number
+  }>(
     api.post('/api/orders', body, {
       headers: { 'Idempotency-Key': idempotencyKey },
     })
@@ -546,6 +554,18 @@ export function createOrder(
 
 export function getOrder(id: string) {
   return unwrap<Order>(api.get(`/api/orders/${id}`))
+}
+
+// redispatchOrder re-attempts matching for a MATCHING order that was queued
+// because every eligible node was cooling down. Returns the same cooling_down /
+// retry_after_secs shape as createOrder so the client can keep its countdown, or
+// the advanced order once a node became free.
+export function redispatchOrder(id: string) {
+  return unwrap<{
+    order: Order
+    cooling_down?: boolean
+    retry_after_secs?: number
+  }>(api.post(`/api/orders/${id}/redispatch`))
 }
 
 export function cancelOrder(id: string) {

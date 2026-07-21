@@ -404,9 +404,11 @@ func SetApiRouter(router *gin.Engine) {
 		orderRoute := apiRouter.Group("/orders")
 		orderRoute.Use(middleware.CORS(), middleware.DeviceOrUserAuth())
 		{
+			orderRoute.POST("/media/probe", controller.ProbeMediaURL)
 			orderRoute.POST("/quote", controller.QuoteOrder)
 			orderRoute.POST("", middleware.CriticalRateLimit(), controller.CreateOrder)
 			orderRoute.GET("/:id", controller.GetOrder)
+			orderRoute.POST("/:id/redispatch", middleware.CriticalRateLimit(), controller.RedispatchOrder)
 			orderRoute.POST("/:id/cancel", controller.CancelOrder)
 			// Signed dual-party receipts drive settlement/dispute (Stage E).
 			orderRoute.POST("/:id/receipts", controller.SubmitReceipt)

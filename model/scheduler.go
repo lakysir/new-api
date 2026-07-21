@@ -271,6 +271,56 @@ func ListOffersForScript(scriptId, version int, providerGroupId string, consumeM
 	return offers, nil
 }
 
+// EarliestCooldownReadyForScript inspects the nodes hosting an active capability
+// for a script version and, when every such node is currently within its
+// min-interval cooldown for the script's category, returns the soonest Unix
+// timestamp any of them becomes dispatchable again. found is false when no node
+// is cooling (so an empty candidate set had a different cause — busy/offline).
+//
+// This is a best-effort diagnostic used only to craft a friendlier "cooling
+// down, retry in Ns" message; it deliberately does not replicate every
+// scheduler filter. It honors the same provider-group / chosen-node scoping so
+// the reported wait matches the nodes the order could actually use.
+func EarliestCooldownReadyForScript(scriptId, version int, providerGroupId, chosenNodeId string, clientUserId int) (readyAt int64, found bool) {
+	type row struct {
+		NodeId             string
+		CategoryId         int
+		MinIntervalSeconds int
+	}
+	var rows []row
+	q := DB.Table("node_capabilities AS cap").
+		Select("cap.node_id, cap.category_id, cap.min_interval_seconds").
+		Joins("JOIN nodes n ON n.id = cap.node_id").
+		Where("cap.script_id = ? AND cap.version = ?", scriptId, version).
+		Where("cap.status = ?", CapabilityStatusActive).
+		Where("cap.category_id > 0 AND cap.min_interval_seconds > 0")
+	if chosenNodeId != "" {
+		q = q.Where("n.enabled = ? OR (n.id = ? AND n.user_id = ?)", true, chosenNodeId, clientUserId)
+	} else {
+		q = q.Where("n.enabled = ?", true)
+	}
+	if providerGroupId != "" {
+		q = q.Where("n.provider_group_id = ?", providerGroupId)
+	}
+	if err := q.Scan(&rows).Error; err != nil {
+		return 0, false
+	}
+	for _, r := range rows {
+		if chosenNodeId != "" && r.NodeId != chosenNodeId {
+			continue
+		}
+		cooling, nodeReadyAt := NodeCategoryCoolingUntil(nil, r.NodeId, r.CategoryId, r.MinIntervalSeconds)
+		if !cooling {
+			continue
+		}
+		if !found || nodeReadyAt < readyAt {
+			readyAt = nodeReadyAt
+			found = true
+		}
+	}
+	return readyAt, found
+}
+
 // GetCapabilityPrice returns a specific node's price for a script version, and
 // whether that capability is currently active. Used to resolve the provider
 // price a client selected.
@@ -328,7 +378,17 @@ func ScheduleCandidates(scriptId, version int, maxPriceMicros int64, limit int, 
 		// Node must have a passing balance check for the category (or no
 		// category). A passed check does not expire on a timer — it stays valid
 		// until an explicit recheck flips balance_ok to false.
-		Where("cap.category_id = 0 OR s.balance_ok = ?", true)
+		Where("cap.category_id = 0 OR s.balance_ok = ?", true).
+		// Min-interval cooldown: exclude a node still inside the per-(node,
+		// category) gap. Independent of concurrency — even with a free slot, a new
+		// dispatch must wait min_interval_seconds since the last dispatch for this
+		// category on this node. The anchor is the most recent lease's created_at
+		// regardless of active state (a finished task must not reset the clock).
+		// Uncategorized scripts or a zero interval opt out.
+		Where(`NOT (cap.category_id > 0 AND cap.min_interval_seconds > 0 AND EXISTS (`+
+			`SELECT 1 FROM leases l2 WHERE l2.node_id = cap.node_id `+
+			`AND l2.category_id = cap.category_id `+
+			`AND l2.created_at + cap.min_interval_seconds > ?))`, now)
 	if chosenNodeId != "" {
 		q = q.Where("n.enabled = ? OR (n.id = ? AND n.user_id = ?)", true, chosenNodeId, clientUserId)
 	} else {

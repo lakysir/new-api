@@ -137,6 +137,23 @@ func CreateOrder(c *gin.Context) {
 			return
 		}
 		result, dispatchErr := dispatch.Dispatch(o.Id, 1)
+		var cooling *dispatch.ErrNodeCoolingDown
+		if errors.As(dispatchErr, &cooling) {
+			// Every eligible node is within the script's min-interval cooldown for
+			// its target site. Unlike all-busy/offline, this clears on its own in a
+			// few seconds, so keep the order in MATCHING with funds still reserved
+			// and hand the client the wait so it can queue + auto-retry (or cancel
+			// for a refund). The stale-order sweep still backstops an abandoned
+			// queue after its grace window.
+			o, _ = model.GetOrder(o.Id)
+			common.ApiSuccess(c, gin.H{
+				"order":            o,
+				"created":          created,
+				"cooling_down":     true,
+				"retry_after_secs": cooling.RetryAfterSecs,
+			})
+			return
+		}
 		if dispatchErr != nil && !errors.Is(dispatchErr, dispatch.ErrNoCandidates) {
 			common.ApiErrorMsg(c, dispatchErr.Error())
 			return
@@ -183,6 +200,94 @@ func CreateOrder(c *gin.Context) {
 		o, _ = model.GetOrder(o.Id)
 	}
 	common.ApiSuccess(c, gin.H{"order": o, "created": created})
+}
+
+// deliverOffer publishes a dispatched order's task.offer over the control
+// channel and waits briefly for the provider to accept/reject, so the client
+// never starts Relay from a transient OFFERED snapshot. On a publish failure it
+// releases the lease and refunds, returning a client-facing message; "" means
+// the offer was delivered and the order advanced past OFFERED (or the wait
+// elapsed harmlessly). Used by RedispatchOrder.
+func deliverOffer(orderId string, result *dispatch.Result) string {
+	// Fast path: deliver this order's offer immediately. The transactional
+	// Outbox remains the retry source if the socket disappears mid-send.
+	if publishErr := dispatch.PublishEvent(nodehub.Default, result.EventId); publishErr != nil {
+		if ta, _ := model.GetTaskAttempt(orderId, 1); ta != nil {
+			_ = model.ReleaseLease(ta.LeaseId, "offer_delivery_failed")
+		}
+		if current, _ := model.GetOrder(orderId); current != nil && current.State == model.OrderOffered {
+			_, _ = model.ApplyTransition(orderId, model.OrderCancelled, nil)
+			_, _ = settlement.Refund(orderId)
+		}
+		return "provider control channel is unavailable; reserved funds were refunded"
+	}
+	// The control-channel response is asynchronous. Wait briefly for the
+	// Provider to accept or reject so the client never starts Relay from a
+	// transient OFFERED snapshot that has already been refunded.
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		current, getErr := model.GetOrder(orderId)
+		if getErr == nil && current.State != model.OrderOffered {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	return ""
+}
+
+// RedispatchOrder re-attempts matching for an order the client already created
+// that is sitting in MATCHING because every eligible node was within its
+// min-interval cooldown. The client calls this after the reported cooldown
+// elapses. It is owner-scoped and only acts on a MATCHING order; any other state
+// is returned as-is (a stale retry is a harmless no-op). On a still-cooling
+// result the order stays queued and the refreshed retry_after_secs is returned;
+// on all-busy/offline it refunds like CreateOrder; on success it delivers the
+// offer.
+func RedispatchOrder(c *gin.Context) {
+	id := c.Param("id")
+	o, err := model.GetOrder(id)
+	if err != nil || o.ClientId != c.GetInt("id") {
+		common.ApiErrorMsg(c, "order not found")
+		return
+	}
+	if o.State != model.OrderMatching {
+		common.ApiSuccess(c, gin.H{"order": o})
+		return
+	}
+
+	result, dispatchErr := dispatch.Dispatch(o.Id, 1)
+	var cooling *dispatch.ErrNodeCoolingDown
+	if errors.As(dispatchErr, &cooling) {
+		// Still cooling — keep queuing, hand back the refreshed wait.
+		o, _ = model.GetOrder(o.Id)
+		common.ApiSuccess(c, gin.H{
+			"order":            o,
+			"cooling_down":     true,
+			"retry_after_secs": cooling.RetryAfterSecs,
+		})
+		return
+	}
+	if dispatchErr != nil && !errors.Is(dispatchErr, dispatch.ErrNoCandidates) {
+		common.ApiErrorMsg(c, dispatchErr.Error())
+		return
+	}
+	if errors.Is(dispatchErr, dispatch.ErrNoCandidates) {
+		// No longer cooling but nothing is free (busy/offline). Same terminal
+		// handling as CreateOrder: cancel and refund now.
+		if _, terr := model.ApplyTransition(o.Id, model.OrderCancelled, nil); terr == nil {
+			_, _ = settlement.Refund(o.Id)
+		}
+		common.ApiErrorMsg(c, "no idle provider available right now (all providers are busy or offline); reserved funds were refunded")
+		return
+	}
+	if result != nil {
+		if errMsg := deliverOffer(o.Id, result); errMsg != "" {
+			common.ApiErrorMsg(c, errMsg)
+			return
+		}
+	}
+	o, _ = model.GetOrder(o.Id)
+	common.ApiSuccess(c, gin.H{"order": o})
 }
 
 // GetOrder returns an order's current state (owner-scoped). When the order is

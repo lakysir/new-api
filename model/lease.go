@@ -39,7 +39,7 @@ var (
 // is no longer unique so concurrent tasks can share the node.
 type Lease struct {
 	Id      string `json:"id" gorm:"primaryKey;type:varchar(64)"`
-	NodeId  string `json:"node_id" gorm:"type:varchar(64);not null;index:idx_node_active_lease"`
+	NodeId  string `json:"node_id" gorm:"type:varchar(64);not null;index:idx_node_active_lease;index:idx_lease_node_category,priority:1"`
 	TaskId  string `json:"task_id" gorm:"type:varchar(64);index;not null"`
 	Attempt int    `json:"attempt" gorm:"not null"`
 	// Active is NULL when released; non-NULL (true) while the lease is held.
@@ -50,6 +50,12 @@ type Lease struct {
 	// per-script concurrency limit check during reservation.
 	ScriptId int `json:"script_id" gorm:"index;default:0"`
 	Version  int `json:"version" gorm:"default:0"`
+	// CategoryId is the target-site category of the script, denormalized from the
+	// script version at reservation time so the min-interval cooldown can be
+	// enforced per (node, category) with a single-table lookup — no join. Zero for
+	// uncategorized scripts (and for leases created before this column existed),
+	// which are exempt from the cooldown.
+	CategoryId int `json:"category_id" gorm:"index:idx_lease_node_category,priority:2;default:0"`
 	ExpiresAt   int64  `json:"expires_at" gorm:"index;not null"`
 	ReleasedAt  int64  `json:"released_at" gorm:"default:0"`
 	Reason      string `json:"reason,omitempty" gorm:"type:varchar(64)"`
@@ -266,6 +272,42 @@ func ReleaseLease(leaseId, reason string) error {
 		}
 		return nil
 	})
+}
+
+// NodeCategoryCoolingUntil reports whether a node is within the min-interval
+// cooldown for a target-site category and, if so, the Unix timestamp at which it
+// becomes dispatchable again.
+//
+// The cooldown throttles how often a NEW execution may be STARTED against a
+// site, independent of concurrency: even when the node has a free concurrency
+// slot, a fresh dispatch must wait until minIntervalSeconds have elapsed since
+// the last dispatch for this (node, category). The anchor is the most recent
+// lease's created_at REGARDLESS of whether it is still active — a finished task
+// must not reset the clock, or the gap the target site requires is lost.
+//
+// categoryId 0 (uncategorized) or minIntervalSeconds <= 0 means no cooldown:
+// returns (false, 0). The passed tx may be nil to use the default DB handle.
+func NodeCategoryCoolingUntil(tx *gorm.DB, nodeId string, categoryId, minIntervalSeconds int) (cooling bool, readyAt int64) {
+	if categoryId <= 0 || minIntervalSeconds <= 0 {
+		return false, 0
+	}
+	db := tx
+	if db == nil {
+		db = DB
+	}
+	var lastCreatedAt int64
+	db.Model(&Lease{}).
+		Where("node_id = ? AND category_id = ?", nodeId, categoryId).
+		Select("COALESCE(MAX(created_at), 0)").
+		Scan(&lastCreatedAt)
+	if lastCreatedAt == 0 {
+		return false, 0
+	}
+	readyAt = lastCreatedAt + int64(minIntervalSeconds)
+	if time.Now().Unix() < readyAt {
+		return true, readyAt
+	}
+	return false, 0
 }
 
 // GetActiveLeaseForNode returns the node's active lease, or nil if none.

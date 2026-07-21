@@ -66,6 +66,7 @@ import {
   listScriptOffers,
   quoteOrder,
   rechargeAvailable,
+  redispatchOrder,
   searchProviderGroups,
   withdrawAvailable,
   type ProviderGroup,
@@ -145,13 +146,24 @@ function collectUrlCandidates(value: unknown, candidates: string[] = []): string
   return candidates
 }
 
-// Probe extensionless signed URLs with native media elements. This does not
-// require reading cross-origin response headers, so it also works without CORS.
+// Probe extensionless signed URLs with native media elements and a same-origin
+// MIME endpoint. Some download providers reject HEAD and browser media loads,
+// but return the real Content-Type for a small range GET.
+async function probeMediaMime(url: string): Promise<MediaKind | null> {
+  try {
+    const response = await api.post('/api/orders/media/probe', { url })
+    const kind = response.data?.kind
+    return kind === 'image' || kind === 'video' || kind === 'audio' ? kind : null
+  } catch {
+    return null
+  }
+}
+
 function probeMediaUrl(url: string): Promise<MediaKind | null> {
   return new Promise((resolve) => {
     const media = document.createElement('video')
     const image = new Image()
-    let pending = 2
+    let pending = 3
     let settled = false
 
     function finish(kind: MediaKind | null) {
@@ -180,39 +192,25 @@ function probeMediaUrl(url: string): Promise<MediaKind | null> {
     }, 8000)
     media.src = url
     image.src = url
+    void probeMediaMime(url).then(finish)
   })
 }
 
 async function detectFirstMedia(value: unknown): Promise<FoundMedia | null> {
   for (const url of collectUrlCandidates(value)) {
-    const knownKind = classifyMediaUrl(url)
-    const kind = knownKind ?? await probeMediaUrl(url)
+    const kind = classifyMediaUrl(url) ?? await probeMediaUrl(url)
     if (kind) return { kind, url }
   }
   return null
 }
 
-// findFirstMedia walks a parsed result (depth-first, preserving key/array order)
-// and returns the first image/video/audio URL it can find, or null.
+// Return immediately only when the first URL can be classified from the URL
+// itself. Otherwise detectFirstMedia must probe it before later URLs are used.
 function findFirstMedia(value: unknown): FoundMedia | null {
-  if (typeof value === 'string') {
-    const kind = classifyMediaUrl(value)
-    return kind ? { kind, url: value.trim() } : null
-  }
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const found = findFirstMedia(item)
-      if (found) return found
-    }
-    return null
-  }
-  if (value !== null && typeof value === 'object') {
-    for (const item of Object.values(value)) {
-      const found = findFirstMedia(item)
-      if (found) return found
-    }
-  }
-  return null
+  const url = collectUrlCandidates(value)[0]
+  if (!url) return null
+  const kind = classifyMediaUrl(url)
+  return kind ? { kind, url } : null
 }
 
 // QueuedTask tracks one purchase+relay run entirely on the client side.
@@ -223,8 +221,13 @@ type QueuedTask = {
   scriptTitle: string
   version: number
   submittedAt: number
-  status: 'submitting' | 'running' | 'success' | 'failed'
+  // 'queued' means every eligible node is cooling down (min-interval gap): the
+  // order sits in MATCHING with funds reserved while the client counts down and
+  // auto-retries. Cancelling a queued task refunds it.
+  status: 'submitting' | 'queued' | 'running' | 'success' | 'failed'
   order: Order | null
+  // Unix ms at which the next redispatch attempt fires, for the queued countdown.
+  cooldownUntil?: number
   relayStatus: string
   relayResult: string
   error?: string
@@ -305,8 +308,8 @@ function loadTaskQueue(): QueuedTask[] {
     ) as unknown
     if (!Array.isArray(saved)) return []
     return (saved as QueuedTask[]).map((task) =>
-      task.status === 'submitting' || task.status === 'running'
-        ? { ...task, status: 'failed', relayStatus: '', error: task.error || 'Interrupted by page reload' }
+      task.status === 'submitting' || task.status === 'running' || task.status === 'queued'
+        ? { ...task, status: 'failed', relayStatus: '', cooldownUntil: undefined, error: task.error || 'Interrupted by page reload' }
         : task
     )
   } catch {
@@ -845,9 +848,23 @@ function TaskCard({ task, onChange, onCancel, onDelete }: TaskCardProps) {
     task.order != null &&
     ['FUNDS_RESERVED', 'MATCHING', 'OFFERED'].includes(task.order.state)
 
+  // Live 1s tick so a queued task's cooldown countdown updates in place.
+  const [nowMs, setNowMs] = useState(() => Date.now())
+  useEffect(() => {
+    if (task.status !== 'queued') return
+    const id = window.setInterval(() => setNowMs(Date.now()), 1000)
+    return () => window.clearInterval(id)
+  }, [task.status])
+  const cooldownRemaining =
+    task.status === 'queued' && task.cooldownUntil
+      ? Math.max(0, Math.ceil((task.cooldownUntil - nowMs) / 1000))
+      : 0
+
   let statusIcon: React.ReactNode
   if (task.status === 'submitting' || task.status === 'running') {
     statusIcon = <Loader2 className='h-4 w-4 animate-spin text-blue-500' />
+  } else if (task.status === 'queued') {
+    statusIcon = <Loader2 className='h-4 w-4 animate-spin text-amber-500' />
   } else if (task.status === 'success') {
     statusIcon = <CheckCircle2 className='h-4 w-4 text-emerald-500' />
   } else {
@@ -970,9 +987,15 @@ function TaskCard({ task, onChange, onCancel, onDelete }: TaskCardProps) {
           <div className='truncate font-medium'>
             #{task.scriptId} {task.scriptTitle} v{task.version}
           </div>
-          {task.relayStatus && (
+          {task.status === 'queued' ? (
+            <div className='truncate text-xs text-amber-600'>
+              {cooldownRemaining > 0
+                ? t('Queued — all providers cooling down, retrying in {{secs}}s', { secs: cooldownRemaining })
+                : t('Queued — retrying...')}
+            </div>
+          ) : task.relayStatus ? (
             <div className='text-muted-foreground truncate text-xs'>{task.relayStatus}</div>
-          )}
+          ) : null}
           {task.error && (
             <div className='truncate text-xs text-red-600'>{task.error}</div>
           )}
@@ -980,7 +1003,7 @@ function TaskCard({ task, onChange, onCancel, onDelete }: TaskCardProps) {
         <div className='text-muted-foreground shrink-0 text-xs'>
           {new Date(task.submittedAt).toLocaleTimeString()}
         </div>
-        {task.status !== 'submitting' && task.status !== 'running' && (
+        {task.status !== 'submitting' && task.status !== 'running' && task.status !== 'queued' && (
           <button
             type='button'
             className='text-muted-foreground shrink-0 p-1 hover:text-destructive'
@@ -1353,6 +1376,9 @@ export function AitokenPurchasePage() {
   // long after it was fired can tell whether the offers panel still shows the
   // same script/version before refreshing it (the user may have switched away).
   const viewedSelectionRef = useRef({ scriptId, version, groupFilterId })
+  // Local ids of queued tasks the user cancelled while waiting out a cooldown, so
+  // the redispatch loop can stop promptly (it can't observe React state directly).
+  const cancelledQueueRef = useRef<Set<string>>(new Set())
   useEffect(() => {
     viewedSelectionRef.current = { scriptId, version, groupFilterId }
   }, [scriptId, version, groupFilterId])
@@ -1521,6 +1547,61 @@ export function AitokenPurchasePage() {
     if (scriptId) await loadOffersFor(scriptId, version, groupId)
   }
 
+  // waitOutCooldown holds a queued order (MATCHING, funds reserved) through the
+  // script's min-interval cooldown: it shows a live countdown, then calls
+  // redispatch. If still cooling it loops with the refreshed wait; once a node
+  // frees up it returns the advanced order for the caller to relay. Returns null
+  // when the queue ended — the user cancelled (refunded via onCancelTask), the
+  // backend refunded (no node left), redispatch errored, or the page is unloading
+  // — with the task already finalized in those cases.
+  async function waitOutCooldown(
+    localId: string, order: Order, firstWaitSecs: number,
+    taskScriptId: number, taskVersion: number, cleanedConfigText: string
+  ): Promise<Order | null> {
+    const upd = (patch: Partial<QueuedTask>) => updateTask(localId, patch)
+    let waitSecs = Math.max(1, firstWaitSecs)
+    // Bound total queue time so an order can never wait indefinitely; the backend
+    // stale-order sweep also backstops a refund past its grace window.
+    const deadline = Date.now() + 10 * 60 * 1000
+    while (Date.now() < deadline) {
+      if (cancelledQueueRef.current.has(localId)) return null
+      // Count down to the next attempt, ticking the card each second.
+      const readyAt = Date.now() + waitSecs * 1000
+      upd({ status: 'queued', cooldownUntil: readyAt, relayStatus: '' })
+      while (Date.now() < readyAt) {
+        if (cancelledQueueRef.current.has(localId)) return null
+        await new Promise((r) => window.setTimeout(r, 1000))
+      }
+      if (cancelledQueueRef.current.has(localId)) return null
+      // Cooldown elapsed — ask the backend to re-match.
+      try {
+        const res = await redispatchOrder(order.id)
+        if (cancelledQueueRef.current.has(localId)) return null
+        upd({ order: res.order })
+        if (res.cooling_down) {
+          // Another node started a task in the meantime; keep queuing.
+          waitSecs = Math.max(1, res.retry_after_secs ?? waitSecs)
+          continue
+        }
+        // Redispatched (OFFERED+), refunded, or otherwise resolved — hand back to
+        // the caller, which handles REFUNDED / no-node / relay uniformly.
+        upd({ cooldownUntil: undefined })
+        return res.order
+      } catch (e) {
+        // Terminal redispatch failure (e.g. all providers went offline → refunded).
+        upd({ status: 'failed', cooldownUntil: undefined, relayStatus: '', error: String((e as Error).message) })
+        addTaskRecord({ orderId: order.id, scriptId: taskScriptId, scriptTitle: scripts.find((s) => s.id === taskScriptId)?.title ?? '', version: taskVersion, nodeId: order.chosen_node_id, configText: cleanedConfigText, result: '', status: 'FAILED', error: String((e as Error).message), createdAt: Math.floor(Date.now() / 1000) })
+        await loadBalance()
+        return null
+      }
+    }
+    // Gave up waiting: cancel + refund so funds aren't frozen until the sweep.
+    try { await cancelOrder(order.id) } catch { /* sweep backstops */ }
+    upd({ status: 'failed', cooldownUntil: undefined, relayStatus: '', error: t('Timed out waiting for an available provider; funds refunded') })
+    await loadBalance()
+    return null
+  }
+
   // runTask executes one purchase+relay cycle for a queued task entry.
   // It runs fire-and-forget so multiple tasks can be in-flight at once.
   async function runTask(
@@ -1532,12 +1613,25 @@ export function AitokenPurchasePage() {
     const upd = (patch: Partial<QueuedTask>) => updateTask(localId, patch)
     try {
       const key = `order-${Date.now()}-${Math.random().toString(36).slice(2)}`
-      const { order: o } = await createOrder({
+      const {
+        order: created, cooling_down: coolingDown, retry_after_secs: retryAfter,
+      } = await createOrder({
         script_id: taskScriptId, version: taskVersion,
         node_id: capturedAutoSelect ? undefined : capturedNodeId || undefined,
         provider_group_id: capturedAutoSelect ? capturedGroupFilterId || undefined : undefined,
         input_hash: inputHash, consume_multiplier: capturedMultiplier,
       }, key)
+      let o = created
+      // Every eligible node is within the script's min-interval cooldown. The
+      // order is queued (MATCHING, funds reserved); wait out the gap and retry,
+      // and let the user cancel (which refunds). waitOutCooldown returns the
+      // advanced order once a node frees up, or null if the queue ended (cancelled
+      // / refunded / gave up) — in which case the task is already finalized.
+      if (coolingDown) {
+        const advanced = await waitOutCooldown(localId, o, retryAfter ?? 30, taskScriptId, taskVersion, cleanedConfigText)
+        if (!advanced) return
+        o = advanced
+      }
       upd({ order: o, status: 'running', relayStatus: t('Order created, connecting...') })
       if (o.state === 'REFUNDED') {
         upd({ status: 'failed', error: t('Provider rejected; funds refunded'), relayStatus: '' })
@@ -1671,10 +1765,25 @@ export function AitokenPurchasePage() {
   }
 
   async function onCancelTask(orderId: string) {
+    // Signal any cooldown-queue loop for this order to stop before we cancel, so
+    // it doesn't redispatch the order we're about to refund.
+    const queued = taskQueue.find((t) => t.order?.id === orderId && t.status === 'queued')
+    if (queued) cancelledQueueRef.current.add(queued.localId)
     try {
       const cancelled = await cancelOrder(orderId)
       setTaskQueue((prev) =>
-        prev.map((t) => (t.order?.id === orderId ? { ...t, order: cancelled } : t))
+        prev.map((task) =>
+          task.order?.id === orderId
+            ? {
+                ...task, order: cancelled, cooldownUntil: undefined,
+                // A queued task has no live relay to interrupt; finalize it as
+                // cancelled right here so the card leaves the "queued" state.
+                ...(task.status === 'queued'
+                  ? { status: 'failed' as const, relayStatus: '', error: t('Cancelled; funds refunded') }
+                  : {}),
+              }
+            : task
+        )
       )
       await loadBalance()
       toast.success(t('Order cancelled'))
@@ -1682,7 +1791,7 @@ export function AitokenPurchasePage() {
   }
 
   const insufficientBalance = quote != null && quote.MaxCustomerMicros > (bal?.client_available ?? 0)
-  const runningTaskCount = taskQueue.filter((task) => task.status === 'running' || task.status === 'submitting').length
+  const runningTaskCount = taskQueue.filter((task) => task.status === 'running' || task.status === 'submitting' || task.status === 'queued').length
 
   return (
     <SectionPageLayout fixedContent>
@@ -1867,11 +1976,11 @@ export function AitokenPurchasePage() {
                 <div className='flex items-center gap-2'>
                   <span className='text-muted-foreground text-xs'>
                     {runningTaskCount > 0 && (
-                      <>{taskQueue.filter((tk) => tk.status === 'running' || tk.status === 'submitting').length} {t('running')} · </>
+                      <>{runningTaskCount} {t('running')} · </>
                     )}
                     {taskQueue.length} {t('total')}
                   </span>
-                  <Button size='sm' variant='ghost' className='h-7 px-2 text-xs' onClick={() => setTaskQueue((prev) => prev.filter((tk) => tk.status === 'running' || tk.status === 'submitting'))}>
+                  <Button size='sm' variant='ghost' className='h-7 px-2 text-xs' onClick={() => setTaskQueue((prev) => prev.filter((tk) => tk.status === 'running' || tk.status === 'submitting' || tk.status === 'queued'))}>
                     {t('Clear done')}
                   </Button>
                 </div>

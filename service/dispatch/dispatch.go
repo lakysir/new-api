@@ -26,6 +26,40 @@ var (
 	ErrOrderNotMatchable = errors.New("order is not in a matchable state")
 )
 
+// ErrNodeCoolingDown is returned when the only otherwise-eligible node(s) for an
+// order are within the script's min-interval cooldown for its target-site
+// category. It carries the seconds until the soonest node is dispatchable again
+// so the caller can tell the buyer to retry, distinct from an all-busy/offline
+// ErrNoCandidates. It unwraps to ErrNoCandidates so existing callers that only
+// branch on "nothing matched" keep working unchanged.
+type ErrNodeCoolingDown struct {
+	RetryAfterSecs int64
+}
+
+func (e *ErrNodeCoolingDown) Error() string {
+	return fmt.Sprintf("all eligible nodes are cooling down; retry in %ds", e.RetryAfterSecs)
+}
+
+// Unwrap lets errors.Is(err, ErrNoCandidates) still match a cooldown result.
+func (e *ErrNodeCoolingDown) Unwrap() error { return ErrNoCandidates }
+
+// noCandidateErr classifies an empty candidate set. When every otherwise-usable
+// node for the order is merely within its min-interval cooldown, it returns an
+// ErrNodeCoolingDown carrying the seconds until the soonest one is dispatchable
+// again (min 1) so the caller can offer a retry. Otherwise (all busy/offline,
+// or no matching capability at all) it returns the plain ErrNoCandidates.
+func noCandidateErr(scriptId, version int, providerGroupId, chosenNodeId string, clientUserId int) error {
+	readyAt, cooling := model.EarliestCooldownReadyForScript(scriptId, version, providerGroupId, chosenNodeId, clientUserId)
+	if !cooling {
+		return ErrNoCandidates
+	}
+	retryAfter := readyAt - time.Now().Unix()
+	if retryAfter < 1 {
+		retryAfter = 1
+	}
+	return &ErrNodeCoolingDown{RetryAfterSecs: retryAfter}
+}
+
 // Result reports a successful dispatch.
 type Result struct {
 	OrderId       string
@@ -66,9 +100,15 @@ func Dispatch(orderId string, attempt int) (*Result, error) {
 		return nil, err
 	}
 	targetSite := ""
-	if version, versionErr := model.GetScriptVersion(o.ScriptId, o.Version); versionErr == nil && version.CategoryId > 0 {
-		if category, categoryErr := model.GetScriptCategory(version.CategoryId); categoryErr == nil {
-			targetSite = category.Site
+	categoryId := 0
+	minInterval := 0
+	if version, versionErr := model.GetScriptVersion(o.ScriptId, o.Version); versionErr == nil {
+		categoryId = version.CategoryId
+		minInterval = version.MinIntervalSeconds
+		if version.CategoryId > 0 {
+			if category, categoryErr := model.GetScriptCategory(version.CategoryId); categoryErr == nil {
+				targetSite = category.Site
+			}
 		}
 	}
 	// Must be matching to dispatch. FUNDS_RESERVED advances to MATCHING first.
@@ -85,7 +125,7 @@ func Dispatch(orderId string, attempt int) (*Result, error) {
 		return nil, err
 	}
 	if len(candidates) == 0 {
-		return nil, ErrNoCandidates
+		return nil, noCandidateErr(o.ScriptId, o.Version, o.ProviderGroupId, o.ChosenNodeId, o.ClientId)
 	}
 	// Build the ordered list of candidates to attempt. In auto mode we try the
 	// ranked candidates in turn; in chosen mode only the client's node.
@@ -100,8 +140,8 @@ func Dispatch(orderId string, attempt int) (*Result, error) {
 			}
 		}
 		if !matched {
-			// Chosen node not currently eligible (offline/busy): no dispatch yet.
-			return nil, ErrNoCandidates
+			// Chosen node not currently eligible (offline/busy/cooling): no dispatch yet.
+			return nil, noCandidateErr(o.ScriptId, o.Version, o.ProviderGroupId, o.ChosenNodeId, o.ClientId)
 		}
 	}
 
@@ -114,7 +154,7 @@ func Dispatch(orderId string, attempt int) (*Result, error) {
 	for _, best := range attemptOrder {
 		var attemptResult *Result
 		txErr := model.DB.Transaction(func(tx *gorm.DB) error {
-			lease, ta, rerr := reserveInTx(tx, taskId, orderId, best.NodeId, o.ScriptId, o.Version, attempt, DefaultLeaseTTL)
+			lease, ta, rerr := reserveInTx(tx, taskId, orderId, best.NodeId, o.ScriptId, o.Version, categoryId, minInterval, attempt, DefaultLeaseTTL)
 			if rerr != nil {
 				return rerr
 			}
@@ -155,10 +195,11 @@ func Dispatch(orderId string, attempt int) (*Result, error) {
 		return nil, txErr
 	}
 	if result == nil {
-		// Every candidate turned out busy — treat as "no eligible node" so the
-		// caller (CreateOrder) leaves the order matching for the async offer
-		// retry rather than hard-failing the request with ErrNodeBusy.
-		return nil, ErrNoCandidates
+		// Every candidate lost the reservation race — busy, or newly inside the
+		// min-interval cooldown by the time we reserved. Classify so a cooldown
+		// surfaces as ErrNodeCoolingDown (retryable) rather than a generic
+		// ErrNoCandidates; both leave the order in MATCHING for the caller.
+		return nil, noCandidateErr(o.ScriptId, o.Version, o.ProviderGroupId, o.ChosenNodeId, o.ClientId)
 	}
 	return result, nil
 }
@@ -166,12 +207,20 @@ func Dispatch(orderId string, attempt int) (*Result, error) {
 // reserveInTx creates the lease + task attempt + flips node to BUSY inside an
 // existing transaction. With concurrent execution the node may accept multiple
 // tasks up to its total concurrency; capacity is checked transactionally here.
-func reserveInTx(tx *gorm.DB, taskId, orderId, nodeId string, scriptId, version, attempt int, ttl time.Duration) (*model.Lease, *model.TaskAttempt, error) {
+func reserveInTx(tx *gorm.DB, taskId, orderId, nodeId string, scriptId, version, categoryId, minInterval, attempt int, ttl time.Duration) (*model.Lease, *model.TaskAttempt, error) {
 	var node model.Node
 	if err := tx.Where("id = ?", nodeId).First(&node).Error; err != nil {
 		return nil, nil, model.ErrNodeNotFound
 	}
 	if !node.IsOnline() {
+		return nil, nil, model.ErrNodeBusy
+	}
+	// Min-interval cooldown re-check inside the transaction: a candidate can pass
+	// the scheduler's pre-filter yet still be within the gap by the time we
+	// reserve (or a concurrent dispatch may have just started a task for this
+	// category). Treat cooling as a soft busy so the caller skips to the next
+	// candidate, mirroring the concurrency guards below.
+	if cooling, _ := model.NodeCategoryCoolingUntil(tx, nodeId, categoryId, minInterval); cooling {
 		return nil, nil, model.ErrNodeBusy
 	}
 	// Node-level capacity: active leases < sum of all capability concurrency.
@@ -208,7 +257,7 @@ func reserveInTx(tx *gorm.DB, taskId, orderId, nodeId string, scriptId, version,
 	active := true
 	lease := &model.Lease{
 		Id: "lea_" + model.NewEventId()[4:], NodeId: nodeId, TaskId: taskId,
-		ScriptId: scriptId, Version: version,
+		ScriptId: scriptId, Version: version, CategoryId: categoryId,
 		Attempt: attempt, Active: &active, ExpiresAt: time.Now().Add(ttl).Unix(),
 	}
 	if err := tx.Create(lease).Error; err != nil {
