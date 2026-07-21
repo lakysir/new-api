@@ -95,6 +95,36 @@ const EXAMPLE_SCRIPT_PARAMS = JSON.stringify(
   2
 )
 
+const EXAMPLE_SCRIPT_CODE = `async function runGeneratedTest(config) {
+  // Script Params is passed to this function as config.
+  const prompt = String(config.prompt || '')
+  if (!prompt) {
+    return { status: 'failed', balance: 0, error: 'prompt is required' }
+  }
+
+  // The script runs in the target page's MAIN world. It can use document,
+  // location, and credentialed fetch requests for the signed-in account.
+  const response = await fetch('/api/generate', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      prompt,
+      model: config.model,
+      resolution: config.resolution,
+      duration: config.duration,
+    }),
+  })
+  const result = await response.json()
+
+  // Return serializable data. balance updates the node's remaining quota.
+  return {
+    status: 'success',
+    balance: Number(result.balance || 0),
+    video_url: result.video_url,
+  }
+}`
+
 const EXAMPLE_PRICE_CALC = `基础单价: $0.001 (由脚本创作者设定)
 节点倍率: 1.2× (由节点提供者设定)
 参数倍率计算:
@@ -194,6 +224,16 @@ export function ScriptCreatorGuidePage() {
             </Callout>
             <p>{t('示例参数：')}</p>
             <CodeBlock code={EXAMPLE_SCRIPT_PARAMS} />
+            <div className='space-y-2 pt-2'>
+              <div className='font-medium'>{t('函数契约与返回值')}</div>
+              <p className='text-muted-foreground'>
+                {t('Script Params 中的 JSON 会作为 config 参数传入 runGeneratedTest。脚本运行在目标页面的 MAIN world，可访问 document、location，以及携带当前登录凭证的 fetch。')}
+              </p>
+              <p className='text-muted-foreground'>
+                {t('返回值必须是可序列化对象。status 表示执行状态，balance 表示账号当前剩余额度；平台会使用 balance 更新节点的剩余额度显示。图片、视频、音频地址和其他业务字段可以按需返回。')}
+              </p>
+              <CodeBlock language='javascript' code={EXAMPLE_SCRIPT_CODE} />
+            </div>
           </Section>
 
           {/* ── 3. 并发数与最小间隔 ── */}
