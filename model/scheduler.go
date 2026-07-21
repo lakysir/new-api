@@ -64,7 +64,6 @@ func ListOffersForScript(scriptId, version int, providerGroupId string, consumeM
 		consumeMultiplier = 1
 	}
 	cutoff := time.Now().Add(-NodePresenceTimeout).Unix()
-	now := time.Now().Unix()
 	type row struct {
 		NodeId            string
 		UserId            int
@@ -222,7 +221,13 @@ func ListOffersForScript(scriptId, version int, providerGroupId string, consumeM
 			availSlots = 0
 		}
 
-		testValid := r.TestExpiresAt > now
+		// A passing capability test does not expire on a timer: once the provider
+		// proved the node can run the script and it was listed (status = active),
+		// it stays schedulable until explicitly re-tested or suspended. Re-testing
+		// on a fixed interval would force providers with many nodes to re-list
+		// repeatedly for no benefit. A fresh test is still required to LIST
+		// (EnableCapability), just not to STAY listed.
+		testValid := true
 		// A passing balance check does not expire on a timer: once the provider
 		// proved the target site is usable, the node stays schedulable until an
 		// explicit recheck flips balance_ok to false (a broken node surfaces via
@@ -330,7 +335,9 @@ func GetCapabilityPrice(nodeId string, scriptId, version int) (int64, bool, erro
 	if err != nil {
 		return 0, false, err
 	}
-	return cap.PriceMicros, cap.Status == CapabilityStatusActive && cap.IsTestValid(), nil
+	// Active status is the permanent pass marker; the test timer only gates
+	// listing (EnableCapability), not staying listed.
+	return cap.PriceMicros, cap.Status == CapabilityStatusActive, nil
 }
 
 // ScheduleCandidates returns eligible nodes for a script version whose price is
@@ -361,7 +368,8 @@ func ScheduleCandidates(scriptId, version int, maxPriceMicros int64, limit int, 
 		Joins("LEFT JOIN node_site_status s ON s.node_id = cap.node_id AND s.category_id = cap.category_id").
 		Where("cap.script_id = ? AND cap.version = ?", scriptId, version).
 		Where("cap.status = ?", CapabilityStatusActive).
-		Where("cap.test_expires_at > ?", now).
+		// A passing capability test does not expire on a timer once listed
+		// (status = active). A fresh test gates LISTING, not staying listed.
 		Where("cap.remaining_quota > ?", consumeMultiplier).
 		Where("cap.price_micros <= ?", maxPriceMicros).
 		Where("n.last_seen_at >= ?", cutoff).

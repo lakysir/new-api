@@ -839,6 +839,11 @@ export function NodesConsolePage() {
                   const checkStatus = (balanceChecks[node.id] || []).find(
                     (item) => item.category_id === c.category_id
                   )
+                  const hasCheckedBalance = (checkStatus?.checked_at ?? 0) > 0
+                  const balanceDisplay =
+                    checkStatus && hasCheckedBalance
+                      ? checkStatus.balance_micros
+                      : c.remaining_quota
                   const checkValid = capabilityBalanceOk(node.id, c.category_id)
                   const checkKey = `${node.id}:${c.category_id}`
                   let checkClassName = 'text-muted-foreground'
@@ -866,7 +871,15 @@ export function NodesConsolePage() {
                           </div>
                         )}
                       </TableCell>
-                      <TableCell>{c.remaining_quota}</TableCell>
+                      <TableCell
+                        title={t(
+                          hasCheckedBalance
+                            ? 'Balance from last balance check'
+                            : 'Balance from last execution result'
+                        )}
+                      >
+                        {balanceDisplay}
+                      </TableCell>
                       <TableCell>{daily}</TableCell>
                       <TableCell>{rate}</TableCell>
                       <TableCell>
