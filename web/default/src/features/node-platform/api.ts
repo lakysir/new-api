@@ -18,18 +18,19 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { api, type ApiRequestConfig } from '@/lib/api'
 
-import type {
-  ApiEnvelope,
-  CapabilityStat,
-  Device,
-  EarningsSummary,
-  LedgerBalances,
-  NodeCapability,
-  NodeInfo,
-  Order,
-  PriceBreakdown,
-  ProviderTaskAttempt,
-  ScriptVersion,
+import {
+  parsePricingRules,
+  type ApiEnvelope,
+  type CapabilityStat,
+  type Device,
+  type EarningsSummary,
+  type LedgerBalances,
+  type NodeCapability,
+  type NodeInfo,
+  type Order,
+  type PriceBreakdown,
+  type ProviderTaskAttempt,
+  type ScriptVersion,
 } from './types'
 
 // unwrap returns the `data` field of the standard API envelope, throwing the
@@ -180,16 +181,27 @@ export function listPendingScripts() {
       base_price_micros?: number
       pricing_rules?: import('./types').PricingRule[]
     }>
-  >(api.get('/api/scripts/pending'))
+  >(api.get('/api/scripts/pending')).then((items) =>
+    items.map((item) => ({
+      ...item,
+      pricing_rules: parsePricingRules(item.pricing_rules),
+    }))
+  )
 }
 
 export function listPublishedScriptVersions() {
-  return unwrap<ScriptVersion[]>(api.get('/api/scripts/versions/published'))
+  return unwrap<ScriptVersion[]>(
+    api.get('/api/scripts/versions/published')
+  ).then((versions) =>
+    versions.map((v) => ({ ...v, pricing_rules: parsePricingRules(v.pricing_rules) }))
+  )
 }
 
 export function listAvailableScriptVersions(scriptId: number) {
   return unwrap<ScriptVersion[]>(
     api.get(`/api/scripts/${scriptId}/versions/available`)
+  ).then((versions) =>
+    versions.map((v) => ({ ...v, pricing_rules: parsePricingRules(v.pricing_rules) }))
   )
 }
 

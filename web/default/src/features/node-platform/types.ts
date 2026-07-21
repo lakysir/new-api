@@ -50,6 +50,23 @@ export type PricingRule = {
   max?: number
 }
 
+// pricing_rules is stored as a JSON string in the DB (model PricingRules is a
+// Go `string`), so API responses deliver it as a string, not an array. Parse it
+// at the boundary so downstream code can rely on the PricingRule[] type.
+export function parsePricingRules(raw: unknown): PricingRule[] {
+  if (!raw) return []
+  if (Array.isArray(raw)) return raw as PricingRule[]
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw)
+      return Array.isArray(parsed) ? (parsed as PricingRule[]) : []
+    } catch {
+      return []
+    }
+  }
+  return []
+}
+
 export type ScriptVersion = {
   id: number
   script_id: number
