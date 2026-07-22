@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/service/nodeidentity"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // nowPlus returns a unix timestamp offset by delta seconds from now.
@@ -520,6 +522,42 @@ func TestEnableCapabilityRequiresBalanceCheck(t *testing.T) {
 	if len(cands) != 1 || cands[0].NodeId != "bc_node" {
 		t.Fatalf("balance-checked node should be schedulable, got %+v", cands)
 	}
+}
+
+func TestFirstBalanceCheckUpdatesOfferBalance(t *testing.T) {
+	const (
+		nodeId        = "first_balance_sync"
+		categoryId    = 43
+		balanceMicros = 27_500_000
+	)
+	require.NoError(t, DB.Create(&Node{
+		Id: nodeId, DeviceId: "d-first-balance", UserId: 1,
+		State: NodeStateIdle, Enabled: true, LastSeenAt: nowPlus(0),
+	}).Error)
+	capability := &NodeCapability{
+		NodeId: nodeId, ScriptId: 7301, Version: 1, UserId: 1,
+		CategoryId: categoryId, PriceMicros: 100_000,
+		DailyLimit: 100, RemainingQuota: 100, Status: CapabilityStatusActive,
+	}
+	require.NoError(t, DB.Create(capability).Error)
+
+	require.NoError(t, RecordBalanceCheck(&NodeSiteStatus{
+		NodeId: nodeId, CategoryId: categoryId, UserId: 1,
+		BalanceOk: true, BalanceMicros: balanceMicros,
+		CheckedAt: nowPlus(0), ExpiresAt: nowPlus(3600),
+	}))
+	var stored NodeCapability
+	require.NoError(t, DB.First(&stored, capability.Id).Error)
+	assert.Equal(t, balanceMicros, stored.RemainingQuota)
+
+	// Existing deployments may already have a fresh site-status row paired with
+	// a stale capability seed. Offers must use the balance check as their source.
+	require.NoError(t, DB.Model(capability).UpdateColumn("remaining_quota", 100).Error)
+
+	offers, err := ListOffersForScript(capability.ScriptId, capability.Version, "", 1, 0)
+	require.NoError(t, err)
+	require.Len(t, offers, 1)
+	assert.Equal(t, balanceMicros, offers[0].RemainingQuota)
 }
 
 func TestSetCategoryBalanceScript(t *testing.T) {

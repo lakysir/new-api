@@ -284,17 +284,19 @@ func RecordBalanceCheck(s *NodeSiteStatus) error {
 	var existing NodeSiteStatus
 	err := DB.Where("node_id = ? AND category_id = ?", s.NodeId, s.CategoryId).First(&existing).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return DB.Create(s).Error
-	}
-	if err != nil {
+		if err := DB.Create(s).Error; err != nil {
+			return err
+		}
+	} else if err != nil {
 		return err
-	}
-	if err := DB.Model(&NodeSiteStatus{}).Where("id = ?", existing.Id).Updates(map[string]any{
-		"balance_ok": s.BalanceOk, "balance_micros": s.BalanceMicros,
-		"tier": s.Tier, "checked_at": s.CheckedAt, "expires_at": s.ExpiresAt,
-		"error_message": s.ErrorMessage,
-	}).Error; err != nil {
-		return err
+	} else {
+		if err := DB.Model(&NodeSiteStatus{}).Where("id = ?", existing.Id).Updates(map[string]any{
+			"balance_ok": s.BalanceOk, "balance_micros": s.BalanceMicros,
+			"tier": s.Tier, "checked_at": s.CheckedAt, "expires_at": s.ExpiresAt,
+			"error_message": s.ErrorMessage,
+		}).Error; err != nil {
+			return err
+		}
 	}
 	// A balance check is the freshest reading of the provider's on-site account
 	// balance, so mirror it onto every capability in this category. The scheduler

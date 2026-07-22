@@ -1831,8 +1831,25 @@ export function AitokenPurchasePage() {
   // The amount actually reserved is the editable cap (defaults to the computed
   // max total), so the affordability check uses it, not the quote's raw max.
   const reserveMicros = maxCapMicros ?? quote?.MaxCustomerMicros ?? 0
-  const insufficientBalance = quote != null && reserveMicros > (bal?.client_available ?? 0)
-  const runningTaskCount = taskQueue.filter((task) => task.status === 'running' || task.status === 'submitting' || task.status === 'queued').length
+  const insufficientBalance =
+    quote != null && reserveMicros > (bal?.client_available ?? 0)
+  const runningTaskCount = taskQueue.filter(
+    (task) =>
+      task.status === 'running' ||
+      task.status === 'submitting' ||
+      task.status === 'queued'
+  ).length
+  const effectiveMultiplier = getEffectiveMultiplier()
+  const quoteFeeItems = quote
+    ? [
+        { label: t('Provider'), value: quote.ProviderMicros },
+        { label: t('Author'), value: quote.AuthorMicros },
+        { label: t('Platform fee'), value: quote.PlatformFeeMicros },
+        { label: t('Relay fee'), value: quote.RelayFeeMicros },
+        { label: t('Storage fee'), value: quote.StorageFeeMicros },
+        { label: t('Risk reserve'), value: quote.RiskReserveMicros },
+      ].filter((item) => item.value > 0)
+    : []
 
   return (
     <SectionPageLayout fixedContent>
@@ -1941,8 +1958,13 @@ export function AitokenPurchasePage() {
                           <span>{statusLabel}</span>
                           {o.owned && !o.enabled && <span className='rounded bg-amber-500/15 px-1.5 py-0.5 text-amber-700'>{t('Your node (disabled) — selectable for testing')}</span>}
                           <span className='text-muted-foreground'>{t('Success rate')}: {rate}</span>
-                          <span className='text-muted-foreground'>{t('quota')}: {o.remaining_quota}</span>
-                          {o.concurrency > 1 && <span className='text-muted-foreground'>{t('slots')}: {o.available_slots}/{o.total_slots}</span>}
+                          <span className='text-muted-foreground'>{t('Quota')}: {o.remaining_quota}</span>
+                          {o.concurrency > 1 && (
+                            <span className='text-muted-foreground'>
+                              {t('Available slots')}: {o.available_slots}/
+                              {o.total_slots}
+                            </span>
+                          )}
                           {!o.available && o.unavailable_reason !== 'BALANCE_CHECK_EXPIRED' && (
                             <span className='text-red-600'>
                               {o.unavailable_reason === 'QUOTA_EXHAUSTED' && t('Quota exhausted')}
@@ -2163,24 +2185,48 @@ export function AitokenPurchasePage() {
               </div>
               {insufficientBalance && <div className='text-xs text-red-300'>{t('Insufficient balance')}</div>}
               {quote && (
-                <div className='flex flex-wrap justify-end gap-x-4 gap-y-1 text-xs text-white/60'>
-                  <span>{t('Provider')}: {microsToCurrency(quote.ProviderMicros)}</span>
-                  <span>{t('Author')}: {microsToCurrency(quote.AuthorMicros)}</span>
-                  <span>{t('Platform fee')}: {microsToCurrency(quote.PlatformFeeMicros)}</span>
-                  {(() => {
-                    const scriptVer = availableVersions.find((v) => v.version === version)
-                    if (!scriptVer?.pricing_rules?.length) return null
-                    try {
-                      const cfg = JSON.parse(configText)
-                      const mult = computeParamsMultiplier(cfg, scriptVer.pricing_rules)
-                      if (mult <= 1) return null
-                      return (
-                        <span className='text-white/80 font-medium'>
-                          {t('Params')}: ×{mult.toFixed(1)}
-                        </span>
-                      )
-                    } catch { return null }
-                  })()}
+                <div className='ml-auto w-full max-w-2xl space-y-2 text-xs'>
+                  <div className='grid grid-cols-2 overflow-hidden rounded-md border border-white/15 sm:grid-cols-4'>
+                    <div className='border-r border-b border-white/10 px-3 py-2 sm:border-b-0'>
+                      <div className='text-white/50'>{t('Provider')}</div>
+                      <div className='mt-0.5 font-medium text-white'>
+                        {microsToCurrency(quote.ProviderMicros)}
+                      </div>
+                    </div>
+                    <div className='border-b border-white/10 px-3 py-2 sm:border-r sm:border-b-0'>
+                      <div className='text-white/50'>{t('Author')}</div>
+                      <div className='mt-0.5 font-medium text-white'>
+                        {microsToCurrency(quote.AuthorMicros)}
+                      </div>
+                    </div>
+                    <div className='border-r border-white/10 px-3 py-2'>
+                      <div className='text-white/50'>{t('Platform fee')}</div>
+                      <div className='mt-0.5 font-medium text-white'>
+                        {microsToCurrency(quote.PlatformFeeMicros)}
+                      </div>
+                    </div>
+                    <div className='px-3 py-2'>
+                      <div className='text-white/50'>{t('Quota')}</div>
+                      <div className='mt-0.5 font-medium text-white'>
+                        x{effectiveMultiplier.toFixed(1)}
+                      </div>
+                    </div>
+                  </div>
+                  <div className='flex flex-wrap items-center justify-end gap-x-2 gap-y-1 text-white/60'>
+                    <span>{t('Billing method')}:</span>
+                    <span className='font-medium text-white/85'>
+                      {quoteFeeItems
+                        .map(
+                          (item) =>
+                            `${item.label} ${microsToCurrency(item.value)}`
+                        )
+                        .join(' + ')}
+                    </span>
+                    <span>=</span>
+                    <span className='font-semibold text-white'>
+                      {t('Total')} {microsToCurrency(quote.MaxCustomerMicros)}
+                    </span>
+                  </div>
                 </div>
               )}
             </div>

@@ -79,6 +79,7 @@ func ListOffersForScript(scriptId, version int, providerGroupId string, consumeM
 		TestExpiresAt     int64
 		CategoryId        int
 		BalanceOk         bool
+		BalanceMicros     int64
 		BalanceExpiresAt  int64
 		Enabled           bool
 	}
@@ -89,7 +90,7 @@ func ListOffersForScript(scriptId, version int, providerGroupId string, consumeM
 			n.user_id, n.last_seen_at, n.state, n.success_count, n.failure_count,
 			n.provider_group_id, n.enabled,
 			pg.name AS provider_group_name,
-			s.balance_ok, s.expires_at AS balance_expires_at`).
+			s.balance_ok, s.balance_micros, s.expires_at AS balance_expires_at`).
 		Joins("JOIN nodes n ON n.id = cap.node_id").
 		Joins("LEFT JOIN provider_groups pg ON pg.id = n.provider_group_id").
 		Joins("LEFT JOIN node_site_status s ON s.node_id = cap.node_id AND s.category_id = cap.category_id").
@@ -233,7 +234,11 @@ func ListOffersForScript(scriptId, version int, providerGroupId string, consumeM
 		// explicit recheck flips balance_ok to false (a broken node surfaces via
 		// failed executions / success rate instead).
 		balanceValid := r.CategoryId == 0 || r.BalanceOk
-		balanceEnough := int64(r.RemainingQuota) > consumeMultiplier
+		remainingQuota := r.RemainingQuota
+		if r.CategoryId > 0 && r.BalanceOk {
+			remainingQuota = int(r.BalanceMicros)
+		}
+		balanceEnough := int64(remainingQuota) > consumeMultiplier
 		owned := r.UserId == viewerUserId
 		enabledOrOwned := r.Enabled || owned
 		available := enabledOrOwned && online && !busy && balanceEnough && testValid && balanceValid
@@ -244,7 +249,7 @@ func ListOffersForScript(scriptId, version int, providerGroupId string, consumeM
 			reason = "NODE_OFFLINE"
 		} else if busy {
 			reason = "NODE_BUSY"
-		} else if r.RemainingQuota <= 0 {
+		} else if remainingQuota <= 0 {
 			reason = "QUOTA_EXHAUSTED"
 		} else if !balanceEnough {
 			reason = "INSUFFICIENT_NODE_BALANCE"
@@ -263,7 +268,7 @@ func ListOffersForScript(scriptId, version int, providerGroupId string, consumeM
 			Concurrency:       scriptConcurrency,
 			AvailableSlots:    int(availSlots),
 			TotalSlots:        scriptConcurrency,
-			RemainingQuota:    r.RemainingQuota,
+			RemainingQuota:    remainingQuota,
 			State:             r.State,
 			Executions:        execByNode[r.NodeId],
 			Successes:         successByNode[r.NodeId],
