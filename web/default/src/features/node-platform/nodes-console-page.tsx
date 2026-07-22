@@ -22,6 +22,7 @@ import {
   Download,
   ExternalLink,
   History,
+  Pencil,
   Settings2,
   Trash2,
 } from 'lucide-react'
@@ -71,13 +72,14 @@ import {
   requestBalanceCheck,
   revokeDevice,
   setNodeEnabled,
+  updateDeviceNickname,
   type NodeBalanceCheck,
   type PluginRelease,
   type ProviderGroup,
   type ScriptCategory,
 } from './api'
 import { EarningsSummary } from './earnings-summary'
-import { displayToMicros, formatUnix, microsToCurrency } from './lib/format'
+import { formatUnix, microsToCurrency } from './lib/format'
 import type {
   CapabilityStat,
   Device,
@@ -225,6 +227,12 @@ export function NodesConsolePage() {
   // button so it only appears once the operator has uploaded a release.
   const [pluginRelease, setPluginRelease] = useState<PluginRelease | null>(null)
   const [pluginDialogOpen, setPluginDialogOpen] = useState(false)
+  // Inline nickname editing: the device ID being edited (null = none) and the
+  // current input value. The nickname itself lives on device.nickname (backend).
+  const [editingNicknameId, setEditingNicknameId] = useState<string | null>(null)
+  const [nicknameInput, setNicknameInput] = useState('')
+  // The device ID whose nickname save is in flight, to disable its input.
+  const [savingNicknameId, setSavingNicknameId] = useState('')
 
   useEffect(() => {
     getLatestPluginRelease()
@@ -233,6 +241,24 @@ export function NodesConsolePage() {
       })
       .catch(() => {})
   }, [])
+
+  async function saveNickname(deviceId: string, value: string) {
+    const trimmed = value.trim()
+    setEditingNicknameId(null)
+    setSavingNicknameId(deviceId)
+    try {
+      await updateDeviceNickname(deviceId, trimmed)
+      // Optimistically update the in-memory device list so the UI reflects the
+      // new nickname immediately without a full reload.
+      setDevices((prev) =>
+        prev.map((d) => (d.id === deviceId ? { ...d, nickname: trimmed } : d))
+      )
+    } catch (e) {
+      toast.error(String((e as Error).message))
+    } finally {
+      setSavingNicknameId('')
+    }
+  }
 
   async function loadTaskAttempts() {
     setAttemptsLoading(true)
@@ -1052,9 +1078,47 @@ export function NodesConsolePage() {
                   <Cpu className='text-muted-foreground size-4 shrink-0' />
                   <div className='min-w-0 flex-1 lg:max-w-72'>
                     <div className='flex min-w-0 items-center gap-2'>
-                      <h3 className='truncate text-sm font-medium'>
-                        {device.name || t('Unnamed device')}
-                      </h3>
+                      {editingNicknameId === device.id ? (
+                        <Input
+                          autoFocus
+                          className='h-6 w-40 px-1.5 py-0 text-sm'
+                          value={nicknameInput}
+                          maxLength={40}
+                          disabled={savingNicknameId === device.id}
+                          placeholder={device.name || t('Unnamed device')}
+                          onChange={(e) => setNicknameInput(e.target.value)}
+                          onBlur={() => saveNickname(device.id, nicknameInput)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              saveNickname(device.id, nicknameInput)
+                            } else if (e.key === 'Escape') {
+                              setEditingNicknameId(null)
+                            }
+                          }}
+                        />
+                      ) : (
+                        <>
+                          <h3
+                            className='truncate text-sm font-medium'
+                            title={
+                              device.nickname ? device.name || undefined : undefined
+                            }
+                          >
+                            {device.nickname || device.name || t('Unnamed device')}
+                          </h3>
+                          <button
+                            type='button'
+                            className='text-muted-foreground hover:text-foreground shrink-0'
+                            title={t('Set nickname')}
+                            onClick={() => {
+                              setNicknameInput(device.nickname ?? '')
+                              setEditingNicknameId(device.id)
+                            }}
+                          >
+                            <Pencil className='size-3' />
+                          </button>
+                        </>
+                      )}
                       <span
                         className={`size-2 shrink-0 rounded-full ${node && nodeOnline(node) ? 'bg-emerald-500' : 'bg-muted-foreground/40'}`}
                       />

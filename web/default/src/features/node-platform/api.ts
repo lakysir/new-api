@@ -373,6 +373,14 @@ export function deleteDevice(deviceId: string) {
   return unwrap(api.delete(`/api/devices/${deviceId}/purge`))
 }
 
+// updateDeviceNickname sets (or clears, when empty) a user-defined label on a
+// device so the console can tell otherwise-identical devices apart.
+export function updateDeviceNickname(deviceId: string, nickname: string) {
+  return unwrap<{ device_id: string; nickname: string }>(
+    api.patch(`/api/devices/${deviceId}/nickname`, { nickname })
+  )
+}
+
 export function deleteNode(nodeId: string) {
   return unwrap(api.delete(`/api/nodes/${nodeId}`))
 }

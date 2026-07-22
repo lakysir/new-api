@@ -54,7 +54,10 @@ type Device struct {
 	UserId           int    `json:"user_id" gorm:"index;not null"`
 	PublicKey        string `json:"public_key" gorm:"type:varchar(128);not null"` // base64 Ed25519
 	Name             string `json:"name" gorm:"type:varchar(128)"`
-	Status           string `json:"status" gorm:"type:varchar(16);index;default:active"`
+	// Nickname is a user-editable label to tell devices apart in the console.
+	// Distinct from Name, which the plugin reports at activation ("browser-node").
+	Nickname string `json:"nickname" gorm:"type:varchar(128)"`
+	Status   string `json:"status" gorm:"type:varchar(16);index;default:active"`
 	AccessTokenHash  string `json:"-" gorm:"type:varchar(80);index"`
 	AccessExpiresAt  int64  `json:"access_expires_at" gorm:"default:0"`
 	RefreshTokenHash string `json:"-" gorm:"type:varchar(80);index"`
@@ -328,6 +331,21 @@ func ListUserDevices(userId int) ([]Device, error) {
 	var devices []Device
 	err := DB.Where("user_id = ?", userId).Order("created_at desc").Find(&devices).Error
 	return devices, err
+}
+
+// SetDeviceNickname sets (or clears, if empty) the user-defined nickname on a
+// device. Returns ErrDeviceNotFound when the device doesn't belong to userId.
+func SetDeviceNickname(userId int, deviceId, nickname string) error {
+	res := DB.Model(&Device{}).
+		Where("id = ? AND user_id = ?", deviceId, userId).
+		Update("nickname", nickname)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrDeviceNotFound
+	}
+	return nil
 }
 
 // ErrDeviceNotRevoked is returned when trying to delete a device that is still

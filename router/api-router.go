@@ -365,6 +365,7 @@ func SetApiRouter(router *gin.Engine) {
 				deviceUserRoute.POST("/activate", middleware.CriticalRateLimit(), controller.ActivateDevice)
 				deviceUserRoute.DELETE("/:deviceId", controller.RevokeMyDevice)
 				deviceUserRoute.DELETE("/:deviceId/purge", controller.DeleteMyDevice)
+				deviceUserRoute.PATCH("/:deviceId/nickname", controller.SetMyDeviceNickname)
 			}
 		}
 

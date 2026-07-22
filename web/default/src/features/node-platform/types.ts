@@ -106,6 +106,8 @@ export type Device = {
   user_id: number
   public_key: string
   name: string
+  /** User-defined label; empty string when unset. Set via PATCH /api/devices/:id/nickname */
+  nickname: string
   status: string
   last_seen_at: number
   revoked_at: number

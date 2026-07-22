@@ -3,6 +3,8 @@ package controller
 import (
 	"errors"
 	"net/http"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
@@ -112,6 +114,40 @@ func RevokeMyDevice(c *gin.Context) {
 		return
 	}
 	common.ApiSuccess(c, nil)
+}
+
+type setDeviceNicknameRequest struct {
+	Nickname string `json:"nickname"`
+}
+
+// SetMyDeviceNickname sets a user-defined label on one of the caller's devices
+// so the console can tell otherwise-identical devices apart. An empty nickname
+// clears it. The nickname is trimmed and capped at 128 chars.
+func SetMyDeviceNickname(c *gin.Context) {
+	deviceId := c.Param("deviceId")
+	if deviceId == "" {
+		common.ApiErrorMsg(c, "device id is required")
+		return
+	}
+	var req setDeviceNicknameRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	nickname := strings.TrimSpace(req.Nickname)
+	if utf8.RuneCountInString(nickname) > 128 {
+		common.ApiErrorMsg(c, "nickname must be at most 128 characters")
+		return
+	}
+	if err := model.SetDeviceNickname(c.GetInt("id"), deviceId, nickname); err != nil {
+		if errors.Is(err, model.ErrDeviceNotFound) {
+			common.ApiErrorMsg(c, "device not found")
+			return
+		}
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{"device_id": deviceId, "nickname": nickname})
 }
 
 // DeleteMyDevice permanently removes a REVOKED device and its nodes/capabilities.
