@@ -22,6 +22,7 @@ import { toast } from 'sonner'
 
 import {
   deleteModelConcurrencyRule,
+  deleteModelConcurrencyRulesByModel,
   getModelConcurrencyRules,
   upsertModelConcurrencyRule,
 } from '../api'
@@ -44,14 +45,17 @@ function unwrap<T>(res: {
   return res.data
 }
 
-export function useModelConcurrencyRules(modelName: string) {
+/**
+ * 一次拉回全部规则（不带 model 过滤），页面进来即可列出所有「已配置」的模型。
+ * 单个模型的明细在前端按 model_name 分组得到，切换模型无需再发请求。
+ */
+export function useAllModelConcurrencyRules() {
   return useQuery({
-    queryKey: [RULES_KEY, modelName],
+    queryKey: [RULES_KEY],
     queryFn: async () => {
-      const res = await getModelConcurrencyRules(modelName)
+      const res = await getModelConcurrencyRules()
       return unwrap(res) ?? []
     },
-    enabled: modelName !== '',
   })
 }
 
@@ -78,6 +82,26 @@ export function useUpsertModelConcurrencyRule() {
     },
     onError: (error: Error) => {
       toast.error(error.message || i18next.t('Failed to update setting'))
+    },
+  })
+}
+
+export function useDeleteModelConcurrencyModel() {
+  const invalidate = useInvalidateRules()
+
+  return useMutation({
+    mutationFn: (modelName: string) =>
+      deleteModelConcurrencyRulesByModel(modelName),
+    onSuccess: (res) => {
+      if (res.success) {
+        toast.success(i18next.t('Deleted successfully'))
+        invalidate()
+        return
+      }
+      toast.error(res.message || i18next.t('Failed to delete'))
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || i18next.t('Failed to delete'))
     },
   })
 }

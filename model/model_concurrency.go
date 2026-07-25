@@ -145,6 +145,17 @@ func DeleteModelConcurrencyRule(id int) error {
 	return DB.Delete(&ModelConcurrency{}, id).Error
 }
 
+// DeleteModelConcurrencyRulesByModel 删除某个模型下的全部规则（含「所有用户」与各指定用户）。
+// 管理端「移除该模型的并发配置」用这个；删完之后该模型即回到不限制状态。
+func DeleteModelConcurrencyRulesByModel(modelName string) (int64, error) {
+	modelName = strings.TrimSpace(modelName)
+	if modelName == "" {
+		return 0, nil
+	}
+	tx := DB.Where("model_name = ?", modelName).Delete(&ModelConcurrency{})
+	return tx.RowsAffected, tx.Error
+}
+
 // asyncEndpointTypes 是会产生异步任务的端点类型。只有这些端点的模型才需要并发限制。
 // 部分类型在 constant 中尚未定义常量（被注释），这里用字面量兜住；多余的值不会匹配到任何模型。
 var asyncEndpointTypes = []string{

@@ -84,6 +84,36 @@ func TestGetModelConcurrencyLimitPriority(t *testing.T) {
 	assert.Equal(t, 2, GetModelConcurrencyLimit(8, "sora-2"))
 }
 
+// 「移除该模型的并发配置」必须连带删掉指定用户规则，且不影响其他模型。
+func TestDeleteModelConcurrencyRulesByModel(t *testing.T) {
+	setupConcurrencyTables(t)
+
+	_, err := UpsertModelConcurrencyRule("sora-2", ModelConcurrencyAllUsers, 2)
+	require.NoError(t, err)
+	_, err = UpsertModelConcurrencyRule("sora-2", 7, 5)
+	require.NoError(t, err)
+	_, err = UpsertModelConcurrencyRule("kling-v1", ModelConcurrencyAllUsers, 1)
+	require.NoError(t, err)
+
+	deleted, err := DeleteModelConcurrencyRulesByModel("sora-2")
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), deleted)
+
+	// 删完之后该模型回到不限制，其他模型的规则保持不变
+	assert.Equal(t, 0, GetModelConcurrencyLimit(7, "sora-2"))
+	assert.Equal(t, 1, GetModelConcurrencyLimit(7, "kling-v1"))
+
+	remaining, err := GetModelConcurrencyRules("")
+	require.NoError(t, err)
+	require.Len(t, remaining, 1)
+	assert.Equal(t, "kling-v1", remaining[0].ModelName)
+
+	// 空模型名不应该误删任何数据
+	deleted, err = DeleteModelConcurrencyRulesByModel("  ")
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), deleted)
+}
+
 // 只统计进行中的任务，且严格按 (用户, 模型) 隔离。
 func TestCountUnfinishedTaskByUserModel(t *testing.T) {
 	setupConcurrencyTables(t)

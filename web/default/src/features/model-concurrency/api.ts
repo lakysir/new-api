@@ -24,11 +24,13 @@ import type {
   UpsertModelConcurrencyRequest,
 } from './types'
 
+/** 不传 modelName 时返回全部规则，管理端列表页用这个。 */
 export async function getModelConcurrencyRules(modelName?: string) {
-  const res = await api.get<ModelConcurrencyApiResponse<ModelConcurrencyRule[]>>(
-    '/api/model_concurrency/',
-    { params: modelName ? { model: modelName } : undefined }
-  )
+  const res = await api.get<
+    ModelConcurrencyApiResponse<ModelConcurrencyRule[]>
+  >('/api/model_concurrency/', {
+    params: modelName ? { model: modelName } : undefined,
+  })
   return res.data
 }
 
@@ -46,5 +48,13 @@ export async function deleteModelConcurrencyRule(id: number) {
   const res = await api.delete<ModelConcurrencyApiResponse<null>>(
     `/api/model_concurrency/${id}`
   )
+  return res.data
+}
+
+/** 删除某个模型下的全部规则，该模型随后回到「不限制」状态。 */
+export async function deleteModelConcurrencyRulesByModel(modelName: string) {
+  const res = await api.delete<
+    ModelConcurrencyApiResponse<{ deleted: number }>
+  >('/api/model_concurrency/', { params: { model: modelName } })
   return res.data
 }

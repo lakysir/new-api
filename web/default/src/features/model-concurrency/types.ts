@@ -39,6 +39,17 @@ export type ModelConcurrencyRule = {
   current: number
 }
 
+/** 列表页每行一个模型，由全部规则在前端按 model_name 聚合得到 */
+export type ModelConcurrencySummary = {
+  model_name: string
+  /** 「所有用户」规则的上限；null 表示该模型只配了指定用户规则 */
+  default_limit: number | null
+  /** 指定用户规则条数 */
+  user_rule_count: number
+  /** 该模型上所有用户进行中的异步任务总数 */
+  current_total: number
+}
+
 export type UpsertModelConcurrencyRequest = {
   model_name: string
   user_id: number

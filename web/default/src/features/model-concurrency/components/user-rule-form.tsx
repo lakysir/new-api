@@ -23,10 +23,9 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useDebounce } from '@/hooks/use-debounce'
-
 import { searchUsers } from '@/features/users/api'
 import type { User } from '@/features/users/types'
+import { useDebounce } from '@/hooks/use-debounce'
 
 type UserRuleFormProps = {
   disabled?: boolean
@@ -136,9 +135,7 @@ export function UserRuleForm({ disabled, onSubmit }: UserRuleFormProps) {
                 {user.username}
                 {user.display_name ? ` (${user.display_name})` : ''}
               </span>
-              <span className='text-muted-foreground shrink-0'>
-                #{user.id}
-              </span>
+              <span className='text-muted-foreground shrink-0'>#{user.id}</span>
             </button>
           ))}
         </div>
@@ -201,7 +198,9 @@ export function UserRuleForm({ disabled, onSubmit }: UserRuleFormProps) {
       {selectedUser && (
         <p className='text-muted-foreground text-sm'>
           {t('Selected user')}: {selectedUser.username}
-          {selectedUser.display_name ? ` (${selectedUser.display_name})` : ''} #
+          {selectedUser.display_name
+            ? ` (${selectedUser.display_name})`
+            : ''} #
           {selectedUser.id}
         </p>
       )}

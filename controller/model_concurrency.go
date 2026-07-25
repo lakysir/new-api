@@ -39,8 +39,18 @@ func GetModelConcurrencyRules(c *gin.Context) {
 		usernames = map[int]string{}
 	}
 
+	// 「所有用户」规则没有具体用户，展示该模型上所有用户进行中的任务总数，
+	// 让管理员在列表页一眼看到这个模型当前有多少任务在跑。
+	modelTotals := map[string]int{}
+	for _, perModel := range counts {
+		for name, total := range perModel {
+			modelTotals[name] += total
+		}
+	}
+
 	for _, rule := range rules {
 		if rule.UserId == model.ModelConcurrencyAllUsers {
+			rule.Current = modelTotals[rule.ModelName]
 			continue
 		}
 		rule.Username = usernames[rule.UserId]
@@ -105,6 +115,23 @@ func DeleteModelConcurrencyRule(c *gin.Context) {
 		return
 	}
 	common.ApiSuccess(c, nil)
+}
+
+// DeleteModelConcurrencyRulesByModel 删除某个模型下的全部并发规则。
+// 模型名走 query 参数而不是路径参数：模型名里可能带 '/'（如 provider/model），
+// 放进路径会被 gin 的路由解析切断。
+func DeleteModelConcurrencyRulesByModel(c *gin.Context) {
+	modelName := strings.TrimSpace(c.Query("model"))
+	if modelName == "" {
+		common.ApiErrorMsg(c, "模型名称不能为空")
+		return
+	}
+	deleted, err := model.DeleteModelConcurrencyRulesByModel(modelName)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{"deleted": deleted})
 }
 
 // GetModelConcurrencyCandidateModels 返回下拉框候选模型名：模型库中的异步端点模型、

@@ -515,6 +515,8 @@ func SetApiRouter(router *gin.Engine) {
 			modelConcurrencyRoute.GET("/", controller.GetModelConcurrencyRules)
 			modelConcurrencyRoute.GET("/models", controller.GetModelConcurrencyCandidateModels)
 			modelConcurrencyRoute.PUT("/", controller.UpsertModelConcurrencyRule)
+			// 按模型批量删除挂在集合路径上（?model=xxx），避免与 "/:id" 产生路由冲突
+			modelConcurrencyRoute.DELETE("/", controller.DeleteModelConcurrencyRulesByModel)
 			modelConcurrencyRoute.DELETE("/:id", controller.DeleteModelConcurrencyRule)
 		}
 
