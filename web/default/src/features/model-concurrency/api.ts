@@ -32,13 +32,6 @@ export async function getModelConcurrencyRules(modelName?: string) {
   return res.data
 }
 
-export async function getModelConcurrencyCandidateModels() {
-  const res = await api.get<ModelConcurrencyApiResponse<string[]>>(
-    '/api/model_concurrency/models'
-  )
-  return res.data
-}
-
 export async function upsertModelConcurrencyRule(
   request: UpsertModelConcurrencyRequest
 ) {

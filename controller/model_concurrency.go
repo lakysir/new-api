@@ -107,37 +107,13 @@ func DeleteModelConcurrencyRule(c *gin.Context) {
 	common.ApiSuccess(c, nil)
 }
 
-// GetModelConcurrencyCandidateModels 返回下拉框候选模型名：历史异步任务中出现过的
-// 模型，加上已配置规则的模型。管理端也允许手输任意模型名。
+// GetModelConcurrencyCandidateModels 返回下拉框候选模型名：模型库中的异步端点模型、
+// 历史异步任务中的模型、已配置规则的模型。管理端也允许手输任意模型名。
 func GetModelConcurrencyCandidateModels(c *gin.Context) {
-	names, err := model.GetTaskModelNames(200)
+	names, err := model.GetAsyncModelNames()
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
-
-	rules, err := model.GetModelConcurrencyRules("")
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-
-	seen := make(map[string]bool, len(names))
-	candidates := make([]string, 0, len(names))
-	for _, name := range names {
-		if name == "" || seen[name] {
-			continue
-		}
-		seen[name] = true
-		candidates = append(candidates, name)
-	}
-	for _, rule := range rules {
-		if seen[rule.ModelName] {
-			continue
-		}
-		seen[rule.ModelName] = true
-		candidates = append(candidates, rule.ModelName)
-	}
-
-	common.ApiSuccess(c, candidates)
+	common.ApiSuccess(c, names)
 }

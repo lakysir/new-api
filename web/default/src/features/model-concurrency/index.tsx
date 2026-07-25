@@ -31,10 +31,6 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
-  NativeSelect,
-  NativeSelectOption,
-} from '@/components/ui/native-select'
-import {
   Table,
   TableBody,
   TableCell,
@@ -42,11 +38,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { useDebounce } from '@/hooks/use-debounce'
 
 import { UserRuleForm } from './components/user-rule-form'
 import {
   useDeleteModelConcurrencyRule,
-  useModelConcurrencyCandidateModels,
   useModelConcurrencyRules,
   useUpsertModelConcurrencyRule,
 } from './hooks/use-model-concurrency'
@@ -71,8 +67,11 @@ function ModelConcurrencyContent() {
   const [modelName, setModelName] = useState('')
   const [defaultLimitInput, setDefaultLimitInput] = useState('0')
 
-  const { data: candidateModels = [] } = useModelConcurrencyCandidateModels()
-  const { data: rules = [], isFetching } = useModelConcurrencyRules(modelName)
+  const trimmedModelName = modelName.trim()
+  // 手输模型名时按去抖拉规则，避免每敲一个字符就打一次接口。
+  const queriedModelName = useDebounce(trimmedModelName, 400)
+  const { data: rules = [], isFetching } =
+    useModelConcurrencyRules(queriedModelName)
 
   const upsertRule = useUpsertModelConcurrencyRule()
   const deleteRule = useDeleteModelConcurrencyRule()
@@ -94,7 +93,7 @@ function ModelConcurrencyContent() {
 
   const parsedDefaultLimit = Number(defaultLimitInput)
   const canSaveDefault =
-    modelName !== '' &&
+    trimmedModelName !== '' &&
     Number.isInteger(parsedDefaultLimit) &&
     parsedDefaultLimit >= 0 &&
     !upsertRule.isPending
@@ -112,43 +111,25 @@ function ModelConcurrencyContent() {
         </CardHeader>
         <CardContent className='flex flex-col gap-4'>
           <div className='flex flex-col gap-2'>
-            <Label htmlFor='concurrency-model-select'>
-              {t('Select a model')}
-            </Label>
-            <div className='flex flex-col gap-2 sm:flex-row'>
-              <NativeSelect className='w-72'>
-                <select
-                  id='concurrency-model-select'
-                  value={candidateModels.includes(modelName) ? modelName : ''}
-                  onChange={(e) => setModelName(e.target.value)}
-                >
-                  <NativeSelectOption value=''>
-                    {t('Select or type a model name')}
-                  </NativeSelectOption>
-                  {candidateModels.map((name) => (
-                    <NativeSelectOption key={name} value={name}>
-                      {name}
-                    </NativeSelectOption>
-                  ))}
-                </select>
-              </NativeSelect>
-              <Input
-                className='w-72'
-                value={modelName}
-                placeholder={t('Or type any model name')}
-                onChange={(e) => setModelName(e.target.value)}
-              />
-            </div>
+            <Label htmlFor='concurrency-model-input'>{t('Model name')}</Label>
+            <Input
+              id='concurrency-model-input'
+              className='w-72'
+              value={modelName}
+              placeholder={t('Type a model name, e.g. sora-2')}
+              onChange={(e) => setModelName(e.target.value)}
+            />
             <p className='text-muted-foreground text-sm'>
               {t(
-                'The dropdown lists models seen in async task history. You can also type any model name.'
+                'Type the model name exactly as it appears in requests. Models without a rule are not limited.'
               )}
             </p>
           </div>
         </CardContent>
       </Card>
 
-      {modelName !== '' && (
+      {/* 去抖期间先不渲染，避免把上一个模型的规则错配到正在输入的模型名上 */}
+      {trimmedModelName !== '' && queriedModelName === trimmedModelName && (
         <>
           <Card>
             <CardHeader>
@@ -179,7 +160,7 @@ function ModelConcurrencyContent() {
                   disabled={!canSaveDefault}
                   onClick={() =>
                     upsertRule.mutate({
-                      model_name: modelName,
+                      model_name: trimmedModelName,
                       user_id: MODEL_CONCURRENCY_ALL_USERS,
                       max_concurrency: parsedDefaultLimit,
                     })
@@ -210,7 +191,7 @@ function ModelConcurrencyContent() {
                 disabled={upsertRule.isPending}
                 onSubmit={(userId, maxConcurrency) =>
                   upsertRule.mutate({
-                    model_name: modelName,
+                    model_name: trimmedModelName,
                     user_id: userId,
                     max_concurrency: maxConcurrency,
                   })

@@ -1,9 +1,12 @@
 package model
 
 import (
+	"slices"
+	"sort"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 )
 
 // ModelConcurrency 限制单个用户在单个模型上同时进行中的异步任务数量。
@@ -142,20 +145,73 @@ func DeleteModelConcurrencyRule(id int) error {
 	return DB.Delete(&ModelConcurrency{}, id).Error
 }
 
-// GetTaskModelNames 返回历史异步任务中出现过的模型名，供管理端下拉框使用。
-func GetTaskModelNames(limit int) ([]string, error) {
-	if limit <= 0 {
-		limit = 200
+// asyncEndpointTypes 是会产生异步任务的端点类型。只有这些端点的模型才需要并发限制。
+// 部分类型在 constant 中尚未定义常量（被注释），这里用字面量兜住；多余的值不会匹配到任何模型。
+var asyncEndpointTypes = []string{
+	string(constant.EndpointTypeOpenAIVideo),
+	"video-generation",
+	"suno-proxy",
+	"kling",
+	"jimeng",
+	"midjourney-proxy",
+}
+
+// GetAsyncModelNames 返回可配置并发限制的模型名，合并三个来源：
+//  1. 模型库中端点类型属于异步的模型 —— 保证新部署（tasks 表为空）时下拉框就有内容
+//  2. 历史异步任务中出现过的模型
+//  3. 已经配置过规则的模型 —— 避免规则存在但模型从下拉框消失
+func GetAsyncModelNames() ([]string, error) {
+	seen := make(map[string]bool)
+
+	var libRows []struct {
+		ModelName string
+		Endpoints string
 	}
-	var names []string
-	err := DB.Model(&Task{}).
-		Distinct().
-		Where("model_name != ?", "").
-		Order("model_name asc").
-		Limit(limit).
-		Pluck("model_name", &names).Error
+	if err := DB.Model(&Model{}).
+		Select("model_name, endpoints").
+		Where("model_name IS NOT NULL AND model_name != ?", "").
+		Find(&libRows).Error; err != nil {
+		return nil, err
+	}
+	// JSON 包含查询在 SQLite/MySQL/PostgreSQL 上写法不通用，取回后在 Go 里过滤
+	for _, row := range libRows {
+		var endpoints []string
+		if common.Unmarshal([]byte(row.Endpoints), &endpoints) != nil {
+			continue
+		}
+		for _, endpoint := range endpoints {
+			if slices.Contains(asyncEndpointTypes, endpoint) {
+				seen[row.ModelName] = true
+				break
+			}
+		}
+	}
+
+	// model_name 可能为 NULL：只写 != '' 会因 SQL 三值逻辑静默丢掉这些行。
+	// Distinct() 与 Pluck 组合在不同驱动上行为不一致，改用 Distinct("model_name")。
+	var taskNames []string
+	if err := DB.Model(&Task{}).
+		Distinct("model_name").
+		Where("model_name IS NOT NULL AND model_name != ?", "").
+		Pluck("model_name", &taskNames).Error; err != nil {
+		return nil, err
+	}
+	for _, name := range taskNames {
+		seen[name] = true
+	}
+
+	rules, err := GetModelConcurrencyRules("")
 	if err != nil {
 		return nil, err
 	}
+	for _, rule := range rules {
+		seen[rule.ModelName] = true
+	}
+
+	names := make([]string, 0, len(seen))
+	for name := range seen {
+		names = append(names, name)
+	}
+	sort.Strings(names)
 	return names, nil
 }

@@ -22,33 +22,36 @@ import { toast } from 'sonner'
 
 import {
   deleteModelConcurrencyRule,
-  getModelConcurrencyCandidateModels,
   getModelConcurrencyRules,
   upsertModelConcurrencyRule,
 } from '../api'
 import type { UpsertModelConcurrencyRequest } from '../types'
 
 const RULES_KEY = 'model-concurrency-rules'
-const MODELS_KEY = 'model-concurrency-models'
+
+/**
+ * 后端 common.ApiError 返回的是 HTTP 200 + success:false，若直接兜底成空数组，
+ * 真实错误会被伪装成「没有数据」而无法排查。这里显式抛出后端消息。
+ */
+function unwrap<T>(res: {
+  success: boolean
+  message?: string
+  data?: T
+}): T | undefined {
+  if (!res.success) {
+    throw new Error(res.message || 'request failed')
+  }
+  return res.data
+}
 
 export function useModelConcurrencyRules(modelName: string) {
   return useQuery({
     queryKey: [RULES_KEY, modelName],
     queryFn: async () => {
       const res = await getModelConcurrencyRules(modelName)
-      return res.data ?? []
+      return unwrap(res) ?? []
     },
     enabled: modelName !== '',
-  })
-}
-
-export function useModelConcurrencyCandidateModels() {
-  return useQuery({
-    queryKey: [MODELS_KEY],
-    queryFn: async () => {
-      const res = await getModelConcurrencyCandidateModels()
-      return res.data ?? []
-    },
   })
 }
 
@@ -56,7 +59,6 @@ function useInvalidateRules() {
   const queryClient = useQueryClient()
   return () => {
     queryClient.invalidateQueries({ queryKey: [RULES_KEY] })
-    queryClient.invalidateQueries({ queryKey: [MODELS_KEY] })
   }
 }
 
