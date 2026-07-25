@@ -499,8 +499,16 @@ func RelayTask(c *gin.Context) {
 		return
 	}
 
+	// 并发上限校验必须在预扣费之前，被拒时不产生任何扣费；也必须在重试循环之前，
+	// 换渠道重试不会重复占位。remix 的模型名由 ResolveOriginTask 回填，故放在其后。
+	releaseConcurrency, taskErr := service.AcquireModelConcurrency(c, relayInfo.UserId, relayInfo.OriginModelName)
+	if taskErr != nil {
+		respondTaskError(c, taskErr)
+		return
+	}
+	defer releaseConcurrency()
+
 	var result *relay.TaskSubmitResult
-	var taskErr *dto.TaskError
 	defer func() {
 		if taskErr != nil && relayInfo.Billing != nil {
 			relayInfo.Billing.Refund(c)
@@ -613,7 +621,9 @@ func RelayTask(c *gin.Context) {
 
 // respondTaskError 统一输出 Task 错误响应（含 429 限流提示改写）
 func respondTaskError(c *gin.Context, taskErr *dto.TaskError) {
-	if taskErr.StatusCode == http.StatusTooManyRequests {
+	// 上游 429 说明渠道负载饱和，改写为统一提示；本地产生的 429（如并发上限）
+	// 已经携带了准确的原因，不能被覆盖。
+	if taskErr.StatusCode == http.StatusTooManyRequests && !taskErr.LocalError {
 		taskErr.Message = "当前分组上游负载已饱和，请稍后再试"
 	}
 	c.JSON(taskErr.StatusCode, taskErr)

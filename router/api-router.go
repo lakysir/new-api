@@ -509,6 +509,15 @@ func SetApiRouter(router *gin.Engine) {
 			prefillGroupRoute.DELETE("/:id", controller.DeletePrefillGroup)
 		}
 
+		modelConcurrencyRoute := apiRouter.Group("/model_concurrency")
+		modelConcurrencyRoute.Use(middleware.AdminAuth())
+		{
+			modelConcurrencyRoute.GET("/", controller.GetModelConcurrencyRules)
+			modelConcurrencyRoute.GET("/models", controller.GetModelConcurrencyCandidateModels)
+			modelConcurrencyRoute.PUT("/", controller.UpsertModelConcurrencyRule)
+			modelConcurrencyRoute.DELETE("/:id", controller.DeleteModelConcurrencyRule)
+		}
+
 		mjRoute := apiRouter.Group("/mj")
 		mjRoute.GET("/self", middleware.UserAuth(), controller.GetUserMidjourney)
 		mjRoute.GET("/", middleware.AdminAuth(), controller.GetAllMidjourney)

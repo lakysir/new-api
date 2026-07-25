@@ -199,6 +199,9 @@ twofa.code_invalid: "驗證碼或備用碼不正確"
 rate_limit.reached: "您已達到請求數限制：{{.Minutes}}分鐘內最多請求{{.Max}}次"
 rate_limit.total_reached: "您已達到總請求數限制：{{.Minutes}}分鐘內最多請求{{.Max}}次，包括失敗次數"
 
+# Model concurrency messages
+model_concurrency.limit_reached: "並發已滿：您在模型 {{.Model}} 上進行中的任務數已達 {{.Current}}，上限為 {{.Max}}，請等待進行中的任務完成後再提交"
+
 # Setting messages
 setting.invalid_type: "無效的預警類型"
 setting.webhook_empty: "Webhook位址不能為空"

@@ -235,6 +235,11 @@ const (
 	MsgRateLimitTotalReached = "rate_limit.total_reached"
 )
 
+// Model concurrency related messages
+const (
+	MsgModelConcurrencyLimitReached = "model_concurrency.limit_reached"
+)
+
 // Setting related messages
 const (
 	MsgSettingInvalidType      = "setting.invalid_type"

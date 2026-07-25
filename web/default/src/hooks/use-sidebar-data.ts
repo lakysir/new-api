@@ -31,6 +31,7 @@ import {
   ServerCog,
   Settings,
   Ticket,
+  Timer,
   User,
   Users,
   Wallet,
@@ -139,6 +140,11 @@ export function useSidebarData(): SidebarData {
             title: t('Models'),
             url: '/models/metadata',
             icon: Box,
+          },
+          {
+            title: t('Async Task Concurrency'),
+            url: '/model-concurrency',
+            icon: Timer,
           },
           {
             title: t('Users'),

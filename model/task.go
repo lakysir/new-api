@@ -49,11 +49,11 @@ type Task struct {
 	UpdatedAt  int64                 `json:"updated_at"`
 	TaskID     string                `json:"task_id" gorm:"type:varchar(191);index"` // 第三方id，不一定有/ song id\ Task id
 	Platform   constant.TaskPlatform `json:"platform" gorm:"type:varchar(30);index"` // 平台
-	UserId     int                   `json:"user_id" gorm:"index"`
+	UserId     int                   `json:"user_id" gorm:"index;index:idx_task_user_model,priority:1"`
 	Group      string                `json:"group" gorm:"type:varchar(50)"` // 修正计费用
 	ChannelId  int                   `json:"channel_id" gorm:"index"`
 	Quota      int                   `json:"quota"`
-	ModelName  string                `json:"model_name" gorm:"type:varchar(191);index"` // 模型名称，用于搜索与统计
+	ModelName  string                `json:"model_name" gorm:"type:varchar(191);index;index:idx_task_user_model,priority:2"` // 模型名称，用于搜索与统计
 	Action     string                `json:"action" gorm:"type:varchar(40);index"` // 任务类型, song, lyrics, description-mode
 	Status     TaskStatus            `json:"status" gorm:"type:varchar(20);index"` // 任务状态
 	FailReason string                `json:"fail_reason"`
