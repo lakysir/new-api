@@ -1694,19 +1694,21 @@ export function AitokenPurchasePage() {
     loadParams = true
   ) {
     setScriptId(value)
+    // The saved draft may point at a version that has since been removed.
+    // Clear the previous metadata immediately so no pricing effect can combine
+    // the new script id with a stale version while availability is loading.
+    setAvailableVersions([])
     setOffers([])
     setNodeId('')
     setAutoSelect(true)
     setOffersPage(0)
     clearQuote()
     if (!value) {
-      setAvailableVersions([])
       return
     }
     try {
       const available = await listAvailableScriptVersions(value)
       const values = available.map((item) => item.version).sort((a, b) => b - a)
-      setAvailableVersions(available)
       const selectedVersion =
         (preferredVersion && values.includes(preferredVersion)
           ? preferredVersion
@@ -1714,7 +1716,11 @@ export function AitokenPurchasePage() {
         values[0] ??
         fallbackVersion ??
         1
+      // Commit the valid version before exposing its metadata. If React renders
+      // between these updates, the quote effect still cannot see the removed
+      // draft version (for example V6) inside the new V8 availability result.
       setVersion(selectedVersion)
+      setAvailableVersions(available)
       const selected = available.find(
         (item) => item.version === selectedVersion
       )
