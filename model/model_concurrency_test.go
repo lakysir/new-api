@@ -84,6 +84,29 @@ func TestGetModelConcurrencyLimitPriority(t *testing.T) {
 	assert.Equal(t, 2, GetModelConcurrencyLimit(8, "sora-2"))
 }
 
+// -1（禁止使用）也要遵循同样的优先级：所有用户禁止 + 指定用户放开 = 白名单。
+func TestGetModelConcurrencyLimitBlocked(t *testing.T) {
+	setupConcurrencyTables(t)
+
+	_, err := UpsertModelConcurrencyRule("sora-2", ModelConcurrencyAllUsers, ModelConcurrencyBlocked)
+	require.NoError(t, err)
+	assert.Equal(t, ModelConcurrencyBlocked, GetModelConcurrencyLimit(7, "sora-2"))
+
+	// 白名单用户：指定用户规则覆盖掉「所有用户禁止」
+	_, err = UpsertModelConcurrencyRule("sora-2", 7, 2)
+	require.NoError(t, err)
+	assert.Equal(t, 2, GetModelConcurrencyLimit(7, "sora-2"))
+	assert.Equal(t, ModelConcurrencyBlocked, GetModelConcurrencyLimit(8, "sora-2"))
+
+	// 反向：所有用户放开，单独禁掉某个用户
+	_, err = UpsertModelConcurrencyRule("kling-v1", ModelConcurrencyAllUsers, 0)
+	require.NoError(t, err)
+	_, err = UpsertModelConcurrencyRule("kling-v1", 9, ModelConcurrencyBlocked)
+	require.NoError(t, err)
+	assert.Equal(t, 0, GetModelConcurrencyLimit(8, "kling-v1"))
+	assert.Equal(t, ModelConcurrencyBlocked, GetModelConcurrencyLimit(9, "kling-v1"))
+}
+
 // 「移除该模型的并发配置」必须连带删掉指定用户规则，且不影响其他模型。
 func TestDeleteModelConcurrencyRulesByModel(t *testing.T) {
 	setupConcurrencyTables(t)

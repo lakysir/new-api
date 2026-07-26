@@ -13,7 +13,7 @@ import (
 //
 // UserId == ModelConcurrencyAllUsers(0) 表示该模型对所有用户生效的默认规则；
 // UserId > 0 表示针对指定用户的规则，优先级高于默认规则（不叠加，命中即生效）。
-// MaxConcurrency == 0 表示不限制。
+// MaxConcurrency == 0 表示不限制；== ModelConcurrencyBlocked(-1) 表示禁止提交。
 type ModelConcurrency struct {
 	Id             int    `json:"id"`
 	ModelName      string `json:"model_name" gorm:"size:128;not null;uniqueIndex:uk_model_concurrency,priority:1"`
@@ -29,9 +29,13 @@ type ModelConcurrency struct {
 // ModelConcurrencyAllUsers 是「所有用户」规则使用的 UserId 取值。
 const ModelConcurrencyAllUsers = 0
 
+// ModelConcurrencyBlocked 是 MaxConcurrency 的特殊取值：完全禁止该用户使用该模型。
+// 配合「所有用户 = -1 + 指定用户 = 0/N」即可做到只放开白名单用户。
+const ModelConcurrencyBlocked = -1
+
 // GetModelConcurrencyLimit 返回用户在指定模型上的并发上限。
 // 解析顺序：(模型, 该用户) → (模型, 所有用户) → 不限制。
-// 返回 0 表示不限制。
+// 返回 0 表示不限制，返回 ModelConcurrencyBlocked(-1) 表示禁止提交。
 func GetModelConcurrencyLimit(userId int, modelName string) int {
 	modelName = strings.TrimSpace(modelName)
 	if modelName == "" || userId <= 0 {

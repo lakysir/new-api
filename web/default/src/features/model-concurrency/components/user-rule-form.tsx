@@ -27,6 +27,8 @@ import { searchUsers } from '@/features/users/api'
 import type { User } from '@/features/users/types'
 import { useDebounce } from '@/hooks/use-debounce'
 
+import { MODEL_CONCURRENCY_BLOCKED } from '../types'
+
 type UserRuleFormProps = {
   disabled?: boolean
   onSubmit: (userId: number, maxConcurrency: number) => void
@@ -34,7 +36,7 @@ type UserRuleFormProps = {
 
 /**
  * 为指定用户添加并发规则：边输入边搜索用户 → 点击选中 → 填并发上限。
- * 并发上限填 0 表示该用户在此模型上不限制（覆盖「所有用户」规则）。
+ * 并发上限填 0 表示该用户在此模型上不限制，填 -1 表示禁止该用户使用（均覆盖「所有用户」规则）。
  * 搜索不到时也允许直接手填用户 ID，避免管理端被搜索接口卡住。
  */
 export function UserRuleForm({ disabled, onSubmit }: UserRuleFormProps) {
@@ -79,7 +81,7 @@ export function UserRuleForm({ disabled, onSubmit }: UserRuleFormProps) {
     !disabled &&
     effectiveUserId !== null &&
     Number.isInteger(limit) &&
-    limit >= 0
+    limit >= MODEL_CONCURRENCY_BLOCKED
 
   const resetSelection = () => {
     setSelectedUser(null)
@@ -163,7 +165,7 @@ export function UserRuleForm({ disabled, onSubmit }: UserRuleFormProps) {
             id='concurrency-user-limit'
             className='w-32'
             type='number'
-            min={0}
+            min={MODEL_CONCURRENCY_BLOCKED}
             value={limitInput}
             disabled={disabled}
             onChange={(e) => setLimitInput(e.target.value)}

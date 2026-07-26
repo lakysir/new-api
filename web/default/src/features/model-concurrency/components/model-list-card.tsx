@@ -49,6 +49,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 
+import { MODEL_CONCURRENCY_BLOCKED } from '../types'
 import type { ModelConcurrencySummary } from '../types'
 
 /** null = 该模型只有指定用户规则，没有「所有用户」默认规则 */
@@ -56,6 +57,9 @@ function DefaultLimitCell({ limit }: { limit: number | null }) {
   const { t } = useTranslation()
   if (limit === null) {
     return <span className='text-muted-foreground'>{t('Not set')}</span>
+  }
+  if (limit === MODEL_CONCURRENCY_BLOCKED) {
+    return <span className='text-destructive'>{t('Not allowed')}</span>
   }
   if (limit === 0) {
     return <span>{t('Unlimited')}</span>
@@ -123,7 +127,7 @@ export function ModelListCard({
     trimmedNewModel !== '' &&
     !alreadyConfigured &&
     Number.isInteger(parsedNewLimit) &&
-    parsedNewLimit >= 0 &&
+    parsedNewLimit >= MODEL_CONCURRENCY_BLOCKED &&
     !addPending
 
   const normalizedFilter = filter.trim().toLowerCase()
@@ -147,7 +151,7 @@ export function ModelListCard({
         <CardTitle>{t('Models with a concurrency rule')}</CardTitle>
         <CardDescription>
           {t(
-            'Limits the number of async tasks (video, Suno, etc.) a user can have in progress at the same time on one model. A limit of 0 means unlimited. A rule for a specific user overrides the rule for all users. Models not listed here are not limited.'
+            'Limits the number of async tasks (video, Suno, etc.) a user can have in progress at the same time on one model. A limit of 0 means unlimited, -1 forbids submitting at all. A rule for a specific user overrides the rule for all users, so set -1 for all users and a limit for specific users to allow only those users. Models not listed here are not limited.'
           )}
         </CardDescription>
       </CardHeader>
@@ -178,7 +182,7 @@ export function ModelListCard({
               id='concurrency-new-model-limit'
               className='w-32'
               type='number'
-              min={0}
+              min={MODEL_CONCURRENCY_BLOCKED}
               value={newModelLimit}
               onChange={(e) => setNewModelLimit(e.target.value)}
             />

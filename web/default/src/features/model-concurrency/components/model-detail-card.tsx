@@ -38,6 +38,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 
+import { MODEL_CONCURRENCY_BLOCKED } from '../types'
 import type { ModelConcurrencyRule } from '../types'
 import { UserRuleForm } from './user-rule-form'
 
@@ -78,7 +79,7 @@ export function ModelDetailCard({
   const parsedDefaultLimit = Number(defaultLimitInput)
   const canSaveDefault =
     Number.isInteger(parsedDefaultLimit) &&
-    parsedDefaultLimit >= 0 &&
+    parsedDefaultLimit >= MODEL_CONCURRENCY_BLOCKED &&
     !upsertPending
 
   return (
@@ -88,7 +89,7 @@ export function ModelDetailCard({
           <CardTitle>{modelName}</CardTitle>
           <CardDescription>
             {t(
-              'A rule for a specific user overrides the all-users limit on this model. 0 means unlimited.'
+              'A rule for a specific user overrides the all-users limit on this model. 0 means unlimited, -1 forbids using the model.'
             )}
           </CardDescription>
         </div>
@@ -108,7 +109,7 @@ export function ModelDetailCard({
                 id='concurrency-default-limit'
                 className='w-32'
                 type='number'
-                min={0}
+                min={MODEL_CONCURRENCY_BLOCKED}
                 value={defaultLimitInput}
                 onChange={(e) => setDefaultLimitInput(e.target.value)}
               />
@@ -123,6 +124,13 @@ export function ModelDetailCard({
             {parsedDefaultLimit === 0 && (
               <p className='text-muted-foreground pb-2 text-sm'>
                 {t('0 means unlimited')}
+              </p>
+            )}
+            {parsedDefaultLimit === MODEL_CONCURRENCY_BLOCKED && (
+              <p className='text-destructive pb-2 text-sm'>
+                {t(
+                  '-1 forbids all users from using this model, except users with their own rule below'
+                )}
               </p>
             )}
           </div>
@@ -156,9 +164,15 @@ export function ModelDetailCard({
                 <TableRow key={rule.id}>
                   <TableCell>{rule.username || `#${rule.user_id}`}</TableCell>
                   <TableCell>
-                    {rule.max_concurrency === 0
-                      ? t('Unlimited')
-                      : rule.max_concurrency}
+                    {rule.max_concurrency === MODEL_CONCURRENCY_BLOCKED ? (
+                      <span className='text-destructive'>
+                        {t('Not allowed')}
+                      </span>
+                    ) : rule.max_concurrency === 0 ? (
+                      t('Unlimited')
+                    ) : (
+                      rule.max_concurrency
+                    )}
                   </TableCell>
                   <TableCell>{rule.current}</TableCell>
                   <TableCell className='text-right'>

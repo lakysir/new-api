@@ -67,7 +67,8 @@ type modelConcurrencyRuleRequest struct {
 }
 
 // UpsertModelConcurrencyRule 新增或更新一条并发规则。
-// user_id 为 0 表示该模型对所有用户生效的默认规则；max_concurrency 为 0 表示不限制。
+// user_id 为 0 表示该模型对所有用户生效的默认规则；
+// max_concurrency 为 0 表示不限制，-1 表示禁止该用户使用该模型。
 func UpsertModelConcurrencyRule(c *gin.Context) {
 	var req modelConcurrencyRuleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -84,8 +85,9 @@ func UpsertModelConcurrencyRule(c *gin.Context) {
 		common.ApiErrorMsg(c, "无效的用户 ID")
 		return
 	}
-	if req.MaxConcurrency < 0 {
-		common.ApiErrorMsg(c, "并发上限不能为负数")
+	// -1 是「禁止使用该模型」的特殊取值，比它更小的负数无意义。
+	if req.MaxConcurrency < model.ModelConcurrencyBlocked {
+		common.ApiErrorMsg(c, "并发上限只能填 -1（禁止使用）、0（不限制）或正整数")
 		return
 	}
 	if req.UserId != model.ModelConcurrencyAllUsers {

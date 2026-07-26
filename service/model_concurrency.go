@@ -25,6 +25,9 @@ const ModelConcurrencyReserveTTL = 5 * time.Minute
 // ConcurrencyLimitReachedCode 是并发已满时返回给客户端的错误码。
 const ConcurrencyLimitReachedCode = "model_concurrency_limit_reached"
 
+// ModelNotAllowedCode 是该用户被禁止使用该模型（上限配成 -1）时的错误码。
+const ModelNotAllowedCode = "model_not_allowed"
+
 var (
 	concurrencyReserver     *limiter.ConcurrencyReserver
 	concurrencyReserverOnce sync.Once
@@ -49,7 +52,7 @@ func concurrencyReserveKey(userId int, modelName string) string {
 //
 // 返回的 release 函数必须在提交流程结束后调用（无论成功或失败）：任务已落库时
 // 数据库计数已能反映它，提交失败时该次占位应当归还。release 恒不为 nil。
-// 当未配置上限（0 表示不限制）时直接放行。
+// 当未配置上限（0 表示不限制）时直接放行；上限为 -1 时直接拒绝。
 func AcquireModelConcurrency(c *gin.Context, userId int, modelName string) (release func(), taskErr *dto.TaskError) {
 	release = func() {}
 
@@ -59,7 +62,12 @@ func AcquireModelConcurrency(c *gin.Context, userId int, modelName string) (rele
 	}
 
 	maxConcurrency := model.GetModelConcurrencyLimit(userId, modelName)
-	if maxConcurrency <= 0 {
+	// -1 表示该用户被禁止使用该模型：不占位、不计数，直接拒绝。
+	if maxConcurrency <= model.ModelConcurrencyBlocked {
+		message := i18n.T(c, i18n.MsgModelNotAllowed, map[string]any{"Model": modelName})
+		return release, TaskErrorWrapperLocal(fmt.Errorf("%s", message), ModelNotAllowedCode, http.StatusForbidden)
+	}
+	if maxConcurrency == 0 {
 		return release, nil
 	}
 

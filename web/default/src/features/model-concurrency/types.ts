@@ -20,6 +20,12 @@ For commercial licensing, please contact support@quantumnous.com
 /** user_id === 0 表示该模型对所有用户生效的默认规则 */
 export const MODEL_CONCURRENCY_ALL_USERS = 0
 
+/**
+ * max_concurrency === -1 表示禁止使用该模型。
+ * 「所有用户 = -1」+「指定用户 = 0/N」即可只放开白名单用户。
+ */
+export const MODEL_CONCURRENCY_BLOCKED = -1
+
 export type ModelConcurrencyApiResponse<T> = {
   success: boolean
   message?: string
@@ -30,7 +36,7 @@ export type ModelConcurrencyRule = {
   id: number
   model_name: string
   user_id: number
-  /** 0 表示不限制 */
+  /** 0 表示不限制，-1 表示禁止使用 */
   max_concurrency: number
   created_time: number
   updated_time: number

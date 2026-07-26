@@ -200,6 +200,7 @@ rate_limit.total_reached: "You have reached the total request limit: maximum {{.
 
 # Model concurrency messages
 model_concurrency.limit_reached: "Concurrency limit reached: you already have {{.Current}} tasks in progress on model {{.Model}} (limit {{.Max}}). Please wait for them to finish before submitting a new task."
+model_concurrency.not_allowed: "You are not allowed to use model {{.Model}}. Please contact the administrator."
 
 # Setting messages
 setting.invalid_type: "Invalid warning type"
