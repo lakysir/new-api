@@ -98,6 +98,27 @@ func ListMyDevices(c *gin.Context) {
 	common.ApiSuccess(c, devices)
 }
 
+// ListMyConsoleRows returns one page of the caller's console rows (a device
+// plus its nodes; device-less nodes come as rows with a null device). Paging is
+// server-side so the console can render — and per-node-fan-out over — at most
+// one page at a time instead of every device a provider owns.
+//
+// Query: ?p / ?page_size (shared pagination params), ?active_only=true to drop
+// revoked devices and offline nodes.
+func ListMyConsoleRows(c *gin.Context) {
+	pageInfo := common.GetPageQuery(c)
+	activeOnly := c.Query("active_only") == "true"
+	rows, total, err := model.ListUserConsoleRows(
+		c.GetInt("id"), activeOnly, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	pageInfo.SetTotal(int(total))
+	pageInfo.SetItems(rows)
+	common.ApiSuccess(c, pageInfo)
+}
+
 // RevokeMyDevice revokes a device and suspends its nodes/capabilities.
 func RevokeMyDevice(c *gin.Context) {
 	deviceId := c.Param("deviceId")

@@ -333,6 +333,128 @@ func ListUserDevices(userId int) ([]Device, error) {
 	return devices, err
 }
 
+// ConsoleRow is one row of the provider console: a device plus the nodes that
+// belong to it. Nodes with no surviving device row are returned as rows with a
+// nil Device (the console renders them as standalone nodes).
+type ConsoleRow struct {
+	Device *Device `json:"device"`
+	Nodes  []Node  `json:"nodes"`
+}
+
+// ListUserConsoleRows returns one page of the caller's console rows plus the
+// total row count. Paging is done server-side so the console never loads (nor
+// fans out per-node requests for) more than one page of devices/nodes at a
+// time — a provider may own hundreds.
+//
+// Rows are ordered devices-first (newest device first), then device-less nodes,
+// so a given (offset, limit) is stable across calls. When activeOnly is set,
+// revoked devices and offline nodes are excluded entirely, matching the
+// console's "hide revoked/offline" filter — the filter must be applied in SQL,
+// otherwise a page could come back empty while later pages still hold matches.
+func ListUserConsoleRows(userId int, activeOnly bool, offset, limit int) ([]ConsoleRow, int64, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	onlineCutoff := time.Now().Add(-NodePresenceTimeout).Unix()
+
+	deviceQuery := func() *gorm.DB {
+		q := DB.Model(&Device{}).Where("user_id = ?", userId)
+		if activeOnly {
+			q = q.Where("status = ?", DeviceStatusActive)
+		}
+		return q
+	}
+	// Nodes whose device row no longer exists for this user. Kept visible so a
+	// node can still be inspected/deleted after its device is purged.
+	orphanNodeQuery := func() *gorm.DB {
+		q := DB.Model(&Node{}).Where("user_id = ?", userId).
+			Where("device_id NOT IN (?)",
+				DB.Model(&Device{}).Select("id").Where("user_id = ?", userId))
+		if activeOnly {
+			q = q.Where("state <> ? AND last_seen_at >= ?", NodeStateOffline, onlineCutoff)
+		}
+		return q
+	}
+
+	var deviceTotal, orphanTotal int64
+	if err := deviceQuery().Count(&deviceTotal).Error; err != nil {
+		return nil, 0, err
+	}
+	if err := orphanNodeQuery().Count(&orphanTotal).Error; err != nil {
+		return nil, 0, err
+	}
+	total := deviceTotal + orphanTotal
+
+	rows := make([]ConsoleRow, 0, limit)
+
+	// Slice the device segment of the combined sequence.
+	if int64(offset) < deviceTotal {
+		deviceLimit := limit
+		if remaining := deviceTotal - int64(offset); remaining < int64(deviceLimit) {
+			deviceLimit = int(remaining)
+		}
+		var devices []Device
+		if err := deviceQuery().Order("created_at desc, id desc").
+			Offset(offset).Limit(deviceLimit).Find(&devices).Error; err != nil {
+			return nil, 0, err
+		}
+		deviceIds := make([]string, 0, len(devices))
+		for _, d := range devices {
+			deviceIds = append(deviceIds, d.Id)
+		}
+		// One query for the whole page's nodes, then grouped in memory.
+		nodesByDevice := map[string][]Node{}
+		if len(deviceIds) > 0 {
+			nodeQuery := DB.Where("user_id = ? AND device_id IN ?", userId, deviceIds)
+			if activeOnly {
+				nodeQuery = nodeQuery.Where("state <> ? AND last_seen_at >= ?",
+					NodeStateOffline, onlineCutoff)
+			}
+			var nodes []Node
+			if err := nodeQuery.Order("last_seen_at desc").Find(&nodes).Error; err != nil {
+				return nil, 0, err
+			}
+			for _, n := range nodes {
+				nodesByDevice[n.DeviceId] = append(nodesByDevice[n.DeviceId], n)
+			}
+		}
+		for i := range devices {
+			device := devices[i]
+			// A device with no nodes must serialize as [] not null, or the
+			// console's node lookups (flatMap/map over row.nodes) crash on it.
+			deviceNodes := nodesByDevice[device.Id]
+			if deviceNodes == nil {
+				deviceNodes = []Node{}
+			}
+			rows = append(rows, ConsoleRow{
+				Device: &device,
+				Nodes:  deviceNodes,
+			})
+		}
+	}
+
+	// Fill the rest of the page from the device-less node segment.
+	if len(rows) < limit {
+		orphanOffset := offset - int(deviceTotal)
+		if orphanOffset < 0 {
+			orphanOffset = 0
+		}
+		var orphans []Node
+		if err := orphanNodeQuery().Order("last_seen_at desc, id desc").
+			Offset(orphanOffset).Limit(limit - len(rows)).Find(&orphans).Error; err != nil {
+			return nil, 0, err
+		}
+		for i := range orphans {
+			rows = append(rows, ConsoleRow{Nodes: []Node{orphans[i]}})
+		}
+	}
+
+	return rows, total, nil
+}
+
 // SetDeviceNickname sets (or clears, if empty) the user-defined nickname on a
 // device. Returns ErrDeviceNotFound when the device doesn't belong to userId.
 func SetDeviceNickname(userId int, deviceId, nickname string) error {

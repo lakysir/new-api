@@ -589,6 +589,19 @@ func ListNodesByUser(userId int) ([]Node, error) {
 	return nodes, err
 }
 
+// ListNodesByIds returns the caller's nodes whose ids are in the given set,
+// used by the console to refresh only the rows currently on screen instead of
+// pulling every node a provider owns (a provider may own hundreds).
+func ListNodesByIds(userId int, nodeIds []string) ([]Node, error) {
+	if len(nodeIds) == 0 {
+		return []Node{}, nil
+	}
+	var nodes []Node
+	err := DB.Where("user_id = ? AND id IN ?", userId, nodeIds).
+		Order("last_seen_at desc").Find(&nodes).Error
+	return nodes, err
+}
+
 // ErrNodeEnableBlocked is returned when turning a node on while one or more of
 // its active capabilities has not passed the (unexpired) balance check for its
 // category. The message lists the offending capabilities so the UI can point

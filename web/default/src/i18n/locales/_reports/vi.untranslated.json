@@ -1,5 +1,13 @@
 {
+  "Showing {{from}}-{{to}} of {{total}}": "Showing {{from}}-{{to}} of {{total}}",
   "Only affects the displayed price on pricing model cards.": "Only affects the displayed price on pricing model cards.",
   "Only affects the displayed unit on pricing model cards.": "Only affects the displayed unit on pricing model cards.",
+  "Models with a concurrency rule": "Models with a concurrency rule",
+  "Limits the number of async tasks (video, Suno, etc.) a user can have in progress at the same time on one model. A limit of 0 means unlimited. A rule for a specific user overrides the rule for all users. Models not listed here are not limited.": "Limits the number of async tasks (video, Suno, etc.) a user can have in progress at the same time on one model. A limit of 0 means unlimited. A rule for a specific user overrides the rule for all users. Models not listed here are not limited.",
+  "This model already has a rule. Select it below to edit.": "This model already has a rule. Select it below to edit.",
+  "This deletes the all-users rule and every user override for this model. The model goes back to unlimited.": "This deletes the all-users rule and every user override for this model. The model goes back to unlimited.",
+  "A rule for a specific user overrides the all-users limit on this model. 0 means unlimited.": "A rule for a specific user overrides the all-users limit on this model. 0 means unlimited.",
+  "Username, display name or email": "Username, display name or email",
+  "Or type a user ID": "Or type a user ID",
   "Units of work for one run (min 1). The fee is the base price times this value; the script decides what it means (e.g. seconds of video, number of images).": "Units of work for one run (min 1). The fee is the base price times this value; the script decides what it means (e.g. seconds of video, number of images)."
 }

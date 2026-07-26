@@ -3,6 +3,7 @@ package controller
 import (
 	"errors"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -193,6 +194,29 @@ func ListCapabilities(c *gin.Context) {
 // ListMyNodes returns the authenticated user's nodes.
 func ListMyNodes(c *gin.Context) {
 	nodes, err := model.ListNodesByUser(c.GetInt("id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, nodes)
+}
+
+// ListMyNodesByIds returns just the caller's nodes named in ?ids=a,b,c. The
+// console polls this to keep the rows currently on screen fresh; polling
+// /nodes/mine instead would pull every node the provider owns every tick.
+// Capped at 100 ids per call (one console page).
+func ListMyNodesByIds(c *gin.Context) {
+	raw := strings.Split(c.Query("ids"), ",")
+	ids := make([]string, 0, len(raw))
+	for _, id := range raw {
+		if id = strings.TrimSpace(id); id != "" {
+			ids = append(ids, id)
+		}
+		if len(ids) >= 100 {
+			break
+		}
+	}
+	nodes, err := model.ListNodesByIds(c.GetInt("id"), ids)
 	if err != nil {
 		common.ApiError(c, err)
 		return

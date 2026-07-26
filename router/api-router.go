@@ -361,6 +361,8 @@ func SetApiRouter(router *gin.Engine) {
 			deviceUserRoute.Use(middleware.CORS(), middleware.TokenOrUserAuth())
 			{
 				deviceUserRoute.GET("/mine", controller.ListMyDevices)
+				// Paginated device+nodes rows for the provider console.
+				deviceUserRoute.GET("/mine/console", controller.ListMyConsoleRows)
 				deviceUserRoute.POST("/challenge", middleware.CriticalRateLimit(), controller.CreateDeviceChallenge)
 				deviceUserRoute.POST("/activate", middleware.CriticalRateLimit(), controller.ActivateDevice)
 				deviceUserRoute.DELETE("/:deviceId", controller.RevokeMyDevice)
@@ -383,6 +385,8 @@ func SetApiRouter(router *gin.Engine) {
 		{
 			nodeRoute.POST("", controller.RegisterNode)
 			nodeRoute.GET("/mine", controller.ListMyNodes)
+			// Refresh only the nodes on the console's current page.
+			nodeRoute.GET("/mine/by-ids", controller.ListMyNodesByIds)
 			nodeRoute.GET("/capability-stats", controller.ListMyCapabilityStats)
 			nodeRoute.GET("/task-attempts", controller.ListMyTaskAttempts)
 			// Provider group: the caller's own group (get-or-create) and a name

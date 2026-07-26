@@ -24,7 +24,6 @@ import { Dialog } from '@/components/dialog'
 import { SectionPageLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
 import {
   Table,
   TableBody,
@@ -33,6 +32,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { Textarea } from '@/components/ui/textarea'
 
 import {
   createCategory,
@@ -58,10 +58,7 @@ import {
 } from './api'
 import { EarningsSummary } from './earnings-summary'
 import { formatUnix, microsToCurrency } from './lib/format'
-import {
-  PricingRulesEditor,
-  extractParamNames,
-} from './pricing-rules-editor'
+import { PricingRulesEditor, extractParamNames } from './pricing-rules-editor'
 import type { ScriptVersion } from './types'
 
 // ppm helpers: 10000 ppm = 1%.
@@ -201,7 +198,9 @@ export function ScriptReviewConsolePage() {
   // Operator sets the platform fee (%) per pending script on approval.
   const [platformFees, setPlatformFees] = useState<Record<number, string>>({})
   // Pricing rules preview for a pending script.
-  const [pricingPreview, setPricingPreview] = useState<PendingScript | null>(null)
+  const [pricingPreview, setPricingPreview] = useState<PendingScript | null>(
+    null
+  )
   // Category management state.
   const [categories, setCategories] = useState<ScriptCategory[]>([])
   const [newCatName, setNewCatName] = useState('')
@@ -245,8 +244,7 @@ export function ScriptReviewConsolePage() {
   )
   // Model binding per script id for quick "already listed as model" lookup.
   const bindingByScriptId = useMemo(
-    () =>
-      new Map(modelBindings.map((binding) => [binding.script_id, binding])),
+    () => new Map(modelBindings.map((binding) => [binding.script_id, binding])),
     [modelBindings]
   )
   const publishedGroups = useMemo(() => {
@@ -275,14 +273,15 @@ export function ScriptReviewConsolePage() {
   async function load() {
     setLoading(true)
     try {
-      const [pendingScripts, versions, cats, key, bindings] =
-        await Promise.all([
+      const [pendingScripts, versions, cats, key, bindings] = await Promise.all(
+        [
           listPendingScripts(),
           listPublishedScriptVersions(),
           listCategories(),
           getPlatformSigningKey(),
           listScriptModelBindings(),
-        ])
+        ]
+      )
       setPending(pendingScripts)
       setPublishedVersions(versions)
       setCategories(cats)
@@ -674,7 +673,7 @@ export function ScriptReviewConsolePage() {
           <div className='space-y-2'>
             <div className='flex flex-wrap items-center gap-2'>
               <Input
-                className='h-9 flex-1 min-w-[300px]'
+                className='h-9 min-w-[300px] flex-1'
                 placeholder={t('Download URL (https://...)')}
                 value={pluginDownloadUrl}
                 onChange={(e) => setPluginDownloadUrl(e.target.value)}
@@ -694,7 +693,9 @@ export function ScriptReviewConsolePage() {
             </div>
             <Textarea
               className='min-h-[72px] w-full resize-none text-sm'
-              placeholder={t('Release notes (optional) — describe what changed in this version')}
+              placeholder={t(
+                'Release notes (optional) — describe what changed in this version'
+              )}
               value={pluginReleaseNotes}
               onChange={(e) => setPluginReleaseNotes(e.target.value)}
             />
@@ -712,7 +713,9 @@ export function ScriptReviewConsolePage() {
           </div>
 
           <p className='text-muted-foreground mt-2 text-xs'>
-            {t('Provide an external URL where the plugin package is hosted. You can upload the file to any CDN or file hosting service.')}
+            {t(
+              'Provide an external URL where the plugin package is hosted. You can upload the file to any CDN or file hosting service.'
+            )}
           </p>
         </div>
 
@@ -748,9 +751,13 @@ export function ScriptReviewConsolePage() {
                 <TableCell>{s.concurrency ?? 1}</TableCell>
                 <TableCell>{s.min_interval_seconds ?? 30}s</TableCell>
                 <TableCell>
-                  {s.base_price_micros
-                    ? microsToCurrency(s.base_price_micros)
-                    : <span className='text-muted-foreground text-xs'>{t('Not set')}</span>}
+                  {s.base_price_micros ? (
+                    microsToCurrency(s.base_price_micros)
+                  ) : (
+                    <span className='text-muted-foreground text-xs'>
+                      {t('Not set')}
+                    </span>
+                  )}
                 </TableCell>
                 <TableCell>
                   {s.pricing_rules && s.pricing_rules.length > 0 ? (
@@ -762,7 +769,9 @@ export function ScriptReviewConsolePage() {
                       {t('View')} ({s.pricing_rules.length})
                     </Button>
                   ) : (
-                    <span className='text-muted-foreground text-xs'>{t('None')}</span>
+                    <span className='text-muted-foreground text-xs'>
+                      {t('None')}
+                    </span>
                   )}
                 </TableCell>
                 <TableCell>
@@ -1174,8 +1183,14 @@ export function ScriptReviewConsolePage() {
         {/* Pricing rules preview dialog */}
         <Dialog
           open={!!pricingPreview}
-          onOpenChange={(open) => { if (!open) setPricingPreview(null) }}
-          title={pricingPreview ? `${t('Pricing Rules')} — ${pricingPreview.title}` : ''}
+          onOpenChange={(open) => {
+            if (!open) setPricingPreview(null)
+          }}
+          title={
+            pricingPreview
+              ? `${t('Pricing Rules')} — ${pricingPreview.title}`
+              : ''
+          }
           description={
             pricingPreview?.base_price_micros
               ? `${t('Base price')}: ${microsToCurrency(pricingPreview.base_price_micros)}`
@@ -1187,7 +1202,9 @@ export function ScriptReviewConsolePage() {
           {pricingPreview && (
             <PricingRulesEditor
               value={pricingPreview.pricing_rules ?? []}
-              availableParams={extractParamNames(pricingPreview.script_params ?? '')}
+              availableParams={extractParamNames(
+                pricingPreview.script_params ?? ''
+              )}
               readonly
             />
           )}
@@ -1258,7 +1275,10 @@ export function ScriptReviewConsolePage() {
                     <div className='text-muted-foreground mb-1 text-xs font-medium'>
                       {t('Pricing Rules')}
                       {version.base_price_micros ? (
-                        <span className='ml-2'>{t('Base')}: {microsToCurrency(version.base_price_micros)}</span>
+                        <span className='ml-2'>
+                          {t('Base')}:{' '}
+                          {microsToCurrency(version.base_price_micros)}
+                        </span>
                       ) : null}
                     </div>
                     <PricingRulesEditor

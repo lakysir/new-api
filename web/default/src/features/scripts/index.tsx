@@ -1,6 +1,6 @@
+import { BookOpen } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { BookOpen } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Dialog } from '@/components/dialog'
@@ -15,12 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from '@/components/ui/tabs'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import {
   getScriptVersionCode,
@@ -31,7 +26,10 @@ import {
 } from '@/features/node-platform/api'
 import { EarningsSummary } from '@/features/node-platform/earnings-summary'
 import { formatUnix } from '@/features/node-platform/lib/format'
-import { PricingRulesEditor, extractParamNames } from '@/features/node-platform/pricing-rules-editor'
+import {
+  PricingRulesEditor,
+  extractParamNames,
+} from '@/features/node-platform/pricing-rules-editor'
 import type { PricingRule, ScriptVersion } from '@/features/node-platform/types'
 import { api } from '@/lib/api'
 import { getCurrencyLabel } from '@/lib/currency'
@@ -88,7 +86,7 @@ const emptyForm = {
   concurrency: 1,
   min_interval_seconds: 30,
   base_price_micros: 0,
-  base_price: '',       // display string for the input
+  base_price: '', // display string for the input
   pricing_rules: [] as PricingRule[],
 }
 
@@ -502,14 +500,19 @@ export function MyScriptsPage() {
     if (!raw) return []
     if (Array.isArray(raw)) return raw as PricingRule[]
     if (typeof raw === 'string') {
-      try { return JSON.parse(raw) as PricingRule[] } catch { return [] }
+      try {
+        return JSON.parse(raw) as PricingRule[]
+      } catch {
+        return []
+      }
     }
     return []
   }
 
   async function openMineEditor(id: number) {
     const script = await unwrap<UserScript>(api.get(`/api/scripts/mine/${id}`))
-    const { microsToCurrency } = await import('@/features/node-platform/lib/format')
+    const { microsToCurrency } =
+      await import('@/features/node-platform/lib/format')
 
     // Start with pricing values already saved on the draft itself.
     let prefillPricing = {
@@ -522,21 +525,31 @@ export function MyScriptsPage() {
 
     // If the draft has no pricing yet but there's a published version,
     // fall back to that so the author doesn't have to re-enter everything.
-    if (!script.base_price_micros && !parsePricingRules(script.pricing_rules).length && script.latest_version) {
+    if (
+      !script.base_price_micros &&
+      !parsePricingRules(script.pricing_rules).length &&
+      script.latest_version
+    ) {
       try {
-        const { listAvailableScriptVersions } = await import('@/features/node-platform/api')
+        const { listAvailableScriptVersions } =
+          await import('@/features/node-platform/api')
         const versions = await listAvailableScriptVersions(id)
         const latest = versions.find((v) => v.version === script.latest_version)
         if (latest) {
           prefillPricing = {
             min_interval_seconds: latest.min_interval_seconds ?? 30,
             base_price: latest.base_price_micros
-              ? microsToCurrency(latest.base_price_micros).replace(/[^0-9.]/g, '')
+              ? microsToCurrency(latest.base_price_micros).replace(
+                  /[^0-9.]/g,
+                  ''
+                )
               : '',
             pricing_rules: parsePricingRules(latest.pricing_rules),
           }
         }
-      } catch { /* best-effort */ }
+      } catch {
+        /* best-effort */
+      }
     }
 
     setEditing({
@@ -559,7 +572,9 @@ export function MyScriptsPage() {
         throw new Error(t('Script Params must be a JSON object.'))
       }
     }
-    const basePriceMicros = Math.round(Number(editing.base_price || 0) * 1_000_000)
+    const basePriceMicros = Math.round(
+      Number(editing.base_price || 0) * 1_000_000
+    )
     const payload = {
       title: editing.title,
       description: editing.description,
@@ -568,7 +583,9 @@ export function MyScriptsPage() {
       concurrency: editing.concurrency ?? 1,
       min_interval_seconds: editing.min_interval_seconds ?? 30,
       base_price_micros: basePriceMicros || undefined,
-      pricing_rules: editing.pricing_rules?.length ? editing.pricing_rules : undefined,
+      pricing_rules: editing.pricing_rules?.length
+        ? editing.pricing_rules
+        : undefined,
     }
     if (editing.id) {
       await unwrap(api.put(`/api/scripts/mine/${editing.id}`, payload))
@@ -602,11 +619,15 @@ export function MyScriptsPage() {
       /* categories optional */
     }
     try {
-      const script = await unwrap<UserScript>(api.get(`/api/scripts/mine/${id}`))
-      const { microsToCurrency } = await import('@/features/node-platform/lib/format')
+      const script = await unwrap<UserScript>(
+        api.get(`/api/scripts/mine/${id}`)
+      )
+      const { microsToCurrency } =
+        await import('@/features/node-platform/lib/format')
       setEditing((prev) => ({
         ...prev,
-        min_interval_seconds: script.min_interval_seconds ?? prev.min_interval_seconds,
+        min_interval_seconds:
+          script.min_interval_seconds ?? prev.min_interval_seconds,
         base_price: script.base_price_micros
           ? microsToCurrency(script.base_price_micros).replace(/[^0-9.]/g, '')
           : prev.base_price,
@@ -614,7 +635,9 @@ export function MyScriptsPage() {
           ? parsePricingRules(script.pricing_rules)
           : prev.pricing_rules,
       }))
-    } catch { /* best-effort */ }
+    } catch {
+      /* best-effort */
+    }
   }
 
   async function confirmSubmitReview() {
@@ -628,7 +651,9 @@ export function MyScriptsPage() {
       toast.error(t('Your share must be between 0% and 5%.'))
       return
     }
-    const basePriceMicros = Math.round(Number(editing.base_price || 0) * 1_000_000)
+    const basePriceMicros = Math.round(
+      Number(editing.base_price || 0) * 1_000_000
+    )
     if (editing.base_price && basePriceMicros <= 0) {
       toast.error(t('Base price must be greater than 0'))
       return
@@ -639,7 +664,9 @@ export function MyScriptsPage() {
         author_share_rate_ppm: Math.round(sharePercent * 10000),
         category_id: submitCategory ? Number(submitCategory) : 0,
         base_price_micros: basePriceMicros || undefined,
-        pricing_rules: editing.pricing_rules?.length ? editing.pricing_rules : undefined,
+        pricing_rules: editing.pricing_rules?.length
+          ? editing.pricing_rules
+          : undefined,
       })
       toast.success(t('Submitted for review'))
       setSubmitTarget(0)
@@ -679,7 +706,13 @@ export function MyScriptsPage() {
         <Button
           type='button'
           variant='outline'
-          render={<a href='/script-creator-guide' target='_blank' rel='noopener noreferrer' />}
+          render={
+            <a
+              href='/script-creator-guide'
+              target='_blank'
+              rel='noopener noreferrer'
+            />
+          }
         >
           <BookOpen className='mr-2 h-4 w-4' />
           {t('Creator Guide')}
@@ -986,7 +1019,9 @@ export function MyScriptsPage() {
               </div>
               {/* Min Interval */}
               <div className='space-y-1'>
-                <div className='text-sm font-medium'>{t('Min Interval (s)')}</div>
+                <div className='text-sm font-medium'>
+                  {t('Min Interval (s)')}
+                </div>
                 <div className='text-muted-foreground text-xs'>
                   {t('Seconds between consecutive tasks (API rate limit)')}
                 </div>
@@ -1006,7 +1041,9 @@ export function MyScriptsPage() {
               {/* Base Price */}
               <div className='space-y-1'>
                 <div className='text-sm font-medium'>
-                  {t('Base Price')} ({getCurrencyLabel() === 'Tokens' ? 'USD' : getCurrencyLabel()})
+                  {t('Base Price')} (
+                  {getCurrencyLabel() === 'Tokens' ? 'USD' : getCurrencyLabel()}
+                  )
                 </div>
                 <div className='text-muted-foreground text-xs'>
                   {t('Price per unit before provider multiplier')}
@@ -1018,7 +1055,12 @@ export function MyScriptsPage() {
                   placeholder='0.01'
                   className='h-9'
                   value={editing.base_price ?? ''}
-                  onChange={(e) => setEditing((prev) => ({ ...prev, base_price: e.target.value }))}
+                  onChange={(e) =>
+                    setEditing((prev) => ({
+                      ...prev,
+                      base_price: e.target.value,
+                    }))
+                  }
                   aria-label={t('Base Price')}
                 />
               </div>
@@ -1028,9 +1070,13 @@ export function MyScriptsPage() {
             <div className='space-y-1'>
               <div className='flex items-center justify-between'>
                 <div>
-                  <div className='text-sm font-medium'>{t('Pricing Rules')}</div>
+                  <div className='text-sm font-medium'>
+                    {t('Pricing Rules')}
+                  </div>
                   <div className='text-muted-foreground text-xs'>
-                    {t('Define which parameters affect the price and by how much')}
+                    {t(
+                      'Define which parameters affect the price and by how much'
+                    )}
                   </div>
                 </div>
                 <a
@@ -1044,7 +1090,9 @@ export function MyScriptsPage() {
               </div>
               <PricingRulesEditor
                 value={editing.pricing_rules ?? []}
-                onChange={(rules) => setEditing((prev) => ({ ...prev, pricing_rules: rules }))}
+                onChange={(rules) =>
+                  setEditing((prev) => ({ ...prev, pricing_rules: rules }))
+                }
                 availableParams={extractParamNames(editing.script_params)}
               />
             </div>

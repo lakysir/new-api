@@ -22,12 +22,14 @@ import {
   parsePricingRules,
   type ApiEnvelope,
   type CapabilityStat,
+  type ConsoleRow,
   type Device,
   type EarningsSummary,
   type LedgerBalances,
   type NodeCapability,
   type NodeInfo,
   type Order,
+  type PageResult,
   type PriceBreakdown,
   type ProviderTaskAttempt,
   type ScriptVersion,
@@ -193,7 +195,10 @@ export function listPublishedScriptVersions() {
   return unwrap<ScriptVersion[]>(
     api.get('/api/scripts/versions/published')
   ).then((versions) =>
-    versions.map((v) => ({ ...v, pricing_rules: parsePricingRules(v.pricing_rules) }))
+    versions.map((v) => ({
+      ...v,
+      pricing_rules: parsePricingRules(v.pricing_rules),
+    }))
   )
 }
 
@@ -201,7 +206,10 @@ export function listAvailableScriptVersions(scriptId: number) {
   return unwrap<ScriptVersion[]>(
     api.get(`/api/scripts/${scriptId}/versions/available`)
   ).then((versions) =>
-    versions.map((v) => ({ ...v, pricing_rules: parsePricingRules(v.pricing_rules) }))
+    versions.map((v) => ({
+      ...v,
+      pricing_rules: parsePricingRules(v.pricing_rules),
+    }))
   )
 }
 
@@ -363,6 +371,39 @@ export function listMyDevices() {
 
 export function listMyNodes(config?: ApiRequestConfig) {
   return unwrap<NodeInfo[]>(api.get('/api/nodes/mine', config))
+}
+
+// listMyConsoleRows fetches one page of the provider console (a device plus its
+// nodes per row; device-less nodes come as rows with device=null). Paging is
+// server-side so the console never loads — nor fans out per-node requests for —
+// more than one page of devices/nodes at a time.
+export function listMyConsoleRows(
+  params: { page: number; pageSize: number; activeOnly: boolean },
+  config?: ApiRequestConfig
+) {
+  return unwrap<PageResult<ConsoleRow>>(
+    api.get('/api/devices/mine/console', {
+      ...config,
+      params: {
+        p: params.page,
+        page_size: params.pageSize,
+        active_only: params.activeOnly ? 'true' : undefined,
+      },
+    })
+  )
+}
+
+// listMyNodesByIds returns just the caller's nodes named in `ids` (max 100 per
+// call). The console polls this to keep the rows currently on screen fresh
+// instead of pulling every node the provider owns each tick.
+export function listMyNodesByIds(ids: string[], config?: ApiRequestConfig) {
+  if (ids.length === 0) return Promise.resolve<NodeInfo[]>([])
+  return unwrap<NodeInfo[]>(
+    api.get('/api/nodes/mine/by-ids', {
+      ...config,
+      params: { ids: ids.join(',') },
+    })
+  )
 }
 
 export function revokeDevice(deviceId: string) {
@@ -643,7 +684,9 @@ export function withdrawAvailable(amountMicros: number) {
     quota_credited: number
     fee_micros: number
     net_micros: number
-  }>(api.post('/api/ledger/withdraw-available', { amount_micros: amountMicros }))
+  }>(
+    api.post('/api/ledger/withdraw-available', { amount_micros: amountMicros })
+  )
 }
 
 // withdrawEarnings transfers the caller's payable balance for a role (provider =

@@ -55,7 +55,11 @@ type EnumValuesEditorProps = {
   readonly?: boolean
 }
 
-function EnumValuesEditor({ values, onChange, readonly }: EnumValuesEditorProps) {
+function EnumValuesEditor({
+  values,
+  onChange,
+  readonly,
+}: EnumValuesEditorProps) {
   const { t } = useTranslation()
   const entries = Object.entries(values)
 
@@ -93,7 +97,10 @@ function EnumValuesEditor({ values, onChange, readonly }: EnumValuesEditorProps)
         <span />
       </div>
       {entries.map(([key, val]) => (
-        <div key={key} className='grid grid-cols-[1fr_80px_auto] items-center gap-1.5'>
+        <div
+          key={key}
+          className='grid grid-cols-[1fr_80px_auto] items-center gap-1.5'
+        >
           <Input
             className='h-7 text-xs'
             value={key}
@@ -151,7 +158,14 @@ type RuleCardProps = {
   readonly?: boolean
 }
 
-function RuleCard({ rule, index, availableParams, onUpdate, onRemove, readonly }: RuleCardProps) {
+function RuleCard({
+  rule,
+  index,
+  availableParams,
+  onUpdate,
+  onRemove,
+  readonly,
+}: RuleCardProps) {
   const { t } = useTranslation()
 
   function patch(partial: Partial<PricingRule>) {
@@ -162,17 +176,26 @@ function RuleCard({ rule, index, availableParams, onUpdate, onRemove, readonly }
     if (type === 'enum_multiplier') {
       onUpdate(index, { ...rule, type, values: {}, unit_multiplier: undefined })
     } else {
-      onUpdate(index, { ...rule, type, values: undefined, unit_multiplier: 1, min: undefined, max: undefined })
+      onUpdate(index, {
+        ...rule,
+        type,
+        values: undefined,
+        unit_multiplier: 1,
+        min: undefined,
+        max: undefined,
+      })
     }
   }
 
   return (
-    <div className='rounded-md border bg-muted/20 p-3 space-y-3'>
+    <div className='bg-muted/20 space-y-3 rounded-md border p-3'>
       <div className='flex items-start justify-between gap-2'>
         <div className='grid flex-1 gap-3 sm:grid-cols-[1fr_1fr_1fr]'>
           {/* Parameter */}
           <label className='space-y-1'>
-            <span className='text-muted-foreground text-xs font-medium'>{t('Parameter')}</span>
+            <span className='text-muted-foreground text-xs font-medium'>
+              {t('Parameter')}
+            </span>
             {availableParams.length > 0 ? (
               <select
                 className='text-foreground h-8 w-full rounded-md border bg-transparent px-2 text-sm disabled:opacity-50'
@@ -182,7 +205,9 @@ function RuleCard({ rule, index, availableParams, onUpdate, onRemove, readonly }
               >
                 <option value=''>{t('Select parameter')}</option>
                 {availableParams.map((p) => (
-                  <option key={p} value={p}>{p}</option>
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
                 ))}
                 {!availableParams.includes(rule.param) && rule.param && (
                   <option value={rule.param}>{rule.param}</option>
@@ -201,7 +226,9 @@ function RuleCard({ rule, index, availableParams, onUpdate, onRemove, readonly }
 
           {/* Display label */}
           <label className='space-y-1'>
-            <span className='text-muted-foreground text-xs font-medium'>{t('Label (optional)')}</span>
+            <span className='text-muted-foreground text-xs font-medium'>
+              {t('Label (optional)')}
+            </span>
             <Input
               className='h-8 text-sm'
               placeholder={t('e.g. Model')}
@@ -213,14 +240,20 @@ function RuleCard({ rule, index, availableParams, onUpdate, onRemove, readonly }
 
           {/* Type */}
           <label className='space-y-1'>
-            <span className='text-muted-foreground text-xs font-medium'>{t('Type')}</span>
+            <span className='text-muted-foreground text-xs font-medium'>
+              {t('Type')}
+            </span>
             <select
               className='text-foreground h-8 w-full rounded-md border bg-transparent px-2 text-sm disabled:opacity-50'
               value={rule.type}
               disabled={readonly}
-              onChange={(e) => changeType(e.target.value as PricingRule['type'])}
+              onChange={(e) =>
+                changeType(e.target.value as PricingRule['type'])
+              }
             >
-              <option value='enum_multiplier'>{t('Enum options (dropdown)')}</option>
+              <option value='enum_multiplier'>
+                {t('Enum options (dropdown)')}
+              </option>
               <option value='linear_range'>{t('Numeric × unit cost')}</option>
             </select>
           </label>
@@ -263,29 +296,43 @@ function RuleCard({ rule, index, availableParams, onUpdate, onRemove, readonly }
               placeholder='1'
               value={rule.unit_multiplier ?? 1}
               disabled={readonly}
-              onChange={(e) => patch({ unit_multiplier: Number(e.target.value) || 1 })}
+              onChange={(e) =>
+                patch({ unit_multiplier: Number(e.target.value) || 1 })
+              }
             />
           </label>
           <label className='space-y-1'>
-            <span className='text-muted-foreground text-xs font-medium'>{t('Min value')}</span>
+            <span className='text-muted-foreground text-xs font-medium'>
+              {t('Min value')}
+            </span>
             <Input
               className='h-8 text-sm'
               type='number'
               placeholder={t('optional')}
               value={rule.min ?? ''}
               disabled={readonly}
-              onChange={(e) => patch({ min: e.target.value ? Number(e.target.value) : undefined })}
+              onChange={(e) =>
+                patch({
+                  min: e.target.value ? Number(e.target.value) : undefined,
+                })
+              }
             />
           </label>
           <label className='space-y-1'>
-            <span className='text-muted-foreground text-xs font-medium'>{t('Max value')}</span>
+            <span className='text-muted-foreground text-xs font-medium'>
+              {t('Max value')}
+            </span>
             <Input
               className='h-8 text-sm'
               type='number'
               placeholder={t('optional')}
               value={rule.max ?? ''}
               disabled={readonly}
-              onChange={(e) => patch({ max: e.target.value ? Number(e.target.value) : undefined })}
+              onChange={(e) =>
+                patch({
+                  max: e.target.value ? Number(e.target.value) : undefined,
+                })
+              }
             />
           </label>
         </div>
@@ -338,10 +385,7 @@ export function PricingRulesEditor({
   }
 
   function addRule() {
-    onChange?.([
-      ...value,
-      { param: '', type: 'enum_multiplier', values: {} },
-    ])
+    onChange?.([...value, { param: '', type: 'enum_multiplier', values: {} }])
   }
 
   function updateRule(index: number, rule: PricingRule) {
@@ -391,7 +435,9 @@ export function PricingRulesEditor({
             <div className='text-muted-foreground py-6 text-center text-sm'>
               {readonly
                 ? t('No pricing rules defined.')
-                : t('No rules yet. Click "Add rule" to define which parameters affect the price.')}
+                : t(
+                    'No rules yet. Click "Add rule" to define which parameters affect the price.'
+                  )}
             </div>
           ) : (
             <div className='space-y-3'>

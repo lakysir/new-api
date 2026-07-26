@@ -39,13 +39,13 @@ export type ScriptReviewStatus = 'draft' | 'pending' | 'approved' | 'rejected'
 // linear_range: a numeric value multiplied by unit_multiplier.
 //   e.g. duration=10s with unit_multiplier=1 -> 10× base units
 export type PricingRule = {
-  param: string           // parameter key in the script's config object
+  param: string // parameter key in the script's config object
   type: 'enum_multiplier' | 'linear_range'
-  label?: string          // human-readable label for the UI
+  label?: string // human-readable label for the UI
   // enum_multiplier fields
   values?: Record<string, number>
   // linear_range fields
-  unit_multiplier?: number   // price units per 1 increment of the param value
+  unit_multiplier?: number // price units per 1 increment of the param value
   min?: number
   max?: number
 }
@@ -124,6 +124,24 @@ export type NodeInfo = {
   region: string
   version: string
   last_seen_at: number
+}
+
+// ConsoleRow is one row of the paginated provider console: a device plus the
+// nodes bound to it. `device` is null for device-less nodes (their device row
+// was purged) so they can still be inspected/deleted. Mirrors the Go
+// model.ConsoleRow JSON.
+export type ConsoleRow = {
+  device: Device | null
+  nodes: NodeInfo[]
+}
+
+// PageResult is the standard paginated envelope returned by endpoints built on
+// common.PageInfo (page/page_size/total/items).
+export type PageResult<T> = {
+  page: number
+  page_size: number
+  total: number
+  items: T[]
 }
 
 export type NodeCapability = {

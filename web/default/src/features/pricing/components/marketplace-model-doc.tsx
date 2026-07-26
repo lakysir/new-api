@@ -100,7 +100,9 @@ function parseSchemaParams(schema: string): SchemaParam[] {
 
 // buildExampleBody constructs a realistic request body: the operator's param
 // template merged under schema defaults/examples, always including the model.
-function buildExampleBody(doc: MarketplaceModelDocType): Record<string, unknown> {
+function buildExampleBody(
+  doc: MarketplaceModelDocType
+): Record<string, unknown> {
   const body: Record<string, unknown> = { model: doc.model_name }
   // Seed from the script's schema defaults.
   for (const p of parseSchemaParams(doc.script_params)) {
@@ -140,7 +142,10 @@ function useBaseUrl(): string {
   }, [status])
 }
 
-function buildCurlSample(baseUrl: string, body: Record<string, unknown>): string {
+function buildCurlSample(
+  baseUrl: string,
+  body: Record<string, unknown>
+): string {
   const bodyJson = JSON.stringify(body, null, 2)
   return [
     `# 1) Submit the task — returns { "id": "task_...", "status": "queued" }`,
@@ -224,9 +229,8 @@ export function MarketplaceModelDoc(props: {
           <p className='mt-2 text-sm whitespace-pre-wrap'>{doc.description}</p>
         ) : null}
         <div className='text-muted-foreground mt-2 text-xs'>
-          {t('Consume multiplier')}: {doc.consume_multiplier} ·{' '}
-          {t('Timeout')}: {doc.timeout_seconds}s
-          {doc.task_type ? ` · ${doc.task_type}` : ''}
+          {t('Consume multiplier')}: {doc.consume_multiplier} · {t('Timeout')}:{' '}
+          {doc.timeout_seconds}s{doc.task_type ? ` · ${doc.task_type}` : ''}
         </div>
       </div>
 

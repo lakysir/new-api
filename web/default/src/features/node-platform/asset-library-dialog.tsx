@@ -32,7 +32,6 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { Button } from '@/components/ui/button'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -43,6 +42,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
@@ -106,7 +106,9 @@ export function AssetLibraryDialog(props: AssetLibraryDialogProps) {
   }, [props.open])
 
   async function uploadFile(file: File) {
-    if (!['image/', 'video/', 'audio/'].some((type) => file.type.startsWith(type))) {
+    if (
+      !['image/', 'video/', 'audio/'].some((type) => file.type.startsWith(type))
+    ) {
       toast.error(t('Only image, video, and audio files are supported'))
       return
     }
@@ -171,7 +173,7 @@ export function AssetLibraryDialog(props: AssetLibraryDialogProps) {
   let libraryContent: React.ReactNode
   if (loading) {
     libraryContent = (
-      <div className='flex h-56 items-center justify-center text-muted-foreground'>
+      <div className='text-muted-foreground flex h-56 items-center justify-center'>
         <Loader2 className='mr-2 h-5 w-5 animate-spin' />
         {t('Loading resources...')}
       </div>
@@ -179,10 +181,12 @@ export function AssetLibraryDialog(props: AssetLibraryDialogProps) {
   } else if (assets.length === 0) {
     libraryContent = (
       <div className='flex h-56 flex-col items-center justify-center rounded-md border border-dashed text-center'>
-        <Upload className='mb-3 h-8 w-8 text-muted-foreground/60' />
+        <Upload className='text-muted-foreground/60 mb-3 h-8 w-8' />
         <div className='text-sm font-medium'>{t('No resources uploaded')}</div>
-        <div className='mt-1 max-w-xs text-xs text-muted-foreground'>
-          {t('Your uploaded media will appear here with a reusable public URL.')}
+        <div className='text-muted-foreground mt-1 max-w-xs text-xs'>
+          {t(
+            'Your uploaded media will appear here with a reusable public URL.'
+          )}
         </div>
       </div>
     )
@@ -190,8 +194,11 @@ export function AssetLibraryDialog(props: AssetLibraryDialogProps) {
     libraryContent = (
       <div className='grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'>
         {assets.map((asset) => (
-          <div key={asset.id} className='overflow-hidden rounded-md border bg-card'>
-            <div className='flex aspect-video items-center justify-center overflow-hidden bg-muted/40'>
+          <div
+            key={asset.id}
+            className='bg-card overflow-hidden rounded-md border'
+          >
+            <div className='bg-muted/40 flex aspect-video items-center justify-center overflow-hidden'>
               {asset.media_type === 'image' && (
                 <button
                   type='button'
@@ -199,37 +206,73 @@ export function AssetLibraryDialog(props: AssetLibraryDialogProps) {
                   aria-label={t('Preview image')}
                   onClick={() => setPreviewAsset(asset)}
                 >
-                  <img className='h-full w-full object-contain' src={asset.url} alt={asset.filename} loading='lazy' />
+                  <img
+                    className='h-full w-full object-contain'
+                    src={asset.url}
+                    alt={asset.filename}
+                    loading='lazy'
+                  />
                   <span className='absolute right-2 bottom-2 flex h-8 w-8 items-center justify-center rounded-md bg-black/65 text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100'>
                     <ZoomIn className='h-4 w-4' aria-hidden='true' />
                   </span>
                 </button>
               )}
               {asset.media_type === 'video' && (
-                <video className='h-full w-full object-contain' src={asset.url} controls preload='metadata' />
+                <video
+                  className='h-full w-full object-contain'
+                  src={asset.url}
+                  controls
+                  preload='metadata'
+                />
               )}
               {asset.media_type === 'audio' && (
                 <div className='flex w-full flex-col items-center gap-4 px-5'>
-                  <FileAudio className='h-9 w-9 text-muted-foreground' />
-                  <audio className='h-9 w-full' src={asset.url} controls preload='metadata' />
+                  <FileAudio className='text-muted-foreground h-9 w-9' />
+                  <audio
+                    className='h-9 w-full'
+                    src={asset.url}
+                    controls
+                    preload='metadata'
+                  />
                 </div>
               )}
             </div>
             <div className='space-y-2.5 p-2.5'>
               <div className='flex min-w-0 items-start gap-2'>
-                {asset.media_type === 'image' && <FileImage className='mt-0.5 h-4 w-4 shrink-0 text-muted-foreground' />}
-                {asset.media_type === 'video' && <Film className='mt-0.5 h-4 w-4 shrink-0 text-muted-foreground' />}
-                {asset.media_type === 'audio' && <FileAudio className='mt-0.5 h-4 w-4 shrink-0 text-muted-foreground' />}
+                {asset.media_type === 'image' && (
+                  <FileImage className='text-muted-foreground mt-0.5 h-4 w-4 shrink-0' />
+                )}
+                {asset.media_type === 'video' && (
+                  <Film className='text-muted-foreground mt-0.5 h-4 w-4 shrink-0' />
+                )}
+                {asset.media_type === 'audio' && (
+                  <FileAudio className='text-muted-foreground mt-0.5 h-4 w-4 shrink-0' />
+                )}
                 <div className='min-w-0 flex-1'>
-                  <div className='truncate text-xs font-medium' title={asset.filename}>{asset.filename}</div>
-                  <div className='mt-0.5 truncate text-[11px] text-muted-foreground'>
-                    {new Date(asset.created_at * 1000).toLocaleString()} · {formatFileSize(asset.size)}
+                  <div
+                    className='truncate text-xs font-medium'
+                    title={asset.filename}
+                  >
+                    {asset.filename}
+                  </div>
+                  <div className='text-muted-foreground mt-0.5 truncate text-[11px]'>
+                    {new Date(asset.created_at * 1000).toLocaleString()} ·{' '}
+                    {formatFileSize(asset.size)}
                   </div>
                 </div>
               </div>
               <div className='flex gap-2'>
-                <Button className='flex-1' size='sm' variant='outline' onClick={() => void copyURL(asset)}>
-                  {copiedId === asset.id ? <Check className='mr-2 h-4 w-4' /> : <Copy className='mr-2 h-4 w-4' />}
+                <Button
+                  className='flex-1'
+                  size='sm'
+                  variant='outline'
+                  onClick={() => void copyURL(asset)}
+                >
+                  {copiedId === asset.id ? (
+                    <Check className='mr-2 h-4 w-4' />
+                  ) : (
+                    <Copy className='mr-2 h-4 w-4' />
+                  )}
                   {copiedId === asset.id ? t('Copied') : t('Copy URL')}
                 </Button>
                 <Button
@@ -241,7 +284,11 @@ export function AssetLibraryDialog(props: AssetLibraryDialogProps) {
                   disabled={deletingId === asset.id}
                   onClick={() => setPendingDelete(asset)}
                 >
-                  {deletingId === asset.id ? <Loader2 className='h-4 w-4 animate-spin' /> : <Trash2 className='h-4 w-4' />}
+                  {deletingId === asset.id ? (
+                    <Loader2 className='h-4 w-4 animate-spin' />
+                  ) : (
+                    <Trash2 className='h-4 w-4' />
+                  )}
                 </Button>
               </div>
             </div>
@@ -253,20 +300,29 @@ export function AssetLibraryDialog(props: AssetLibraryDialogProps) {
 
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
-      <DialogContent closeLabel={t('Close')} className='flex h-[min(80vh,760px)] w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden p-0 sm:w-[60vw] sm:max-w-[1200px]'>
+      <DialogContent
+        closeLabel={t('Close')}
+        className='flex h-[min(80vh,760px)] w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden p-0 sm:w-[60vw] sm:max-w-[1200px]'
+      >
         <DialogHeader className='border-b px-5 py-4 text-left'>
           <DialogTitle>{t('Resource library')}</DialogTitle>
           <DialogDescription>
-            {t('Upload media here, then copy its public URL into script parameters.')}
+            {t(
+              'Upload media here, then copy its public URL into script parameters.'
+            )}
           </DialogDescription>
         </DialogHeader>
 
-        <div className='flex items-center justify-between gap-4 border-b bg-muted/25 px-5 py-3'>
-          <div className='min-w-0 space-y-1 text-xs text-muted-foreground'>
+        <div className='bg-muted/25 flex items-center justify-between gap-4 border-b px-5 py-3'>
+          <div className='text-muted-foreground min-w-0 space-y-1 text-xs'>
             <div>{t('Images, video, and audio. Up to 100 MB per file.')}</div>
             <div className='flex items-center gap-1.5 text-amber-700 dark:text-amber-400'>
               <Clock3 className='h-3.5 w-3.5 shrink-0' aria-hidden='true' />
-              <span>{t('Resources are retained for 24 hours and automatically expire afterward.')}</span>
+              <span>
+                {t(
+                  'Resources are retained for 24 hours and automatically expire afterward.'
+                )}
+              </span>
             </div>
           </div>
           <input
@@ -293,33 +349,57 @@ export function AssetLibraryDialog(props: AssetLibraryDialogProps) {
             {uploading ? t('Uploading...') : t('Upload resource')}
           </Button>
         </div>
-        {uploading && <Progress value={uploadProgress} className='h-1 rounded-none' />}
+        {uploading && (
+          <Progress value={uploadProgress} className='h-1 rounded-none' />
+        )}
 
         <div className='min-h-56 flex-1 overflow-y-auto p-4 sm:p-5'>
           {libraryContent}
         </div>
       </DialogContent>
-      <AlertDialog open={pendingDelete != null} onOpenChange={(open) => { if (!open && deletingId == null) setPendingDelete(null) }}>
+      <AlertDialog
+        open={pendingDelete != null}
+        onOpenChange={(open) => {
+          if (!open && deletingId == null) setPendingDelete(null)
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t('Delete resource')}</AlertDialogTitle>
-            <AlertDialogDescription>{t('Delete this resource permanently?')}</AlertDialogDescription>
+            <AlertDialogDescription>
+              {t('Delete this resource permanently?')}
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deletingId != null}>{t('Cancel')}</AlertDialogCancel>
+            <AlertDialogCancel disabled={deletingId != null}>
+              {t('Cancel')}
+            </AlertDialogCancel>
             <AlertDialogAction
               variant='destructive'
               disabled={deletingId != null}
-              onClick={() => { if (pendingDelete) void deleteAsset(pendingDelete) }}
+              onClick={() => {
+                if (pendingDelete) void deleteAsset(pendingDelete)
+              }}
             >
-              {deletingId != null && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
+              {deletingId != null && (
+                <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+              )}
               {t('Delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <Dialog open={previewAsset != null} onOpenChange={(open) => { if (!open) setPreviewAsset(null) }}>
-        <DialogContent closeLabel={t('Close')} className='flex h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] items-center justify-center overflow-hidden bg-black/95 p-4 text-white sm:max-w-[calc(100vw-2rem)]' aria-label={t('Preview image')}>
+      <Dialog
+        open={previewAsset != null}
+        onOpenChange={(open) => {
+          if (!open) setPreviewAsset(null)
+        }}
+      >
+        <DialogContent
+          closeLabel={t('Close')}
+          className='flex h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] items-center justify-center overflow-hidden bg-black/95 p-4 text-white sm:max-w-[calc(100vw-2rem)]'
+          aria-label={t('Preview image')}
+        >
           <DialogTitle className='sr-only'>{t('Preview image')}</DialogTitle>
           {previewAsset && (
             <img
