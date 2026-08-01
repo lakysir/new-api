@@ -1575,6 +1575,7 @@ const rootRouteChildren: RootRouteChildren = {
   AboutIndexRoute: AboutIndexRoute,
   AitokenApiDocsIndexRoute: AitokenApiDocsIndexRoute,
   PricingIndexRoute: PricingIndexRoute,
+  VideoModelsIndexRoute: VideoModelsIndexRoute,
   RankingsIndexRoute: RankingsIndexRoute,
   ScriptsIndexRoute: ScriptsIndexRoute,
   ScriptCreatorGuideIndexRoute: ScriptCreatorGuideIndexRoute,
