@@ -23,6 +23,7 @@ type Pricing struct {
 	Tags                    string                  `json:"tags,omitempty"`
 	VendorID                int                     `json:"vendor_id,omitempty"`
 	Recommended             int                     `json:"recommended,omitempty"`
+	IsVideoModel            int                     `json:"is_video_model,omitempty"`
 	QuotaType               int                     `json:"quota_type"`
 	ModelRatio              float64                 `json:"model_ratio"`
 	ModelPrice              float64                 `json:"model_price"`
@@ -310,6 +311,7 @@ func updatePricing() {
 			pricing.Tags = meta.Tags
 			pricing.VendorID = meta.VendorID
 			pricing.Recommended = meta.Recommended
+			pricing.IsVideoModel = meta.IsVideoModel
 			pricing.RequestPriceUnits = meta.RequestPriceUnits
 			pricing.RequestPriceDisplayUnit = meta.RequestPriceDisplayUnit
 			pricing.Endpoints = meta.Endpoints

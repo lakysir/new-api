@@ -36,7 +36,7 @@ import { EXCLUDED_GROUPS, VIEW_MODES } from './constants'
 import { useFilters } from './hooks/use-filters'
 import { usePricingData } from './hooks/use-pricing-data'
 
-export function Pricing() {
+export function VideoModelMarketplace() {
   const { t } = useTranslation()
   const [selectedModelName, setSelectedModelName] = useState<string | null>(
     null
@@ -54,9 +54,9 @@ export function Pricing() {
     usdExchangeRate,
   } = usePricingData()
 
-  // Filter out video models (is_video_model !== 1)
-  const generalModels = useMemo(
-    () => (models || []).filter((model) => model.is_video_model !== 1),
+  // Filter only video models (is_video_model === 1)
+  const videoModels = useMemo(
+    () => (models || []).filter((model) => model.is_video_model === 1),
     [models]
   )
 
@@ -87,7 +87,7 @@ export function Pricing() {
     availableTags,
     clearFilters,
     clearSearch,
-  } = useFilters(generalModels)
+  } = useFilters(videoModels)
 
   const handleModelClick = useCallback((modelName: string) => {
     setSelectedModelName(modelName)
@@ -96,11 +96,10 @@ export function Pricing() {
   const selectedModel = useMemo(
     () =>
       selectedModelName
-        ? generalModels.find(
-            (model) => model.model_name === selectedModelName
-          ) || null
+        ? videoModels.find((model) => model.model_name === selectedModelName) ||
+          null
         : null,
-    [generalModels, selectedModelName]
+    [videoModels, selectedModelName]
   )
 
   const availableGroups = useMemo(
@@ -184,16 +183,16 @@ export function Pricing() {
         <PageTransition className='relative mx-auto w-full max-w-[1900px] px-3 pt-16 pb-8 sm:px-6 sm:pt-20 sm:pb-10 xl:px-8'>
           <header className='mx-auto mb-5 max-w-3xl pt-5 text-center sm:mb-8 sm:pt-9'>
             <h1 className='text-[clamp(2rem,5.5vw,3.5rem)] leading-[1.15] font-bold tracking-tight'>
-              {t('General Model Marketplace')}
+              {t('Video Model Marketplace')}
             </h1>
             <p className='text-muted-foreground/80 mt-3 text-sm sm:mt-4 sm:text-base'>
               {t('This site currently has {{count}} models enabled', {
-                count: generalModels.length,
+                count: videoModels.length,
               })}
             </p>
             <p className='text-muted-foreground/60 mx-auto mt-2 max-w-2xl text-xs leading-relaxed sm:text-sm'>
               {t(
-                'Discover curated AI models, compare pricing and capabilities, and choose the right model for every scenario.'
+                'Discover curated AI video models, compare pricing and capabilities, and choose the right model for every scenario.'
               )}
             </p>
             <SearchBar
@@ -223,7 +222,7 @@ export function Pricing() {
               groups={availableGroups}
               groupRatios={groupRatio}
               tags={availableTags}
-              models={generalModels}
+              models={videoModels}
               hasActiveFilters={hasActiveFilters}
               onClearFilters={clearFilters}
               className='hover-scrollbar bg-background/75 sticky top-4 hidden max-h-[calc(100dvh-2rem)] self-start overflow-y-auto shadow-sm backdrop-blur-xl xl:block'
@@ -232,7 +231,7 @@ export function Pricing() {
             <main className='min-w-0 space-y-4'>
               <PricingToolbar
                 filteredCount={filteredModels.length}
-                totalCount={generalModels.length}
+                totalCount={videoModels.length}
                 sortBy={sortBy}
                 onSortChange={setSortBy}
                 tokenUnit={tokenUnit}
@@ -255,7 +254,7 @@ export function Pricing() {
                 groups={availableGroups}
                 groupRatios={groupRatio}
                 tags={availableTags}
-                models={models || []}
+                models={videoModels}
                 hasActiveFilters={hasActiveFilters}
                 activeFilterCount={activeFilterCount}
                 onClearFilters={clearFilters}

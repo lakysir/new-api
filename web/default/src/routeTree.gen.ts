@@ -19,6 +19,7 @@ import { Route as ScriptsIndexRouteImport } from './routes/scripts/index'
 import { Route as ScriptCreatorGuideIndexRouteImport } from './routes/script-creator-guide/index'
 import { Route as RankingsIndexRouteImport } from './routes/rankings/index'
 import { Route as PricingIndexRouteImport } from './routes/pricing/index'
+import { Route as VideoModelsIndexRouteImport } from './routes/video-models/index'
 import { Route as AitokenApiDocsIndexRouteImport } from './routes/aitoken-api-docs/index'
 import { Route as AboutIndexRouteImport } from './routes/about/index'
 import { Route as OauthProviderRouteImport } from './routes/oauth/$provider'
@@ -126,6 +127,11 @@ const RankingsIndexRoute = RankingsIndexRouteImport.update({
 const PricingIndexRoute = PricingIndexRouteImport.update({
   id: '/pricing/',
   path: '/pricing/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VideoModelsIndexRoute = VideoModelsIndexRouteImport.update({
+  id: '/video-models/',
+  path: '/video-models/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AitokenApiDocsIndexRoute = AitokenApiDocsIndexRouteImport.update({
@@ -491,6 +497,7 @@ export interface FileRoutesByFullPath {
   '/about/': typeof AboutIndexRoute
   '/aitoken-api-docs/': typeof AitokenApiDocsIndexRoute
   '/pricing/': typeof PricingIndexRoute
+  '/video-models/': typeof VideoModelsIndexRoute
   '/rankings/': typeof RankingsIndexRoute
   '/scripts/': typeof ScriptsIndexRoute
   '/script-creator-guide/': typeof ScriptCreatorGuideIndexRoute
@@ -633,6 +640,7 @@ export interface FileRoutesById {
   '/about/': typeof AboutIndexRoute
   '/aitoken-api-docs/': typeof AitokenApiDocsIndexRoute
   '/pricing/': typeof PricingIndexRoute
+  '/video-models/': typeof VideoModelsIndexRoute
   '/rankings/': typeof RankingsIndexRoute
   '/scripts/': typeof ScriptsIndexRoute
   '/setup/': typeof SetupIndexRoute
@@ -704,6 +712,7 @@ export interface FileRouteTypes {
     | '/about/'
     | '/aitoken-api-docs/'
     | '/pricing/'
+    | '/video-models/'
     | '/rankings/'
     | '/scripts/'
     | '/setup/'
@@ -843,6 +852,7 @@ export interface FileRouteTypes {
     | '/about/'
     | '/aitoken-api-docs/'
     | '/pricing/'
+    | '/video-models/'
     | '/rankings/'
     | '/scripts/'
     | '/setup/'
@@ -851,6 +861,7 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard/$section'
     | '/_authenticated/errors/$error'
     | '/_authenticated/models/$section'
+    | '/_authenticated/video-models/$section'
     | '/_authenticated/usage-logs/$section'
     | '/_authenticated/buy-aitoken/'
     | '/_authenticated/channels/'
@@ -858,6 +869,7 @@ export interface FileRouteTypes {
     | '/_authenticated/invoices/'
     | '/_authenticated/keys/'
     | '/_authenticated/models/'
+    | '/_authenticated/video-models/'
     | '/_authenticated/my-scripts/'
     | '/_authenticated/nodes-console/'
     | '/_authenticated/playground/'

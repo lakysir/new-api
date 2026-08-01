@@ -100,6 +100,7 @@ const extendedModelFormSchema = z.object({
   status: z.boolean(),
   sync_official: z.boolean(),
   recommended: z.boolean(),
+  is_video_model: z.boolean(),
   request_price_units: z.string().optional(),
   request_price_display_unit: z.enum(['request', 'second']).optional(),
   price: z.string().optional(),
@@ -246,6 +247,7 @@ export function ModelMutateDrawer({
       status: true,
       sync_official: true,
       recommended: false,
+      is_video_model: false,
       request_price_units: '1',
       request_price_display_unit: 'request',
       price: '',
@@ -303,7 +305,7 @@ export function ModelMutateDrawer({
       setOldModelName(model.model_name)
 
       // Base model data reset
-      const baseModelData = {
+      const baseModelData: Partial<ExtendedModelFormValues> = {
         id: model.id,
         model_name: model.model_name,
         description: model.description || '',
@@ -316,6 +318,7 @@ export function ModelMutateDrawer({
         status: model.status === 1,
         sync_official: model.sync_official === 1,
         recommended: model.recommended === 1,
+        is_video_model: model.is_video_model === 1,
         request_price_units: String(model.request_price_units || 1),
         request_price_display_unit:
           model.request_price_display_unit === 'second' ? 'second' : 'request',
@@ -442,6 +445,7 @@ export function ModelMutateDrawer({
         status: true,
         sync_official: true,
         recommended: false,
+        is_video_model: false,
         request_price_units: String(currentRow?.request_price_units || 1),
         request_price_display_unit:
           currentRow?.request_price_display_unit === 'second'
@@ -481,14 +485,15 @@ export function ModelMutateDrawer({
           status: values.status ? 1 : 0,
           sync_official: values.sync_official ? 1 : 0,
           recommended: values.recommended ? 1 : 0,
+          is_video_model: values.is_video_model ? 1 : 0,
           request_price_units: Math.max(
             1,
             Number.parseInt(values.request_price_units || '1', 10) || 1
           ),
           request_price_display_unit:
             values.request_price_display_unit === 'second'
-              ? 'second'
-              : 'request',
+              ? ('second' as const)
+              : ('request' as const),
         }
 
         // Remove ratio fields from model data (they're stored in system settings)
@@ -1468,6 +1473,31 @@ export function ModelMutateDrawer({
                       <FormDescription>
                         {t(
                           'Feature this model at the top of the model marketplace.'
+                        )}
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='is_video_model'
+                render={({ field }) => (
+                  <FormItem className={sideDrawerSwitchItemClassName()}>
+                    <div className='flex flex-col gap-0.5'>
+                      <FormLabel className='text-base'>
+                        {t('Video Model')}
+                      </FormLabel>
+                      <FormDescription>
+                        {t(
+                          'Mark as video model. It will appear in Video Model Marketplace instead of General Model Marketplace.'
                         )}
                       </FormDescription>
                     </div>

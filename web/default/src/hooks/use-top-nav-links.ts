@@ -80,12 +80,15 @@ export function useTopNavLinks(): TopNavLink[] {
     requiresAuth: !isAuthed,
   })
 
-  // Pricing
+  // Pricing (General Model Marketplace)
   const pricing = modules?.pricing
   if (pricing && typeof pricing === 'object' && pricing.enabled) {
     const requiresAuth = pricing.requireAuth && !isAuthed
-    links.push({ title: t('Model Square'), href: '/pricing', requiresAuth })
+    links.push({ title: t('General Model Marketplace'), href: '/pricing/', requiresAuth })
   }
+
+  // Video Model Marketplace
+  links.push({ title: t('Video Model Marketplace'), href: '/video-models/' })
 
   // Script Square
   if (modules?.scripts !== false) {

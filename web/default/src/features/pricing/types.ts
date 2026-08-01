@@ -38,6 +38,7 @@ export type PricingModel = {
   vendor_icon?: string
   vendor_description?: string
   recommended?: number
+  is_video_model?: number
   quota_type: number
   model_ratio: number
   completion_ratio: number

@@ -33,6 +33,7 @@ type Model struct {
 	Status                  int            `json:"status" gorm:"default:1"`
 	SyncOfficial            int            `json:"sync_official" gorm:"default:1"`
 	Recommended             int            `json:"recommended" gorm:"default:0;index"`
+	IsVideoModel            int            `json:"is_video_model" gorm:"default:0;index"`
 	RequestPriceUnits       int            `json:"request_price_units,omitempty" gorm:"default:1"`
 	RequestPriceDisplayUnit string         `json:"request_price_display_unit,omitempty" gorm:"type:varchar(16);default:'request'"`
 	CreatedTime             int64          `json:"created_time" gorm:"bigint"`
@@ -62,6 +63,7 @@ func (mi *Model) Insert() error {
 	// 保存原始值（因为 Create 后可能被 GORM 的 default 标签覆盖为 1）
 	originalStatus := mi.Status
 	originalSyncOfficial := mi.SyncOfficial
+	originalIsVideoModel := mi.IsVideoModel
 
 	// 先创建记录（GORM 会对零值字段应用默认值）
 	if err := DB.Create(mi).Error; err != nil {
@@ -70,8 +72,9 @@ func (mi *Model) Insert() error {
 
 	// 使用保存的原始值进行更新，确保零值能正确保存
 	return DB.Model(&Model{}).Where("id = ?", mi.Id).Updates(map[string]interface{}{
-		"status":        originalStatus,
-		"sync_official": originalSyncOfficial,
+		"status":         originalStatus,
+		"sync_official":  originalSyncOfficial,
+		"is_video_model": originalIsVideoModel,
 	}).Error
 }
 
@@ -94,7 +97,7 @@ func (mi *Model) Update() error {
 	}
 	// 使用 Select 强制更新所有字段，包括零值
 	return DB.Model(&Model{}).Where("id = ?", mi.Id).
-		Select("model_name", "description", "description_en", "icon", "tags", "vendor_id", "endpoints", "status", "sync_official", "recommended", "request_price_units", "request_price_display_unit", "name_rule", "updated_time").
+		Select("model_name", "description", "description_en", "icon", "tags", "vendor_id", "endpoints", "status", "sync_official", "recommended", "is_video_model", "request_price_units", "request_price_display_unit", "name_rule", "updated_time").
 		Updates(mi).Error
 }
 
