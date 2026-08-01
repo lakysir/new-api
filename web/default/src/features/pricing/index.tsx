@@ -87,7 +87,7 @@ export function Pricing() {
     availableTags,
     clearFilters,
     clearSearch,
-  } = useFilters(generalModels)
+  } = useFilters(generalModels, '/pricing/')
 
   const handleModelClick = useCallback((modelName: string) => {
     setSelectedModelName(modelName)

@@ -29,20 +29,10 @@ import {
   type ViewMode,
 } from '../constants'
 import { filterAndSortModels, extractAllTags } from '../lib/filters'
+import type { MarketplaceSearch } from '../lib/search'
 import type { PricingModel, TokenUnit } from '../types'
 
-type FilterState = {
-  search?: string
-  sort?: string
-  vendor?: string
-  group?: string
-  quotaType?: string
-  endpointType?: string
-  tag?: string
-  tokenUnit?: TokenUnit
-  view?: ViewMode
-  rechargePrice?: boolean
-}
+type MarketplaceRoute = '/pricing/' | '/video-models/'
 
 function normalizeViewMode(value: unknown): ViewMode {
   if (value === VIEW_MODES.TABLE) {
@@ -51,9 +41,9 @@ function normalizeViewMode(value: unknown): ViewMode {
   return VIEW_MODES.CARD
 }
 
-export function useFilters(models: PricingModel[]) {
-  const search = useSearch({ from: '/pricing/' })
-  const [filterState, setFilterState] = useState<FilterState>(() => ({
+export function useFilters(models: PricingModel[], route: MarketplaceRoute) {
+  const search = useSearch({ from: route })
+  const [filterState, setFilterState] = useState<MarketplaceSearch>(() => ({
     search: search.search,
     sort: search.sort,
     vendor: search.vendor,
@@ -86,7 +76,7 @@ export function useFilters(models: PricingModel[]) {
           delete next[key]
         }
       }
-      return next as FilterState
+      return next as MarketplaceSearch
     })
   }, [])
 

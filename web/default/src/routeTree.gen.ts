@@ -14,19 +14,19 @@ import { Route as PrivacyPolicyRouteImport } from './routes/privacy-policy'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as authRouteRouteImport } from './routes/(auth)/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as VideoModelsIndexRouteImport } from './routes/video-models/index'
 import { Route as SetupIndexRouteImport } from './routes/setup/index'
 import { Route as ScriptsIndexRouteImport } from './routes/scripts/index'
 import { Route as ScriptCreatorGuideIndexRouteImport } from './routes/script-creator-guide/index'
 import { Route as RankingsIndexRouteImport } from './routes/rankings/index'
 import { Route as PricingIndexRouteImport } from './routes/pricing/index'
-import { Route as VideoModelsIndexRouteImport } from './routes/video-models/index'
 import { Route as AitokenApiDocsIndexRouteImport } from './routes/aitoken-api-docs/index'
 import { Route as AboutIndexRouteImport } from './routes/about/index'
 import { Route as OauthProviderRouteImport } from './routes/oauth/$provider'
 import { Route as ConsoleTopupRouteImport } from './routes/console/topup'
 import { Route as ConsoleLogRouteImport } from './routes/console/log'
-import { Route as AuthenticatedChat2linkRouteImport } from './routes/_authenticated/chat2link'
 import { Route as AuthenticatedModelConcurrencyRouteImport } from './routes/_authenticated/model-concurrency'
+import { Route as AuthenticatedChat2linkRouteImport } from './routes/_authenticated/chat2link'
 import { Route as errors503RouteImport } from './routes/(errors)/503'
 import { Route as errors500RouteImport } from './routes/(errors)/500'
 import { Route as errors404RouteImport } from './routes/(errors)/404'
@@ -104,6 +104,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const VideoModelsIndexRoute = VideoModelsIndexRouteImport.update({
+  id: '/video-models/',
+  path: '/video-models/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SetupIndexRoute = SetupIndexRouteImport.update({
   id: '/setup/',
   path: '/setup/',
@@ -127,11 +132,6 @@ const RankingsIndexRoute = RankingsIndexRouteImport.update({
 const PricingIndexRoute = PricingIndexRouteImport.update({
   id: '/pricing/',
   path: '/pricing/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const VideoModelsIndexRoute = VideoModelsIndexRouteImport.update({
-  id: '/video-models/',
-  path: '/video-models/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AitokenApiDocsIndexRoute = AitokenApiDocsIndexRouteImport.update({
@@ -159,17 +159,17 @@ const ConsoleLogRoute = ConsoleLogRouteImport.update({
   path: '/console/log',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedChat2linkRoute = AuthenticatedChat2linkRouteImport.update({
-  id: '/chat2link',
-  path: '/chat2link',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
 const AuthenticatedModelConcurrencyRoute =
   AuthenticatedModelConcurrencyRouteImport.update({
     id: '/model-concurrency',
     path: '/model-concurrency',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedChat2linkRoute = AuthenticatedChat2linkRouteImport.update({
+  id: '/chat2link',
+  path: '/chat2link',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const errors503Route = errors503RouteImport.update({
   id: '/(errors)/503',
   path: '/503',
@@ -497,11 +497,11 @@ export interface FileRoutesByFullPath {
   '/about/': typeof AboutIndexRoute
   '/aitoken-api-docs/': typeof AitokenApiDocsIndexRoute
   '/pricing/': typeof PricingIndexRoute
-  '/video-models/': typeof VideoModelsIndexRoute
   '/rankings/': typeof RankingsIndexRoute
-  '/scripts/': typeof ScriptsIndexRoute
   '/script-creator-guide/': typeof ScriptCreatorGuideIndexRoute
+  '/scripts/': typeof ScriptsIndexRoute
   '/setup/': typeof SetupIndexRoute
+  '/video-models/': typeof VideoModelsIndexRoute
   '/user/reset': typeof authUserResetRoute
   '/chat/$chatId': typeof AuthenticatedChatChatIdRoute
   '/dashboard/$section': typeof AuthenticatedDashboardSectionRoute
@@ -568,9 +568,10 @@ export interface FileRoutesByTo {
   '/aitoken-api-docs': typeof AitokenApiDocsIndexRoute
   '/pricing': typeof PricingIndexRoute
   '/rankings': typeof RankingsIndexRoute
-  '/scripts': typeof ScriptsIndexRoute
   '/script-creator-guide': typeof ScriptCreatorGuideIndexRoute
+  '/scripts': typeof ScriptsIndexRoute
   '/setup': typeof SetupIndexRoute
+  '/video-models': typeof VideoModelsIndexRoute
   '/user/reset': typeof authUserResetRoute
   '/chat/$chatId': typeof AuthenticatedChatChatIdRoute
   '/dashboard/$section': typeof AuthenticatedDashboardSectionRoute
@@ -640,10 +641,11 @@ export interface FileRoutesById {
   '/about/': typeof AboutIndexRoute
   '/aitoken-api-docs/': typeof AitokenApiDocsIndexRoute
   '/pricing/': typeof PricingIndexRoute
-  '/video-models/': typeof VideoModelsIndexRoute
   '/rankings/': typeof RankingsIndexRoute
+  '/script-creator-guide/': typeof ScriptCreatorGuideIndexRoute
   '/scripts/': typeof ScriptsIndexRoute
   '/setup/': typeof SetupIndexRoute
+  '/video-models/': typeof VideoModelsIndexRoute
   '/(auth)/user/reset': typeof authUserResetRoute
   '/_authenticated/chat/$chatId': typeof AuthenticatedChatChatIdRoute
   '/_authenticated/dashboard/$section': typeof AuthenticatedDashboardSectionRoute
@@ -712,10 +714,11 @@ export interface FileRouteTypes {
     | '/about/'
     | '/aitoken-api-docs/'
     | '/pricing/'
-    | '/video-models/'
     | '/rankings/'
+    | '/script-creator-guide/'
     | '/scripts/'
     | '/setup/'
+    | '/video-models/'
     | '/user/reset'
     | '/chat/$chatId'
     | '/dashboard/$section'
@@ -782,8 +785,10 @@ export interface FileRouteTypes {
     | '/aitoken-api-docs'
     | '/pricing'
     | '/rankings'
+    | '/script-creator-guide'
     | '/scripts'
     | '/setup'
+    | '/video-models'
     | '/user/reset'
     | '/chat/$chatId'
     | '/dashboard/$section'
@@ -852,16 +857,16 @@ export interface FileRouteTypes {
     | '/about/'
     | '/aitoken-api-docs/'
     | '/pricing/'
-    | '/video-models/'
     | '/rankings/'
+    | '/script-creator-guide/'
     | '/scripts/'
     | '/setup/'
+    | '/video-models/'
     | '/(auth)/user/reset'
     | '/_authenticated/chat/$chatId'
     | '/_authenticated/dashboard/$section'
     | '/_authenticated/errors/$error'
     | '/_authenticated/models/$section'
-    | '/_authenticated/video-models/$section'
     | '/_authenticated/usage-logs/$section'
     | '/_authenticated/buy-aitoken/'
     | '/_authenticated/channels/'
@@ -869,7 +874,6 @@ export interface FileRouteTypes {
     | '/_authenticated/invoices/'
     | '/_authenticated/keys/'
     | '/_authenticated/models/'
-    | '/_authenticated/video-models/'
     | '/_authenticated/my-scripts/'
     | '/_authenticated/nodes-console/'
     | '/_authenticated/playground/'
@@ -918,9 +922,10 @@ export interface RootRouteChildren {
   AitokenApiDocsIndexRoute: typeof AitokenApiDocsIndexRoute
   PricingIndexRoute: typeof PricingIndexRoute
   RankingsIndexRoute: typeof RankingsIndexRoute
-  ScriptsIndexRoute: typeof ScriptsIndexRoute
   ScriptCreatorGuideIndexRoute: typeof ScriptCreatorGuideIndexRoute
+  ScriptsIndexRoute: typeof ScriptsIndexRoute
   SetupIndexRoute: typeof SetupIndexRoute
+  VideoModelsIndexRoute: typeof VideoModelsIndexRoute
   PricingModelIdIndexRoute: typeof PricingModelIdIndexRoute
 }
 
@@ -961,6 +966,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/video-models/': {
+      id: '/video-models/'
+      path: '/video-models'
+      fullPath: '/video-models/'
+      preLoaderRoute: typeof VideoModelsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/setup/': {
       id: '/setup/'
       path: '/setup'
@@ -973,6 +985,13 @@ declare module '@tanstack/react-router' {
       path: '/scripts'
       fullPath: '/scripts/'
       preLoaderRoute: typeof ScriptsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/script-creator-guide/': {
+      id: '/script-creator-guide/'
+      path: '/script-creator-guide'
+      fullPath: '/script-creator-guide/'
+      preLoaderRoute: typeof ScriptCreatorGuideIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/rankings/': {
@@ -1024,18 +1043,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConsoleLogRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/chat2link': {
-      id: '/_authenticated/chat2link'
-      path: '/chat2link'
-      fullPath: '/chat2link'
-      preLoaderRoute: typeof AuthenticatedChat2linkRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
     '/_authenticated/model-concurrency': {
       id: '/_authenticated/model-concurrency'
       path: '/model-concurrency'
       fullPath: '/model-concurrency'
       preLoaderRoute: typeof AuthenticatedModelConcurrencyRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/chat2link': {
+      id: '/_authenticated/chat2link'
+      path: '/chat2link'
+      fullPath: '/chat2link'
+      preLoaderRoute: typeof AuthenticatedChat2linkRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/(errors)/503': {
@@ -1575,11 +1594,11 @@ const rootRouteChildren: RootRouteChildren = {
   AboutIndexRoute: AboutIndexRoute,
   AitokenApiDocsIndexRoute: AitokenApiDocsIndexRoute,
   PricingIndexRoute: PricingIndexRoute,
-  VideoModelsIndexRoute: VideoModelsIndexRoute,
   RankingsIndexRoute: RankingsIndexRoute,
-  ScriptsIndexRoute: ScriptsIndexRoute,
   ScriptCreatorGuideIndexRoute: ScriptCreatorGuideIndexRoute,
+  ScriptsIndexRoute: ScriptsIndexRoute,
   SetupIndexRoute: SetupIndexRoute,
+  VideoModelsIndexRoute: VideoModelsIndexRoute,
   PricingModelIdIndexRoute: PricingModelIdIndexRoute,
 }
 export const routeTree = rootRouteImport

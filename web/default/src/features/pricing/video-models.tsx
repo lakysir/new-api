@@ -87,7 +87,7 @@ export function VideoModelMarketplace() {
     availableTags,
     clearFilters,
     clearSearch,
-  } = useFilters(videoModels)
+  } = useFilters(videoModels, '/video-models/')
 
   const handleModelClick = useCallback((modelName: string) => {
     setSelectedModelName(modelName)
