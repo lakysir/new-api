@@ -173,6 +173,7 @@ export function ModelsTable() {
       description: false,
       bound_channels: false,
       quota_types: false,
+      vendor_id: false,
     },
     columnFilters,
     pagination,

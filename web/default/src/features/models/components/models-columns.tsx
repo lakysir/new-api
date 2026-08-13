@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { type ColumnDef } from '@tanstack/react-table'
+import type { ColumnDef } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
 
 import { BadgeCell, BadgeListCell } from '@/components/data-table'
@@ -182,8 +182,13 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
           model.matched_models &&
           model.matched_models.length > 0
         ) {
-          const matchedBadges = model.matched_models.map((m, idx) => (
-            <StatusBadge key={idx} label={m} autoColor={m} size='sm' />
+          const matchedBadges = model.matched_models.map((matchedModel) => (
+            <StatusBadge
+              key={matchedModel}
+              label={matchedModel}
+              autoColor={matchedModel}
+              size='sm'
+            />
           ))
 
           return (
@@ -240,7 +245,51 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
       enableSorting: false,
     },
 
-    // Vendor column
+    // Recommended column
+    {
+      accessorKey: 'recommended',
+      header: t('Recommended'),
+      meta: { mobileHidden: true },
+      cell: ({ row }) => {
+        const recommended = row.getValue('recommended') as number | undefined
+        return (
+          <StatusBadge
+            label={recommended === 1 ? t('Yes') : t('No')}
+            variant={recommended === 1 ? 'success' : 'neutral'}
+            size='sm'
+            copyable={false}
+            className='-ml-1.5'
+          />
+        )
+      },
+      size: 110,
+      enableSorting: false,
+    },
+
+    // Video Model column
+    {
+      accessorKey: 'is_video_model',
+      header: t('Video Model'),
+      meta: { mobileHidden: true },
+      cell: ({ row }) => {
+        const isVideoModel = row.getValue('is_video_model') as
+          | number
+          | undefined
+        return (
+          <StatusBadge
+            label={isVideoModel === 1 ? t('Yes') : t('No')}
+            variant={isVideoModel === 1 ? 'info' : 'neutral'}
+            size='sm'
+            copyable={false}
+            className='-ml-1.5'
+          />
+        )
+      },
+      size: 130,
+      enableSorting: false,
+    },
+
+    // Vendor data column, kept hidden for toolbar filtering and icon fallback.
     {
       accessorKey: 'vendor_id',
       header: t('Vendor'),
@@ -264,6 +313,7 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
       },
       size: 150,
       enableSorting: false,
+      enableHiding: false,
     },
 
     // Description column
@@ -293,8 +343,8 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
         const tagArray = parseModelTags(tags)
         return (
           <BadgeListCell
-            items={tagArray.map((tag, idx) => (
-              <StatusBadge key={idx} label={tag} autoColor={tag} size='sm' />
+            items={tagArray.map((tag) => (
+              <StatusBadge key={tag} label={tag} autoColor={tag} size='sm' />
             ))}
           />
         )
@@ -313,8 +363,13 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
         const endpointArray = formatEndpointsDisplay(endpoints)
         return (
           <BadgeListCell
-            items={endpointArray.map((ep, idx) => (
-              <StatusBadge key={idx} label={ep} autoColor={ep} size='sm' />
+            items={endpointArray.map((endpoint) => (
+              <StatusBadge
+                key={endpoint}
+                label={endpoint}
+                autoColor={endpoint}
+                size='sm'
+              />
             ))}
           />
         )
@@ -337,11 +392,11 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
         }>
         return (
           <BadgeListCell
-            items={(channels ?? []).map((c, idx) => (
+            items={(channels ?? []).map((channel) => (
               <StatusBadge
-                key={idx}
-                label={`${c.name} (${c.type})`}
-                autoColor={c.name}
+                key={channel.id}
+                label={`${channel.name} (${channel.type})`}
+                autoColor={channel.name}
                 size='sm'
               />
             ))}
@@ -380,12 +435,12 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
         const quotaTypes = row.getValue('quota_types') as number[]
         return (
           <BadgeListCell
-            items={(quotaTypes ?? []).map((qt, idx) => {
-              const config = QUOTA_TYPE_CONFIG[qt]
+            items={(quotaTypes ?? []).map((quotaType) => {
+              const config = QUOTA_TYPE_CONFIG[quotaType]
               return (
                 <StatusBadge
-                  key={idx}
-                  label={config?.label || String(qt)}
+                  key={quotaType}
+                  label={config?.label || String(quotaType)}
                   variant={
                     (config?.color === 'error' ? 'danger' : config?.color) as
                       | 'neutral'

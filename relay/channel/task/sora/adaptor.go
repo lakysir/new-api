@@ -2,8 +2,10 @@ package sora
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
@@ -50,6 +52,10 @@ type responseTask struct {
 	ExpiresAt          int64  `json:"expires_at,omitempty"`
 	Seconds            string `json:"seconds,omitempty"`
 	Size               string `json:"size,omitempty"`
+	// BillingMultiplier is an optional upstream-provided extra billing factor.
+	// Keep the raw JSON so invalid values can still be forwarded without
+	// changing the legacy response handling or billing behavior.
+	BillingMultiplier json.RawMessage `json:"billing_multiplier,omitempty"`
 	RemixedFromVideoID string `json:"remixed_from_video_id,omitempty"`
 	Error              *struct {
 		Message string `json:"message"`
@@ -254,6 +260,28 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 	dResp.TaskID = info.PublicTaskID
 	c.JSON(http.StatusOK, dResp)
 	return upstreamID, responseBody, nil
+}
+
+// AdjustBillingOnSubmit applies an optional extra multiplier returned by the
+// upstream create-task response. Missing or invalid values preserve the
+// existing request-based billing ratios.
+func (a *TaskAdaptor) AdjustBillingOnSubmit(info *relaycommon.RelayInfo, taskData []byte) map[string]float64 {
+	var response responseTask
+	if err := common.Unmarshal(taskData, &response); err != nil || len(response.BillingMultiplier) == 0 {
+		return nil
+	}
+
+	var multiplier float64
+	if err := common.Unmarshal(response.BillingMultiplier, &multiplier); err != nil || multiplier <= 0 || math.IsNaN(multiplier) || math.IsInf(multiplier, 0) {
+		return nil
+	}
+
+	ratio := make(map[string]float64, len(info.PriceData.OtherRatios)+1)
+	for key, value := range info.PriceData.OtherRatios {
+		ratio[key] = value
+	}
+	ratio["billing_multiplier"] = multiplier
+	return ratio
 }
 
 // FetchTask fetch task status
