@@ -52,15 +52,16 @@ type requestPayload struct {
 	Tools                 []struct {
 		Type string `json:"type,omitempty"`
 	} `json:"tools,omitempty"`
-	SafetyIdentifier string         `json:"safety_identifier,omitempty"`
-	Priority         *dto.IntValue  `json:"priority,omitempty"`
-	Resolution       string         `json:"resolution,omitempty"`
-	Ratio            string         `json:"ratio,omitempty"`
-	Duration         *dto.IntValue  `json:"duration,omitempty"`
-	Frames           *dto.IntValue  `json:"frames,omitempty"`
-	Seed             *dto.IntValue  `json:"seed,omitempty"`
-	CameraFixed      *dto.BoolValue `json:"camera_fixed,omitempty"`
-	Watermark        *dto.BoolValue `json:"watermark,omitempty"`
+	SafetyIdentifier   string         `json:"safety_identifier,omitempty"`
+	Priority           *dto.IntValue  `json:"priority,omitempty"`
+	Resolution         string         `json:"resolution,omitempty"`
+	Ratio              string         `json:"ratio,omitempty"`
+	Duration           *dto.IntValue  `json:"duration,omitempty"`
+	Frames             *dto.IntValue  `json:"frames,omitempty"`
+	Seed               *dto.IntValue  `json:"seed,omitempty"`
+	CameraFixed        *dto.BoolValue `json:"camera_fixed,omitempty"`
+	Watermark          *dto.BoolValue `json:"watermark,omitempty"`
+	UsePersonCharacter *dto.BoolValue `json:"use_person_character,omitempty"`
 }
 
 type responsePayload struct {

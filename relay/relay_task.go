@@ -175,6 +175,7 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 	if info.PublicTaskID == "" {
 		info.PublicTaskID = model.GenerateTaskID()
 	}
+	common.SetContextKey(c, constant.ContextKeyPublicTaskID, info.PublicTaskID)
 
 	// 4. 价格计算：基础模型价格
 	info.OriginModelName = modelName

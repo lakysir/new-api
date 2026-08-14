@@ -31,6 +31,17 @@ func SetVideoRouter(router *gin.Engine) {
 		videoV1Router.GET("/videos/:task_id", controller.RelayTaskFetch)
 	}
 
+	// Volcengine content-generation compatibility routes. These reuse the
+	// existing task relay and storage pipeline while preserving the official
+	// request/response contract expected by a DoubaoVideo downstream channel.
+	doubaoV3Router := router.Group("/api/v3/contents/generations")
+	doubaoV3Router.Use(middleware.RouteTag("relay"))
+	doubaoV3Router.Use(middleware.TokenAuth(), middleware.DoubaoVideoProtocolConvert(), middleware.Distribute())
+	{
+		doubaoV3Router.POST("/tasks", middleware.DoubaoVideoCreateResponseConvert(), controller.RelayTask)
+		doubaoV3Router.GET("/tasks/:task_id", controller.RelayDoubaoVideoTaskFetch)
+	}
+
 	klingV1Router := router.Group("/kling/v1")
 	klingV1Router.Use(middleware.RouteTag("relay"))
 	klingV1Router.Use(middleware.KlingRequestConvert(), middleware.TokenAuth(), middleware.Distribute())
