@@ -263,6 +263,7 @@ export interface TaskLog {
   action: string // MUSIC, LYRICS, GENERATE, TEXT_GENERATE, etc.
   model_name?: string
   channel_id: number
+  quota: number
   submit_time: number // seconds
   finish_time?: number // seconds
   progress?: string

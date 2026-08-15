@@ -4300,6 +4300,7 @@
     "Success": "Success",
     "Success Cost": "Success Cost",
     "Failure Cost": "Failure Cost",
+    "Final Cost": "Final Cost",
     "Running Cost": "Running Cost",
     "Success rate": "Success rate",
     "Successfully created {{count}} API Key(s)": "Successfully created {{count}} API Key(s)",

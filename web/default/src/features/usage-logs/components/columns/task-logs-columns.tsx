@@ -26,7 +26,7 @@ import { Dialog } from '@/components/dialog'
 import { StatusBadge } from '@/components/status-badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { getUserAvatarFallback, getUserAvatarStyle } from '@/lib/avatar'
-import { formatTimestampToDate } from '@/lib/format'
+import { formatLogQuota, formatTimestampToDate } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 import { TASK_ACTIONS, TASK_STATUS } from '../../constants'
@@ -273,6 +273,26 @@ export function useTaskLogsColumns(isAdmin: boolean): ColumnDef<TaskLog>[] {
         )
       },
       size: 180,
+    },
+    {
+      accessorKey: 'quota',
+      header: t('Final Cost'),
+      cell: function FinalCostCell({ row }) {
+        const { sensitiveVisible } = useUsageLogsContext()
+        const log = row.original
+        if (log.status !== TASK_STATUS.SUCCESS) {
+          if (log.status === TASK_STATUS.FAILURE) {
+            return sensitiveVisible ? formatLogQuota(0) : '••••'
+          }
+          return <span className='text-muted-foreground/60 text-xs'>-</span>
+        }
+        return (
+          <span className='font-mono text-xs tabular-nums'>
+            {sensitiveVisible ? formatLogQuota(log.quota || 0) : '••••'}
+          </span>
+        )
+      },
+      size: 130,
     },
     createDurationColumn<TaskLog>({
       submitTimeKey: 'submit_time',
