@@ -163,6 +163,7 @@ export const ModelPricingEditorPanel = forwardRef<
     defaultValues: {
       name: '',
       price: '',
+      referenceVideoTokenPrice: '',
       ratio: '',
       cacheRatio: '',
       createCacheRatio: '',
@@ -177,9 +178,17 @@ export const ModelPricingEditorPanel = forwardRef<
     const nextLaneState = createInitialLaneState(editData)
 
     if (editData) {
+      let referenceVideoTokenPrice = editData.referenceVideoTokenPrice || ''
+      if (
+        !referenceVideoTokenPrice &&
+        editData.billingMode === 'per_request_reference_video'
+      ) {
+        referenceVideoTokenPrice = editData.ratio || ''
+      }
       form.reset({
         name: editData.name,
         price: editData.price || '',
+        referenceVideoTokenPrice,
         ratio: editData.ratio || '',
         cacheRatio: editData.cacheRatio || '',
         createCacheRatio: editData.createCacheRatio || '',
@@ -188,19 +197,20 @@ export const ModelPricingEditorPanel = forwardRef<
         audioRatio: editData.audioRatio || '',
         audioCompletionRatio: editData.audioCompletionRatio || '',
       })
-      setPricingMode(
-        editData.billingMode === 'tiered_expr'
-          ? 'tiered_expr'
-          : editData.price
-            ? 'per-request'
-            : 'per-token'
-      )
+      let nextPricingMode: PricingMode = 'per-token'
+      if (editData.billingMode === 'tiered_expr') {
+        nextPricingMode = 'tiered_expr'
+      } else if (editData.price) {
+        nextPricingMode = 'per-request'
+      }
+      setPricingMode(nextPricingMode)
       setBillingExpr(editData.billingExpr || '')
       setRequestRuleExpr(editData.requestRuleExpr || '')
     } else {
       form.reset({
         name: '',
         price: '',
+        referenceVideoTokenPrice: '',
         ratio: '',
         cacheRatio: '',
         createCacheRatio: '',
@@ -334,6 +344,9 @@ export const ModelPricingEditorPanel = forwardRef<
 
   const handleModeChange = (value: string) => {
     const nextMode = value as PricingMode
+    if (nextMode !== 'per-request' && pricingMode === 'per-request') {
+      syncLaneRatios(promptPrice, lanePrices, laneEnabled)
+    }
     setPricingMode(nextMode)
     if (nextMode === 'tiered_expr' && !billingExpr) {
       setBillingExpr('tier("base", p * 0 + c * 0)')
@@ -368,6 +381,7 @@ export const ModelPricingEditorPanel = forwardRef<
   const warnings = useMemo(() => {
     const nextWarnings: string[] = []
     const hasConflict =
+      editData?.billingMode !== 'per_request_reference_video' &&
       !!editData?.price &&
       [
         editData.ratio,
@@ -411,6 +425,32 @@ export const ModelPricingEditorPanel = forwardRef<
   }, [editData, laneEnabled, lanePrices, pricingMode, promptPrice, t])
 
   const validatePricingValues = useCallback(() => {
+    const referenceVideoTokenPrice = form.getValues('referenceVideoTokenPrice')
+    const fixedPrice = form.getValues('price')
+    if (
+      pricingMode === 'per-request' &&
+      hasValue(referenceVideoTokenPrice) &&
+      toNumberOrNull(fixedPrice) === null
+    ) {
+      form.setError('price', {
+        message: t(
+          'Fixed price is required when reference video token pricing is enabled.'
+        ),
+      })
+      return false
+    }
+
+    if (
+      pricingMode === 'per-request' &&
+      hasValue(referenceVideoTokenPrice) &&
+      (toNumberOrNull(referenceVideoTokenPrice) ?? 0) <= 0
+    ) {
+      form.setError('referenceVideoTokenPrice', {
+        message: t('Reference video token price must be greater than 0.'),
+      })
+      return false
+    }
+
     if (
       pricingMode === 'per-token' &&
       toNumberOrNull(promptPrice) === null &&
@@ -442,9 +482,16 @@ export const ModelPricingEditorPanel = forwardRef<
     (values: ModelPricingFormValues) => {
       const data: ModelRatioData = {
         name: values.name.trim(),
-        billingMode: pricingMode,
+        billingMode:
+          pricingMode === 'per-request' && values.referenceVideoTokenPrice
+            ? 'per_request_reference_video'
+            : pricingMode,
         price: values.price || '',
-        ratio: values.ratio || '',
+        referenceVideoTokenPrice: values.referenceVideoTokenPrice || '',
+        ratio:
+          pricingMode === 'per-request'
+            ? values.referenceVideoTokenPrice || ''
+            : values.ratio || '',
         cacheRatio: values.cacheRatio || '',
         createCacheRatio: values.createCacheRatio || '',
         completionRatio: values.completionRatio || '',
@@ -629,6 +676,44 @@ export const ModelPricingEditorPanel = forwardRef<
                               <FieldDescription>
                                 {t(
                                   'Cost in USD per request, regardless of tokens used.'
+                                )}
+                              </FieldDescription>
+                              <FormMessage />
+                            </Field>
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name='referenceVideoTokenPrice'
+                        render={({ field }) => (
+                          <FormItem className='contents'>
+                            <Field>
+                              <FieldLabel>
+                                {t('Reference video token price')}
+                              </FieldLabel>
+                              <FormControl>
+                                <InputGroup>
+                                  <InputGroupAddon>$</InputGroupAddon>
+                                  <InputGroupInput
+                                    inputMode='decimal'
+                                    placeholder='70'
+                                    {...field}
+                                    onChange={(event) => {
+                                      const value = event.target.value
+                                      if (numericDraftRegex.test(value)) {
+                                        field.onChange(value)
+                                      }
+                                    }}
+                                  />
+                                  <InputGroupAddon align='inline-end'>
+                                    {t('per 1M tokens')}
+                                  </InputGroupAddon>
+                                </InputGroup>
+                              </FormControl>
+                              <FieldDescription>
+                                {t(
+                                  'Used only by POST /v1/videos when extra_videos is present.'
                                 )}
                               </FieldDescription>
                               <FormMessage />

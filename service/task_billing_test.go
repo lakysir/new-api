@@ -688,6 +688,41 @@ func TestSettle_PerCallBilling_SkipsTotalTokens(t *testing.T) {
 	assert.Equal(t, int64(0), countLogs(t))
 }
 
+func TestCalculateReferenceVideoTokenQuotaUsesPerMillionPriceAndGroupRatio(t *testing.T) {
+	quota := CalculateReferenceVideoTokenQuota(2_000, 70, 500_000, 1.5)
+	assert.Equal(t, 105_000, quota)
+}
+
+func TestSettle_ReferenceVideoTokensOverridesPerCallSkip(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+
+	const userID, tokenID, channelID = 35, 35, 35
+	const initQuota, tokenRemain, preConsumed = 200_000, 200_000, 20_000
+
+	seedUser(t, userID, initQuota)
+	seedToken(t, tokenID, userID, "sk-reference-video", tokenRemain)
+	seedChannel(t, channelID)
+
+	task := makeTask(userID, channelID, preConsumed, tokenID, BillingSourceWallet, 0)
+	task.PrivateData.BillingContext.PerCallBilling = true
+	task.PrivateData.BillingContext.ReferenceVideoTokenBilling = true
+	task.PrivateData.BillingContext.ReferenceVideoTokenPrice = 70
+	task.PrivateData.BillingContext.QuotaPerUnit = 500_000
+	task.PrivateData.BillingContext.GroupRatio = 1.5
+
+	settleTaskBillingOnComplete(ctx, &mockAdaptor{}, task, &relaycommon.TaskInfo{
+		Status:      model.TaskStatusSuccess,
+		TotalTokens: 2_000,
+	})
+
+	const actualQuota = 105_000
+	assert.Equal(t, initQuota-(actualQuota-preConsumed), getUserQuota(t, userID))
+	assert.Equal(t, tokenRemain-(actualQuota-preConsumed), getTokenRemainQuota(t, tokenID))
+	assert.Equal(t, actualQuota, task.Quota)
+	assert.Equal(t, int64(1), countLogs(t))
+}
+
 func TestSettle_NonPerCallBilling_AppliesAdaptorAdjustment(t *testing.T) {
 	truncate(t)
 	ctx := context.Background()

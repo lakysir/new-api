@@ -11,8 +11,11 @@ import (
 const (
 	BillingModeRatio      = "ratio"
 	BillingModeTieredExpr = "tiered_expr"
-	BillingModeField      = "billing_mode"
-	BillingExprField      = "billing_expr"
+	// BillingModePerRequestReferenceVideo keeps per-request pre-consumption,
+	// then settles successful /v1/videos requests with extra_videos by tokens.
+	BillingModePerRequestReferenceVideo = "per_request_reference_video"
+	BillingModeField                    = "billing_mode"
+	BillingExprField                    = "billing_expr"
 )
 
 // BillingSetting is managed by config.GlobalConfig.Register.

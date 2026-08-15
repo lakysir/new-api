@@ -9,6 +9,7 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-gonic/gin"
@@ -125,6 +126,11 @@ func taskBillingOther(task *model.Task) map[string]interface{} {
 			other["model_ratio"] = bc.ModelRatio
 		}
 		other["group_ratio"] = bc.GroupRatio
+		if bc.ReferenceVideoTokenBilling {
+			other["billing_mode"] = "per_request_reference_video"
+			other["reference_video_token_price"] = bc.ReferenceVideoTokenPrice
+			other["quota_per_unit"] = bc.QuotaPerUnit
+		}
 		if len(bc.OtherRatios) > 0 {
 			for k, v := range bc.OtherRatios {
 				other[k] = v
@@ -217,6 +223,9 @@ func RecalculateTaskQuota(ctx context.Context, task *model.Task, actualQuota int
 	taskAdjustTokenQuota(ctx, task, quotaDelta)
 
 	task.Quota = actualQuota
+	if err := task.UpdateQuota(); err != nil {
+		logger.LogError(ctx, fmt.Sprintf("更新任务结算额度失败 task %s: %s", task.TaskID, err.Error()))
+	}
 
 	var logType int
 	var logQuota int
@@ -300,5 +309,49 @@ func RecalculateTaskQuotaByTokens(ctx context.Context, task *model.Task, totalTo
 	actualQuota := int(float64(totalTokens) * modelRatio * finalGroupRatio * otherMultiplier)
 
 	reason := fmt.Sprintf("token重算：tokens=%d, modelRatio=%.2f, groupRatio=%.2f, otherMultiplier=%.4f", totalTokens, modelRatio, finalGroupRatio, otherMultiplier)
+	RecalculateTaskQuota(ctx, task, actualQuota, reason)
+}
+
+// CalculateReferenceVideoTokenQuota converts a USD-per-million-token price to
+// internal quota and applies the group ratio captured when the task was created.
+func CalculateReferenceVideoTokenQuota(totalTokens int, tokenPricePerMillion, quotaPerUnit, groupRatio float64) int {
+	if totalTokens <= 0 || tokenPricePerMillion <= 0 || quotaPerUnit <= 0 || groupRatio < 0 {
+		return 0
+	}
+	cost := float64(totalTokens) / 1_000_000 * tokenPricePerMillion
+	return billingexpr.QuotaRound(cost * quotaPerUnit * groupRatio)
+}
+
+// RecalculateTaskQuotaByReferenceVideoTokens settles the explicit /v1/videos
+// mixed mode. Duration and other request ratios are pre-charge inputs only and
+// are deliberately excluded from the final token-based amount.
+func RecalculateTaskQuotaByReferenceVideoTokens(ctx context.Context, task *model.Task, totalTokens int) {
+	bc := task.PrivateData.BillingContext
+	if bc == nil || !bc.ReferenceVideoTokenBilling || totalTokens <= 0 {
+		return
+	}
+
+	quotaPerUnit := bc.QuotaPerUnit
+	if quotaPerUnit <= 0 {
+		quotaPerUnit = common.QuotaPerUnit
+	}
+	actualQuota := CalculateReferenceVideoTokenQuota(
+		totalTokens,
+		bc.ReferenceVideoTokenPrice,
+		quotaPerUnit,
+		bc.GroupRatio,
+	)
+	if actualQuota <= 0 {
+		logger.LogWarn(ctx, fmt.Sprintf("任务 %s 参考视频 token 结算结果无效，保留预扣额度", task.TaskID))
+		return
+	}
+
+	reason := fmt.Sprintf(
+		"参考视频 token 结算：tokens=%d, tokenPricePerMillion=%.6f, quotaPerUnit=%.2f, groupRatio=%.4f",
+		totalTokens,
+		bc.ReferenceVideoTokenPrice,
+		quotaPerUnit,
+		bc.GroupRatio,
+	)
 	RecalculateTaskQuota(ctx, task, actualQuota, reason)
 }

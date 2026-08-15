@@ -16,13 +16,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import {
-  type ColumnFiltersState,
-  type OnChangeFn,
-  type PaginationState,
-  type RowSelectionState,
-  type VisibilityState,
-  type SortingState,
+import type {
+  ColumnFiltersState,
+  OnChangeFn,
+  PaginationState,
+  RowSelectionState,
+  VisibilityState,
+  SortingState,
 } from '@tanstack/react-table'
 import { Copy, Plus } from 'lucide-react'
 import {
@@ -210,7 +210,7 @@ const ModelRatioVisualEditorComponent = forwardRef<
     const draftByName = new Map(draftRows.map((row) => [row.name, row]))
     const modelNames = new Set([...savedByName.keys(), ...draftByName.keys()])
 
-    return Array.from(modelNames)
+    return [...modelNames]
       .map((name) => {
         const saved = savedByName.get(name)
         const draft = draftByName.get(name)
@@ -218,8 +218,12 @@ const ModelRatioVisualEditorComponent = forwardRef<
         const savedSignature = getSnapshotSignature(saved)
         const draftSignature = getSnapshotSignature(draft)
 
+        if (!displayed) {
+          throw new Error(`Missing model pricing snapshot for ${name}`)
+        }
+
         return {
-          ...displayed!,
+          ...displayed,
           saved,
           draft,
           isDraftChanged: savedSignature !== draftSignature,
@@ -256,11 +260,15 @@ const ModelRatioVisualEditorComponent = forwardRef<
     () =>
       models.reduce(
         (acc, model) => {
-          const mode =
+          let mode: 'per-token' | 'per-request' | 'tiered_expr' = 'per-token'
+          if (model.billingMode === 'tiered_expr') {
+            mode = 'tiered_expr'
+          } else if (
             model.billingMode === 'per-request' ||
-            model.billingMode === 'tiered_expr'
-              ? model.billingMode
-              : 'per-token'
+            model.billingMode === 'per_request_reference_video'
+          ) {
+            mode = 'per-request'
+          }
           acc[mode] += 1
           return acc
         },
@@ -276,22 +284,26 @@ const ModelRatioVisualEditorComponent = forwardRef<
   const handleEdit = useCallback(
     (model: ModelRow) => {
       const editableModel = model.draft ?? model.saved ?? model
+      let editableBillingMode: ModelRatioData['billingMode'] = 'per-token'
+      if (editableModel.billingMode === 'tiered_expr') {
+        editableBillingMode = 'tiered_expr'
+      } else if (editableModel.billingMode === 'per_request_reference_video') {
+        editableBillingMode = 'per_request_reference_video'
+      } else if (editableModel.price) {
+        editableBillingMode = 'per-request'
+      }
       setEditData({
         name: editableModel.name,
         price: editableModel.price,
         ratio: editableModel.ratio,
+        referenceVideoTokenPrice: editableModel.referenceVideoTokenPrice,
         cacheRatio: editableModel.cacheRatio,
         createCacheRatio: editableModel.createCacheRatio,
         completionRatio: editableModel.completionRatio,
         imageRatio: editableModel.imageRatio,
         audioRatio: editableModel.audioRatio,
         audioCompletionRatio: editableModel.audioCompletionRatio,
-        billingMode:
-          editableModel.billingMode === 'tiered_expr'
-            ? 'tiered_expr'
-            : editableModel.price && editableModel.price !== ''
-              ? 'per-request'
-              : 'per-token',
+        billingMode: editableBillingMode,
         billingExpr: editableModel.billingExpr,
         requestRuleExpr: editableModel.requestRuleExpr,
       })
@@ -500,7 +512,7 @@ const ModelRatioVisualEditorComponent = forwardRef<
         value: string | undefined
       ) => {
         if (!value || value === '') return
-        const parsed = parseFloat(value)
+        const parsed = Number.parseFloat(value)
         if (Number.isFinite(parsed)) target[name] = parsed
       }
 
@@ -537,6 +549,10 @@ const ModelRatioVisualEditorComponent = forwardRef<
           setIfPresent(imageMap, name, data.imageRatio)
           setIfPresent(audioMap, name, data.audioRatio)
           setIfPresent(audioCompletionMap, name, data.audioCompletionRatio)
+        } else if (data.billingMode === 'per_request_reference_video') {
+          setIfPresent(priceMap, name, data.price)
+          setIfPresent(ratioMap, name, data.referenceVideoTokenPrice)
+          billingModeMap[name] = 'per_request_reference_video'
         } else if (data.price && data.price !== '') {
           setIfPresent(priceMap, name, data.price)
         } else {

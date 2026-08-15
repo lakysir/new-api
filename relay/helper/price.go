@@ -194,10 +194,15 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 // ModelPriceHelperPerCall 按次/按量计费的 PriceHelper (MJ、Task)
 func ModelPriceHelperPerCall(c *gin.Context, info *relaycommon.RelayInfo) (types.PriceData, error) {
 	groupRatioInfo := HandleGroupRatio(c, info)
+	billingMode := billing_setting.GetBillingMode(info.OriginModelName)
 
 	modelPrice, success := ratio_setting.GetModelPrice(info.OriginModelName, true)
 	usePrice := success
 	var modelRatio float64
+
+	if billingMode == billing_setting.BillingModePerRequestReferenceVideo && !success {
+		return types.PriceData{}, fmt.Errorf("model %s reference-video token billing requires a fixed price", info.OriginModelName)
+	}
 
 	if !success {
 		defaultPrice, ok := ratio_setting.GetDefaultModelPriceMap()[info.OriginModelName]
@@ -215,6 +220,14 @@ func ModelPriceHelperPerCall(c *gin.Context, info *relaycommon.RelayInfo) (types
 			if !ratioSuccess && !acceptUnsetRatio {
 				return types.PriceData{}, modelPriceNotConfiguredError(matchName, info.UserId)
 			}
+		}
+	} else if billingMode == billing_setting.BillingModePerRequestReferenceVideo {
+		// In this explicit mixed mode ModelRatio stores the reference-video
+		// price in USD per 1M tokens. Fixed ModelPrice remains the pre-charge.
+		var ratioSuccess bool
+		modelRatio, ratioSuccess, _ = ratio_setting.GetModelRatio(info.OriginModelName)
+		if !ratioSuccess || modelRatio <= 0 {
+			return types.PriceData{}, fmt.Errorf("model %s reference-video token price is not configured", info.OriginModelName)
 		}
 	}
 

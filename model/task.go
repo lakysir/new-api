@@ -54,8 +54,8 @@ type Task struct {
 	ChannelId  int                   `json:"channel_id" gorm:"index"`
 	Quota      int                   `json:"quota"`
 	ModelName  string                `json:"model_name" gorm:"type:varchar(191);index;index:idx_task_user_model,priority:2"` // 模型名称，用于搜索与统计
-	Action     string                `json:"action" gorm:"type:varchar(40);index"` // 任务类型, song, lyrics, description-mode
-	Status     TaskStatus            `json:"status" gorm:"type:varchar(20);index"` // 任务状态
+	Action     string                `json:"action" gorm:"type:varchar(40);index"`                                           // 任务类型, song, lyrics, description-mode
+	Status     TaskStatus            `json:"status" gorm:"type:varchar(20);index"`                                           // 任务状态
 	FailReason string                `json:"fail_reason"`
 	SubmitTime int64                 `json:"submit_time" gorm:"index"`
 	StartTime  int64                 `json:"start_time" gorm:"index"`
@@ -113,12 +113,15 @@ type TaskPrivateData struct {
 
 // TaskBillingContext 记录任务提交时的计费参数，以便轮询阶段可以重新计算额度。
 type TaskBillingContext struct {
-	ModelPrice      float64            `json:"model_price,omitempty"`       // 模型单价
-	GroupRatio      float64            `json:"group_ratio,omitempty"`       // 分组倍率
-	ModelRatio      float64            `json:"model_ratio,omitempty"`       // 模型倍率
-	OtherRatios     map[string]float64 `json:"other_ratios,omitempty"`      // 附加倍率（时长、分辨率等）
-	OriginModelName string             `json:"origin_model_name,omitempty"` // 模型名称，必须为OriginModelName
-	PerCallBilling  bool               `json:"per_call_billing,omitempty"`  // 按次计费：跳过轮询阶段的差额结算
+	ModelPrice                 float64            `json:"model_price,omitempty"`                   // 模型单价
+	GroupRatio                 float64            `json:"group_ratio,omitempty"`                   // 分组倍率
+	ModelRatio                 float64            `json:"model_ratio,omitempty"`                   // 模型倍率
+	OtherRatios                map[string]float64 `json:"other_ratios,omitempty"`                  // 附加倍率（时长、分辨率等）
+	OriginModelName            string             `json:"origin_model_name,omitempty"`             // 模型名称，必须为OriginModelName
+	PerCallBilling             bool               `json:"per_call_billing,omitempty"`              // 按次计费：跳过轮询阶段的差额结算
+	ReferenceVideoTokenBilling bool               `json:"reference_video_token_billing,omitempty"` // /v1/videos 携带 extra_videos 时按 token 结算
+	ReferenceVideoTokenPrice   float64            `json:"reference_video_token_price,omitempty"`   // 美元/百万 token
+	QuotaPerUnit               float64            `json:"quota_per_unit,omitempty"`                // 创建任务时的额度汇率快照
 }
 
 // GetUpstreamTaskID 获取上游真实 task ID（用于与 provider 通信）
@@ -409,6 +412,15 @@ func (Task *Task) Update() error {
 	var err error
 	err = DB.Save(Task).Error
 	return err
+}
+
+// UpdateQuota persists the final settled quota without rewriting task status
+// or other fields that may have been updated by another worker.
+func (t *Task) UpdateQuota() error {
+	if t.ID <= 0 {
+		return nil
+	}
+	return DB.Model(&Task{}).Where("id = ?", t.ID).Update("quota", t.Quota).Error
 }
 
 // UpdateWithStatus performs a conditional UPDATE guarded by fromStatus (CAS).

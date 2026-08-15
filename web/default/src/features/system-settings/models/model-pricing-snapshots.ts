@@ -37,6 +37,7 @@ export type ModelPricingSnapshotInput = {
 export type ModelPricingSnapshot = {
   name: string
   price?: string
+  referenceVideoTokenPrice?: string
   ratio?: string
   cacheRatio?: string
   createCacheRatio?: string
@@ -75,7 +76,9 @@ const ratioToPrice = (ratio?: string, denominator?: string) => {
 }
 
 export const getModeLabel = (mode?: string) => {
-  if (mode === 'per-request') return 'Per-request'
+  if (mode === 'per-request' || mode === 'per_request_reference_video') {
+    return 'Per-request'
+  }
   if (mode === 'tiered_expr') return 'Expression'
   return 'Per-token'
 }
@@ -83,7 +86,9 @@ export const getModeLabel = (mode?: string) => {
 export const getModeVariant = (
   mode?: string
 ): 'warning' | 'info' | 'success' => {
-  if (mode === 'per-request') return 'warning'
+  if (mode === 'per-request' || mode === 'per_request_reference_video') {
+    return 'warning'
+  }
   if (mode === 'tiered_expr') return 'info'
   return 'success'
 }
@@ -106,7 +111,10 @@ export const getPriceSummary = (
   if (row.billingMode === 'tiered_expr') {
     return getExpressionSummary(row, t)
   }
-  if (row.billingMode === 'per-request') {
+  if (
+    row.billingMode === 'per-request' ||
+    row.billingMode === 'per_request_reference_video'
+  ) {
     return row.price ? `$${row.price} / ${t('request')}` : t('Unset price')
   }
 
@@ -135,6 +143,11 @@ export const getPriceDetail = (
     return row.requestRuleExpr
       ? t('Includes request rules')
       : t('Expression based')
+  }
+  if (row.billingMode === 'per_request_reference_video') {
+    return row.referenceVideoTokenPrice
+      ? `${t('Reference video')} $${row.referenceVideoTokenPrice} / 1M tokens`
+      : t('Fixed request price')
   }
   if (row.billingMode === 'per-request') {
     return t('Fixed request price')
@@ -223,7 +236,7 @@ export const buildModelSnapshots = ({
     ...Object.keys(billingExprMap),
   ])
 
-  return Array.from(modelNames).map((name) => {
+  return [...modelNames].map((name) => {
     const price = priceMap[name]?.toString() || ''
     const ratio = ratioMap[name]?.toString() || ''
     const cache = cacheMap[name]?.toString() || ''
@@ -251,6 +264,23 @@ export const buildModelSnapshots = ({
         imageRatio: image,
         audioRatio: audio,
         audioCompletionRatio: audioCompletion,
+        hasConflict: false,
+      }
+    }
+
+    if (modeForModel === 'per_request_reference_video') {
+      return {
+        name,
+        price,
+        ratio,
+        referenceVideoTokenPrice: ratio,
+        cacheRatio: cache,
+        createCacheRatio: createCache,
+        completionRatio: completion,
+        imageRatio: image,
+        audioRatio: audio,
+        audioCompletionRatio: audioCompletion,
+        billingMode: 'per_request_reference_video',
         hasConflict: false,
       }
     }
@@ -283,6 +313,7 @@ export const getSnapshotSignature = (snapshot?: ModelPricingSnapshot) => {
   if (!snapshot) return ''
   return JSON.stringify({
     price: snapshot.price || '',
+    referenceVideoTokenPrice: snapshot.referenceVideoTokenPrice || '',
     ratio: snapshot.ratio || '',
     cacheRatio: snapshot.cacheRatio || '',
     createCacheRatio: snapshot.createCacheRatio || '',

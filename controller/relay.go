@@ -22,6 +22,7 @@ import (
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
+	"github.com/QuantumNous/new-api/setting/billing_setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/types"
 
@@ -589,6 +590,14 @@ func RelayTask(c *gin.Context) {
 			perfmetrics.RecordRelaySample(relayInfo, true, 0)
 		})
 
+		referenceVideoTokenBilling := false
+		if c.Request.Method == http.MethodPost &&
+			c.Request.URL.Path == "/v1/videos" &&
+			billing_setting.GetBillingMode(relayInfo.OriginModelName) == billing_setting.BillingModePerRequestReferenceVideo {
+			request, requestErr := relaycommon.GetTaskRequest(c)
+			referenceVideoTokenBilling = requestErr == nil && len(request.ExtraVideos) > 0 && relayInfo.PriceData.ModelRatio > 0
+		}
+
 		task := model.InitTask(result.Platform, relayInfo)
 		task.PrivateData.UpstreamTaskID = result.UpstreamTaskID
 		task.PrivateData.BillingSource = relayInfo.BillingSource
@@ -596,12 +605,15 @@ func RelayTask(c *gin.Context) {
 		task.PrivateData.TokenId = relayInfo.TokenId
 		task.PrivateData.NodeName = common.NodeName
 		task.PrivateData.BillingContext = &model.TaskBillingContext{
-			ModelPrice:      relayInfo.PriceData.ModelPrice,
-			GroupRatio:      relayInfo.PriceData.GroupRatioInfo.GroupRatio,
-			ModelRatio:      relayInfo.PriceData.ModelRatio,
-			OtherRatios:     relayInfo.PriceData.OtherRatios,
-			OriginModelName: relayInfo.OriginModelName,
-			PerCallBilling:  common.StringsContains(constant.TaskPricePatches, relayInfo.OriginModelName) || relayInfo.PriceData.UsePrice,
+			ModelPrice:                 relayInfo.PriceData.ModelPrice,
+			GroupRatio:                 relayInfo.PriceData.GroupRatioInfo.GroupRatio,
+			ModelRatio:                 relayInfo.PriceData.ModelRatio,
+			OtherRatios:                relayInfo.PriceData.OtherRatios,
+			OriginModelName:            relayInfo.OriginModelName,
+			PerCallBilling:             common.StringsContains(constant.TaskPricePatches, relayInfo.OriginModelName) || relayInfo.PriceData.UsePrice,
+			ReferenceVideoTokenBilling: referenceVideoTokenBilling,
+			ReferenceVideoTokenPrice:   relayInfo.PriceData.ModelRatio,
+			QuotaPerUnit:               common.QuotaPerUnit,
 		}
 		task.Quota = result.Quota
 		task.Data = result.TaskData

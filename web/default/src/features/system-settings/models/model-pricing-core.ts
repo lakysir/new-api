@@ -26,6 +26,7 @@ export const createModelPricingSchema = (t: (key: string) => string) =>
   z.object({
     name: z.string().min(1, t('Model name is required')),
     price: z.string().optional(),
+    referenceVideoTokenPrice: z.string().optional(),
     ratio: z.string().optional(),
     cacheRatio: z.string().optional(),
     createCacheRatio: z.string().optional(),
@@ -40,6 +41,7 @@ export type ModelPricingFormValues = z.infer<
 >
 
 export type PricingMode = 'per-token' | 'per-request' | 'tiered_expr'
+export type PersistedPricingMode = PricingMode | 'per_request_reference_video'
 
 export type LaneKey =
   | 'completion'
@@ -52,6 +54,7 @@ export type LaneKey =
 export type ModelRatioData = {
   name: string
   price?: string
+  referenceVideoTokenPrice?: string
   ratio?: string
   cacheRatio?: string
   createCacheRatio?: string
@@ -59,7 +62,7 @@ export type ModelRatioData = {
   imageRatio?: string
   audioRatio?: string
   audioCompletionRatio?: string
-  billingMode?: PricingMode
+  billingMode?: PersistedPricingMode
   billingExpr?: string
   requestRuleExpr?: string
 }
@@ -182,7 +185,10 @@ export function createInitialLaneState(data?: ModelRatioData | null) {
     }
   }
 
-  const promptPrice = ratioToBasePrice(data.ratio)
+  const promptPrice =
+    data.billingMode === 'per_request_reference_video'
+      ? ''
+      : ratioToBasePrice(data.ratio)
   const audioInputPrice = deriveLanePrice(data.audioRatio, promptPrice)
   const prices: Record<LaneKey, string> = {
     completion: deriveLanePrice(data.completionRatio, promptPrice),
@@ -231,13 +237,21 @@ export function buildPreviewRows(
   }
 
   if (mode === 'per-request') {
-    return [
+    const rows: PreviewRow[] = [
       {
         key: 'price',
         label: 'ModelPrice',
         value: values.price || t('Empty'),
       },
     ]
+    if (values.referenceVideoTokenPrice) {
+      rows.push({
+        key: 'referenceVideoTokenPrice',
+        label: t('Reference video token price'),
+        value: `$${values.referenceVideoTokenPrice} / 1M tokens`,
+      })
+    }
+    return rows
   }
 
   return [
