@@ -540,6 +540,10 @@ export function ModelMutateDrawer({
               modelSettings.ModelRatio,
               { fallback: {}, silent: true }
             )
+            const billingModeMap = safeJsonParse<Record<string, string>>(
+              modelSettings['billing_setting.billing_mode'],
+              { fallback: {}, silent: true }
+            )
             const cacheMap = safeJsonParse<Record<string, number>>(
               modelSettings.CacheRatio,
               { fallback: {}, silent: true }
@@ -561,6 +565,17 @@ export function ModelMutateDrawer({
               { fallback: {}, silent: true }
             )
 
+            // Reference-video token pricing is stored in ModelRatio even though
+            // the model otherwise uses per-request pricing. Preserve that hidden
+            // value when this metadata editor rebuilds the pricing maps.
+            const sourceModelName =
+              isEditing && oldModelName ? oldModelName : finalModelName
+            const isReferenceVideoBilling =
+              billingModeMap[sourceModelName] === 'per_request_reference_video'
+            const referenceVideoTokenPrice = isReferenceVideoBilling
+              ? ratioMap[sourceModelName]
+              : undefined
+
             // Remove old model name entries if model name changed (always, even if no new config)
             if (isEditing && oldModelName && oldModelName !== finalModelName) {
               delete priceMap[oldModelName]
@@ -570,6 +585,10 @@ export function ModelMutateDrawer({
               delete imageMap[oldModelName]
               delete audioMap[oldModelName]
               delete audioCompletionMap[oldModelName]
+              if (billingModeMap[oldModelName] !== undefined) {
+                billingModeMap[finalModelName] = billingModeMap[oldModelName]
+                delete billingModeMap[oldModelName]
+              }
             }
 
             // Remove current model name from all maps first (always, to handle mode switches or clearing)
@@ -590,6 +609,12 @@ export function ModelMutateDrawer({
                 values.price !== ''
               ) {
                 priceMap[finalModelName] = Number.parseFloat(values.price)
+                if (
+                  isReferenceVideoBilling &&
+                  referenceVideoTokenPrice !== undefined
+                ) {
+                  ratioMap[finalModelName] = referenceVideoTokenPrice
+                }
               } else if (pricingMode === 'per-token') {
                 if (values.ratio && values.ratio !== '') {
                   ratioMap[finalModelName] = Number.parseFloat(values.ratio)
@@ -640,6 +665,19 @@ export function ModelMutateDrawer({
               newModelRatio !== normalizeJsonString(modelSettings.ModelRatio)
             ) {
               updates.push({ key: 'ModelRatio', value: newModelRatio })
+            }
+
+            const newBillingMode = normalizeJsonString(
+              JSON.stringify(billingModeMap)
+            )
+            if (
+              newBillingMode !==
+              normalizeJsonString(modelSettings['billing_setting.billing_mode'])
+            ) {
+              updates.push({
+                key: 'billing_setting.billing_mode',
+                value: newBillingMode,
+              })
             }
 
             const newCacheRatio = normalizeJsonString(JSON.stringify(cacheMap))
