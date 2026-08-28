@@ -24,7 +24,10 @@ export type HeaderNavAccessConfig = {
 export type HeaderNavModulesConfig = {
   home: boolean
   console: boolean
+  aitoken: boolean
   pricing: HeaderNavAccessConfig
+  video: boolean
+  scripts: boolean
   rankings: HeaderNavAccessConfig
   docs: boolean
   about: boolean
@@ -41,10 +44,13 @@ export type SidebarModulesAdminConfig = Record<string, SidebarSectionConfig>
 export const HEADER_NAV_DEFAULT: HeaderNavModulesConfig = {
   home: true,
   console: true,
+  aitoken: true,
   pricing: {
     enabled: true,
     requireAuth: false,
   },
+  video: true,
+  scripts: true,
   rankings: {
     enabled: true,
     requireAuth: false,

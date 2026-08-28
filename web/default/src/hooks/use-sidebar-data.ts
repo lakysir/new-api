@@ -38,7 +38,9 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-import { type SidebarData } from '@/components/layout/types'
+import type { SidebarData } from '@/components/layout/types'
+import { useStatus } from '@/hooks/use-status'
+import { parseHeaderNavModulesFromStatus } from '@/lib/nav-modules'
 import { ROLE } from '@/lib/roles'
 
 /**
@@ -49,6 +51,12 @@ import { ROLE } from '@/lib/roles'
  */
 export function useSidebarData(): SidebarData {
   const { t } = useTranslation()
+  const { status } = useStatus()
+  const headerNavModules = parseHeaderNavModulesFromStatus(
+    status as Record<string, unknown> | null
+  )
+  const p2pEnabled = headerNavModules.aitoken !== false
+  const scriptsEnabled = headerNavModules.scripts !== false
 
   return {
     navGroups: [
@@ -87,11 +95,15 @@ export function useSidebarData(): SidebarData {
             url: '/keys',
             icon: Key,
           },
-          {
-            title: t('AiToken P2P Marketplace'),
-            url: '/buy-aitoken',
-            icon: Wallet,
-          },
+          ...(p2pEnabled
+            ? [
+                {
+                  title: t('AiToken P2P Marketplace'),
+                  url: '/buy-aitoken',
+                  icon: Wallet,
+                },
+              ]
+            : []),
           {
             title: t('Usage Logs'),
             url: '/usage-logs/common',
@@ -115,11 +127,15 @@ export function useSidebarData(): SidebarData {
             url: '/wallet',
             icon: Wallet,
           },
-          {
-            title: t('Devices & Nodes'),
-            url: '/nodes-console',
-            icon: ScrollText,
-          },
+          ...(p2pEnabled
+            ? [
+                {
+                  title: t('Devices & Nodes'),
+                  url: '/nodes-console',
+                  icon: ScrollText,
+                },
+              ]
+            : []),
           {
             title: t('Profile'),
             url: '/profile',
@@ -161,12 +177,16 @@ export function useSidebarData(): SidebarData {
             url: '/redemption-codes',
             icon: Ticket,
           },
-          {
-            title: t('Script Review'),
-            url: '/script-review',
-            icon: ScrollText,
-            requiredRole: ROLE.ADMIN,
-          },
+          ...(p2pEnabled && scriptsEnabled
+            ? [
+                {
+                  title: t('Script Review'),
+                  url: '/script-review',
+                  icon: ScrollText,
+                  requiredRole: ROLE.ADMIN,
+                },
+              ]
+            : []),
           {
             title: t('Subscriptions'),
             url: '/subscriptions',

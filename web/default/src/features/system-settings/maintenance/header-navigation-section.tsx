@@ -51,10 +51,13 @@ import {
 const headerNavSchema = z.object({
   home: z.boolean(),
   console: z.boolean(),
+  aitoken: z.boolean(),
   pricingEnabled: z.boolean(),
   pricingRequireAuth: z.boolean(),
   rankingsEnabled: z.boolean(),
   rankingsRequireAuth: z.boolean(),
+  video: z.boolean(),
+  scripts: z.boolean(),
   docs: z.boolean(),
   about: z.boolean(),
 })
@@ -73,6 +76,10 @@ const toFormValues = (config: HeaderNavModulesConfig): HeaderNavFormValues => ({
     config.console === undefined
       ? HEADER_NAV_DEFAULT.console
       : Boolean(config.console),
+  aitoken:
+    config.aitoken === undefined
+      ? HEADER_NAV_DEFAULT.aitoken
+      : Boolean(config.aitoken),
   pricingEnabled:
     config.pricing?.enabled === undefined
       ? HEADER_NAV_DEFAULT.pricing.enabled
@@ -89,6 +96,14 @@ const toFormValues = (config: HeaderNavModulesConfig): HeaderNavFormValues => ({
     config.rankings?.requireAuth === undefined
       ? HEADER_NAV_DEFAULT.rankings.requireAuth
       : Boolean(config.rankings.requireAuth),
+  video:
+    config.video === undefined
+      ? HEADER_NAV_DEFAULT.video
+      : Boolean(config.video),
+  scripts:
+    config.scripts === undefined
+      ? HEADER_NAV_DEFAULT.scripts
+      : Boolean(config.scripts),
   docs:
     config.docs === undefined ? HEADER_NAV_DEFAULT.docs : Boolean(config.docs),
   about:
@@ -119,6 +134,9 @@ export function HeaderNavigationSection({
       ...config,
       home: values.home,
       console: values.console,
+      aitoken: values.aitoken,
+      video: values.video,
+      scripts: values.scripts,
       docs: values.docs,
       about: values.about,
       pricing: {
@@ -162,6 +180,21 @@ export function HeaderNavigationSection({
       key: 'console',
       title: t('Console'),
       description: t('User dashboard and quota controls.'),
+    },
+    {
+      key: 'aitoken',
+      title: t('AiToken P2P Marketplace'),
+      description: t('P2P token marketplace and execution services.'),
+    },
+    {
+      key: 'video',
+      title: t('Video Model Marketplace'),
+      description: t('Video generation model catalog and pricing.'),
+    },
+    {
+      key: 'scripts',
+      title: t('Script Square'),
+      description: t('Browser script marketplace and execution services.'),
     },
     {
       key: 'docs',

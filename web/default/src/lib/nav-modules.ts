@@ -25,7 +25,9 @@ export type HeaderNavModule = 'rankings' | 'pricing'
 export type HeaderNavModules = {
   home: boolean
   console: boolean
+  aitoken: boolean
   pricing: ModuleAccess
+  video: boolean
   scripts: boolean
   rankings: ModuleAccess
   docs: boolean
@@ -36,7 +38,9 @@ export type HeaderNavModules = {
 const DEFAULT_HEADER_NAV_MODULES: HeaderNavModules = {
   home: true,
   console: true,
+  aitoken: true,
   pricing: { enabled: true, requireAuth: false },
+  video: true,
   scripts: true,
   rankings: { enabled: true, requireAuth: false },
   docs: true,
