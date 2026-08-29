@@ -238,6 +238,8 @@ const (
 // Model concurrency related messages
 const (
 	MsgModelConcurrencyLimitReached = "model_concurrency.limit_reached"
+	MsgUserConcurrencyLimitReached  = "user_concurrency.limit_reached"
+	MsgUserConcurrencyNotAllowed    = "user_concurrency.not_allowed"
 	MsgModelNotAllowed              = "model_concurrency.not_allowed"
 )
 

@@ -61,3 +61,18 @@ export type UpsertModelConcurrencyRequest = {
   user_id: number
   max_concurrency: number
 }
+
+export type UserAsyncConcurrencyRule = {
+  id: number
+  user_id: number
+  max_concurrency: number
+  created_time: number
+  updated_time: number
+  username?: string
+  current: number
+}
+
+export type UpsertUserAsyncConcurrencyRequest = {
+  user_id: number
+  max_concurrency: number
+}

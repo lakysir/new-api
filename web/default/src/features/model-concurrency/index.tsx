@@ -20,6 +20,7 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 import { ModelDetailCard } from './components/model-detail-card'
 import { ModelListCard } from './components/model-list-card'
@@ -28,7 +29,11 @@ import {
   useDeleteModelConcurrencyModel,
   useDeleteModelConcurrencyRule,
   useUpsertModelConcurrencyRule,
+  useDeleteUserAsyncConcurrencyRule,
+  useUpsertUserAsyncConcurrencyRule,
+  useUserAsyncConcurrencyRules,
 } from './hooks/use-model-concurrency'
+import { UserTotalConcurrencyCard } from './components/user-total-concurrency-card'
 import {
   MODEL_CONCURRENCY_ALL_USERS,
   type ModelConcurrencyRule,
@@ -79,6 +84,9 @@ function ModelConcurrencyContent() {
   const upsertRule = useUpsertModelConcurrencyRule()
   const deleteRule = useDeleteModelConcurrencyRule()
   const deleteModel = useDeleteModelConcurrencyModel()
+  const { data: userRules = [], isLoading: userRulesLoading } = useUserAsyncConcurrencyRules()
+  const upsertUserRule = useUpsertUserAsyncConcurrencyRule()
+  const deleteUserRule = useDeleteUserAsyncConcurrencyRule()
 
   const groups = useMemo(() => groupRulesByModel(rules), [rules])
 
@@ -119,7 +127,12 @@ function ModelConcurrencyContent() {
   }
 
   return (
-    <div className='flex flex-col gap-6'>
+    <Tabs defaultValue='models' className='flex flex-col gap-6'>
+      <TabsList>
+        <TabsTrigger value='models'>{t('Model concurrency')}</TabsTrigger>
+        <TabsTrigger value='users'>{t('User total concurrency')}</TabsTrigger>
+      </TabsList>
+      <TabsContent value='models' className='flex flex-col gap-6'>
       <ModelListCard
         summaries={summaries}
         isLoading={isLoading}
@@ -157,6 +170,17 @@ function ModelConcurrencyContent() {
           onDeleteRule={(id) => deleteRule.mutate(id)}
         />
       )}
-    </div>
+      </TabsContent>
+      <TabsContent value='users'>
+        <UserTotalConcurrencyCard
+          rules={userRules}
+          isLoading={userRulesLoading}
+          pending={upsertUserRule.isPending}
+          deletePending={deleteUserRule.isPending}
+          onSave={(userId, maxConcurrency) => upsertUserRule.mutate({ user_id: userId, max_concurrency: maxConcurrency })}
+          onDelete={(userId) => deleteUserRule.mutate(userId)}
+        />
+      </TabsContent>
+    </Tabs>
   )
 }

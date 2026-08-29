@@ -522,6 +522,9 @@ func SetApiRouter(router *gin.Engine) {
 			// 按模型批量删除挂在集合路径上（?model=xxx），避免与 "/:id" 产生路由冲突
 			modelConcurrencyRoute.DELETE("/", controller.DeleteModelConcurrencyRulesByModel)
 			modelConcurrencyRoute.DELETE("/:id", controller.DeleteModelConcurrencyRule)
+			modelConcurrencyRoute.GET("/users", controller.GetUserAsyncConcurrencyRules)
+			modelConcurrencyRoute.PUT("/users", controller.UpsertUserAsyncConcurrencyRule)
+			modelConcurrencyRoute.DELETE("/users/:user_id", controller.DeleteUserAsyncConcurrencyRule)
 		}
 
 		mjRoute := apiRouter.Group("/mj")

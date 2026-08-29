@@ -74,6 +74,17 @@ func CountUnfinishedTaskByUserModel(userId int, modelName string) (int64, error)
 	return total, err
 }
 
+// CountUnfinishedTaskByUser counts all unfinished async tasks for a user.
+func CountUnfinishedTaskByUser(userId int) (int64, error) {
+	var total int64
+	err := DB.Model(&Task{}).
+		Where("user_id = ?", userId).
+		Where("status != ?", TaskStatusSuccess).
+		Where("status != ?", TaskStatusFailure).
+		Count(&total).Error
+	return total, err
+}
+
 type unfinishedTaskGroup struct {
 	UserId    int    `gorm:"column:user_id"`
 	ModelName string `gorm:"column:model_name"`

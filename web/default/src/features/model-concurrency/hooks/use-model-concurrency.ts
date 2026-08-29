@@ -24,11 +24,15 @@ import {
   deleteModelConcurrencyRule,
   deleteModelConcurrencyRulesByModel,
   getModelConcurrencyRules,
+  getUserAsyncConcurrencyRules,
+  upsertUserAsyncConcurrencyRule,
+  deleteUserAsyncConcurrencyRule,
   upsertModelConcurrencyRule,
 } from '../api'
-import type { UpsertModelConcurrencyRequest } from '../types'
+import type { UpsertModelConcurrencyRequest, UpsertUserAsyncConcurrencyRequest } from '../types'
 
 const RULES_KEY = 'model-concurrency-rules'
+const USER_RULES_KEY = 'user-async-concurrency-rules'
 
 /**
  * 后端 common.ApiError 返回的是 HTTP 200 + success:false，若直接兜底成空数组，
@@ -83,6 +87,42 @@ export function useUpsertModelConcurrencyRule() {
     onError: (error: Error) => {
       toast.error(error.message || i18next.t('Failed to update setting'))
     },
+  })
+}
+
+export function useUserAsyncConcurrencyRules() {
+  return useQuery({
+    queryKey: [USER_RULES_KEY],
+    queryFn: async () => unwrap(await getUserAsyncConcurrencyRules()) ?? [],
+  })
+}
+
+function useInvalidateUserRules() {
+  const queryClient = useQueryClient()
+  return () => queryClient.invalidateQueries({ queryKey: [USER_RULES_KEY] })
+}
+
+export function useUpsertUserAsyncConcurrencyRule() {
+  const invalidate = useInvalidateUserRules()
+  return useMutation({
+    mutationFn: (request: UpsertUserAsyncConcurrencyRequest) => upsertUserAsyncConcurrencyRule(request),
+    onSuccess: (res) => {
+      if (res.success) { toast.success(i18next.t('Setting updated successfully')); invalidate() }
+      else toast.error(res.message || i18next.t('Failed to update setting'))
+    },
+    onError: (error: Error) => toast.error(error.message || i18next.t('Failed to update setting')),
+  })
+}
+
+export function useDeleteUserAsyncConcurrencyRule() {
+  const invalidate = useInvalidateUserRules()
+  return useMutation({
+    mutationFn: (userId: number) => deleteUserAsyncConcurrencyRule(userId),
+    onSuccess: (res) => {
+      if (res.success) { toast.success(i18next.t('Deleted successfully')); invalidate() }
+      else toast.error(res.message || i18next.t('Failed to delete'))
+    },
+    onError: (error: Error) => toast.error(error.message || i18next.t('Failed to delete')),
   })
 }
 

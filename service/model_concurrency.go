@@ -13,19 +13,13 @@ import (
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
-
 	"github.com/gin-gonic/gin"
 )
 
-// ModelConcurrencyReserveTTL 是预留位的存活时间。它只需覆盖「并发判定 → 上游提交
-// → 任务落库」这一段，取值偏大一些以容忍上游响应缓慢（如带图片上传的视频提交），
-// 同时保证异常情况下槽位最终会自动释放。
 const ModelConcurrencyReserveTTL = 5 * time.Minute
-
-// ConcurrencyLimitReachedCode 是并发已满时返回给客户端的错误码。
 const ConcurrencyLimitReachedCode = "model_concurrency_limit_reached"
-
-// ModelNotAllowedCode 是该用户被禁止使用该模型（上限配成 -1）时的错误码。
+const UserConcurrencyLimitReachedCode = "user_concurrency_limit_reached"
+const UserConcurrencyNotAllowedCode = "user_concurrency_not_allowed"
 const ModelNotAllowedCode = "model_not_allowed"
 
 var (
@@ -35,77 +29,70 @@ var (
 
 func getConcurrencyReserver() *limiter.ConcurrencyReserver {
 	concurrencyReserverOnce.Do(func() {
-		if common.RedisEnabled {
-			concurrencyReserver = limiter.NewConcurrencyReserver(common.RDB)
-		} else {
-			concurrencyReserver = limiter.NewConcurrencyReserver(nil)
-		}
+		if common.RedisEnabled { concurrencyReserver = limiter.NewConcurrencyReserver(common.RDB) } else { concurrencyReserver = limiter.NewConcurrencyReserver(nil) }
 	})
 	return concurrencyReserver
 }
 
-func concurrencyReserveKey(userId int, modelName string) string {
-	return fmt.Sprintf("concurrency:reserve:%d:%s", userId, modelName)
-}
+func concurrencyReserveKey(userId int, modelName string) string { return fmt.Sprintf("concurrency:reserve:%d:%s", userId, modelName) }
+func userConcurrencyReserveKey(userId int) string { return fmt.Sprintf("concurrency:reserve:%d:all", userId) }
 
-// AcquireModelConcurrency 检查用户在指定模型上的异步任务并发是否已满。
-//
-// 返回的 release 函数必须在提交流程结束后调用（无论成功或失败）：任务已落库时
-// 数据库计数已能反映它，提交失败时该次占位应当归还。release 恒不为 nil。
-// 当未配置上限（0 表示不限制）时直接放行；上限为 -1 时直接拒绝。
+// AcquireModelConcurrency applies both the per-model and per-user async limits.
 func AcquireModelConcurrency(c *gin.Context, userId int, modelName string) (release func(), taskErr *dto.TaskError) {
 	release = func() {}
-
 	modelName = strings.TrimSpace(modelName)
-	if userId <= 0 || modelName == "" {
-		return release, nil
-	}
+	if userId <= 0 || modelName == "" { return release, nil }
 
 	maxConcurrency := model.GetModelConcurrencyLimit(userId, modelName)
-	// -1 表示该用户被禁止使用该模型：不占位、不计数，直接拒绝。
 	if maxConcurrency <= model.ModelConcurrencyBlocked {
 		message := i18n.T(c, i18n.MsgModelNotAllowed, map[string]any{"Model": modelName})
 		return release, TaskErrorWrapperLocal(fmt.Errorf("%s", message), ModelNotAllowedCode, http.StatusForbidden)
 	}
-	if maxConcurrency == 0 {
-		return release, nil
-	}
-
-	dbCount, err := model.CountUnfinishedTaskByUserModel(userId, modelName)
-	if err != nil {
-		// 计数失败时放行，避免数据库抖动导致所有任务提交被拒。
-		logger.LogError(c, fmt.Sprintf("count unfinished task for concurrency limit failed: %s", err.Error()))
-		return release, nil
-	}
-
-	key := concurrencyReserveKey(userId, modelName)
 	member := c.GetString(common.RequestIdKey)
-	if member == "" {
-		member = common.NewRequestId()
-	}
-
+	if member == "" { member = common.NewRequestId() }
 	reserver := getConcurrencyReserver()
-	allowed, used, err := reserver.Reserve(c, key, member, dbCount, maxConcurrency, ModelConcurrencyReserveTTL)
-	if err != nil {
-		logger.LogError(c, fmt.Sprintf("reserve model concurrency slot failed: %s", err.Error()))
-		return release, nil
+	modelKey := concurrencyReserveKey(userId, modelName)
+	modelReserved := false
+	if maxConcurrency > 0 {
+		dbCount, err := model.CountUnfinishedTaskByUserModel(userId, modelName)
+		if err != nil { logger.LogError(c, fmt.Sprintf("count unfinished task for concurrency limit failed: %s", err.Error())); return release, nil }
+		allowed, used, err := reserver.Reserve(c, modelKey, member, dbCount, maxConcurrency, ModelConcurrencyReserveTTL)
+		if err != nil { logger.LogError(c, fmt.Sprintf("reserve model concurrency slot failed: %s", err.Error())); return release, nil }
+		if !allowed {
+			message := i18n.T(c, i18n.MsgModelConcurrencyLimitReached, map[string]any{"Model": modelName, "Max": maxConcurrency, "Current": used})
+			return release, TaskErrorWrapperLocal(fmt.Errorf("%s", message), ConcurrencyLimitReachedCode, http.StatusTooManyRequests)
+		}
+		modelReserved = true
 	}
 
-	if !allowed {
-		message := i18n.T(c, i18n.MsgModelConcurrencyLimitReached, map[string]any{
-			"Model":   modelName,
-			"Max":     maxConcurrency,
-			"Current": used,
-		})
-		return release, TaskErrorWrapperLocal(fmt.Errorf("%s", message), ConcurrencyLimitReachedCode, http.StatusTooManyRequests)
+	userMaxConcurrency := model.GetUserAsyncConcurrencyLimit(userId)
+	userKey := userConcurrencyReserveKey(userId)
+	userReserved := false
+	if userMaxConcurrency <= model.ModelConcurrencyBlocked {
+		if modelReserved {
+			reserver.Release(c, modelKey, member)
+		}
+		message := i18n.T(c, i18n.MsgUserConcurrencyNotAllowed, nil)
+		return release, TaskErrorWrapperLocal(fmt.Errorf("%s", message), UserConcurrencyNotAllowedCode, http.StatusForbidden)
+	}
+	if userMaxConcurrency > 0 {
+		dbCount, err := model.CountUnfinishedTaskByUser(userId)
+		if err != nil { logger.LogError(c, fmt.Sprintf("count unfinished task for user concurrency limit failed: %s", err.Error())); if modelReserved { reserver.Release(c, modelKey, member) }; return release, nil }
+		allowed, used, err := reserver.Reserve(c, userKey, member, dbCount, userMaxConcurrency, ModelConcurrencyReserveTTL)
+		if err != nil { logger.LogError(c, fmt.Sprintf("reserve user concurrency slot failed: %s", err.Error())); if modelReserved { reserver.Release(c, modelKey, member) }; return release, nil }
+		if !allowed {
+			if modelReserved { reserver.Release(c, modelKey, member) }
+			message := i18n.T(c, i18n.MsgUserConcurrencyLimitReached, map[string]any{"Max": userMaxConcurrency, "Current": used})
+			return release, TaskErrorWrapperLocal(fmt.Errorf("%s", message), UserConcurrencyLimitReachedCode, http.StatusTooManyRequests)
+		}
+		userReserved = true
 	}
 
 	released := false
 	return func() {
-		if released {
-			return
-		}
+		if released { return }
 		released = true
-		reserver.Release(c, key, member)
+		if modelReserved { reserver.Release(c, modelKey, member) }
+		if userReserved { reserver.Release(c, userKey, member) }
 	}, nil
 }

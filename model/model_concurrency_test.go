@@ -9,10 +9,25 @@ import (
 
 func setupConcurrencyTables(t *testing.T) {
 	t.Helper()
-	require.NoError(t, DB.AutoMigrate(&ModelConcurrency{}, &Task{}, &Model{}))
+	require.NoError(t, DB.AutoMigrate(&ModelConcurrency{}, &UserAsyncConcurrency{}, &Task{}, &Model{}))
 	require.NoError(t, DB.Where("1 = 1").Delete(&ModelConcurrency{}).Error)
+	require.NoError(t, DB.Where("1 = 1").Delete(&UserAsyncConcurrency{}).Error)
 	require.NoError(t, DB.Where("1 = 1").Delete(&Task{}).Error)
 	require.NoError(t, DB.Where("1 = 1").Delete(&Model{}).Error)
+}
+
+func TestUserAsyncConcurrencyRuleAndTotalCount(t *testing.T) {
+	setupConcurrencyTables(t)
+	require.NoError(t, DB.Create(&Task{UserId: 7, ModelName: "sora-2", Status: TaskStatusInProgress}).Error)
+	require.NoError(t, DB.Create(&Task{UserId: 7, ModelName: "kling-v1", Status: TaskStatusQueued}).Error)
+	require.NoError(t, DB.Create(&Task{UserId: 7, ModelName: "sora-2", Status: TaskStatusSuccess}).Error)
+
+	_, err := UpsertUserAsyncConcurrencyRule(7, 30)
+	require.NoError(t, err)
+	assert.Equal(t, 30, GetUserAsyncConcurrencyLimit(7))
+	count, err := CountUnfinishedTaskByUser(7)
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), count)
 }
 
 // 下拉框为空的根因回归：tasks 表为空时，模型库中的异步端点模型仍必须出现，

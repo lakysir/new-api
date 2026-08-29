@@ -202,6 +202,8 @@ rate_limit.total_reached: "您已达到总请求数限制：{{.Minutes}}分钟�
 # Model concurrency messages
 model_concurrency.limit_reached: "并发已满：您在模型 {{.Model}} 上进行中的任务数已达 {{.Current}}，上限为 {{.Max}}，请等待进行中的任务完成后再提交"
 model_concurrency.not_allowed: "您没有使用模型 {{.Model}} 的权限，请联系管理员"
+user_concurrency.limit_reached: "异步任务总并发已满：您当前有 {{.Current}} 个进行中的任务，总上限为 {{.Max}}，请等待任务完成后再提交"
+user_concurrency.not_allowed: "您不能提交异步任务，请联系管理员"
 
 # Setting messages
 setting.invalid_type: "无效的预警类型"

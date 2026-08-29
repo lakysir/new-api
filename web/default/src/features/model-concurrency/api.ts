@@ -22,6 +22,8 @@ import type {
   ModelConcurrencyApiResponse,
   ModelConcurrencyRule,
   UpsertModelConcurrencyRequest,
+  UpsertUserAsyncConcurrencyRequest,
+  UserAsyncConcurrencyRule,
 } from './types'
 
 /** 不传 modelName 时返回全部规则，管理端列表页用这个。 */
@@ -31,6 +33,29 @@ export async function getModelConcurrencyRules(modelName?: string) {
   >('/api/model_concurrency/', {
     params: modelName ? { model: modelName } : undefined,
   })
+  return res.data
+}
+
+export async function getUserAsyncConcurrencyRules() {
+  const res = await api.get<ModelConcurrencyApiResponse<UserAsyncConcurrencyRule[]>>(
+    '/api/model_concurrency/users'
+  )
+  return res.data
+}
+
+export async function upsertUserAsyncConcurrencyRule(
+  request: UpsertUserAsyncConcurrencyRequest
+) {
+  const res = await api.put<ModelConcurrencyApiResponse<UserAsyncConcurrencyRule>>(
+    '/api/model_concurrency/users', request
+  )
+  return res.data
+}
+
+export async function deleteUserAsyncConcurrencyRule(userId: number) {
+  const res = await api.delete<ModelConcurrencyApiResponse<null>>(
+    `/api/model_concurrency/users/${userId}`
+  )
   return res.data
 }
 
