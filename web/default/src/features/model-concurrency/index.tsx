@@ -78,6 +78,7 @@ function groupRulesByModel(rules: ModelConcurrencyRule[]) {
 }
 
 function ModelConcurrencyContent() {
+  const { t } = useTranslation()
   const [selectedModel, setSelectedModel] = useState<string | null>(null)
 
   const { data: rules = [], isLoading } = useAllModelConcurrencyRules()
