@@ -185,6 +185,7 @@ export const TASK_ACTIONS = {
   FIRST_TAIL_GENERATE: 'firstTailGenerate', // 首尾生视频
   REFERENCE_GENERATE: 'referenceGenerate', // 参照生视频
   REMIX_GENERATE: 'remixGenerate', // 视频 Remix
+  VIDEO_EDIT: 'videoEdit',
 } as const
 
 /**
@@ -300,6 +301,7 @@ export const TASK_ACTION_MAPPINGS: Record<string, StatusMapping> = {
     label: 'Video Remix',
     variant: 'blue',
   },
+  [TASK_ACTIONS.VIDEO_EDIT]: { label: 'Video Edit', variant: 'blue' },
 }
 
 /**

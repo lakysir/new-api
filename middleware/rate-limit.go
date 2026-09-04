@@ -116,6 +116,14 @@ func CriticalRateLimit() func(c *gin.Context) {
 }
 
 func isScriptApiRateLimitExempt(c *gin.Context) bool {
+	// User management is already protected by AdminAuth and may issue one
+	// request per selected user during bulk operations. Do not let the global
+	// public API limiter reject legitimate administrator actions.
+	if c.Request.URL.Path == "/api/user/manage" ||
+		(c.Request.Method == http.MethodDelete &&
+			strings.HasPrefix(c.Request.URL.Path, "/api/user/")) {
+		return true
+	}
 	if c.Request.Method != http.MethodGet {
 		return false
 	}

@@ -35,7 +35,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 
-import { manageUser } from '../api'
+import { deleteUser, manageUser } from '../api'
 import { type User } from '../types'
 import { useUsers } from './users-provider'
 
@@ -54,7 +54,11 @@ export function DataTableBulkActions({ table }: DataTableBulkActionsProps) {
     if (!pendingAction || selectedUsers.length === 0) return
     setLoading(true)
     const results = await Promise.allSettled(
-      selectedUsers.map((user) => manageUser(user.id, pendingAction))
+      selectedUsers.map((user) =>
+        pendingAction === 'delete'
+          ? deleteUser(user.id)
+          : manageUser(user.id, pendingAction)
+      )
     )
     const successCount = results.filter(
       (result) => result.status === 'fulfilled' && result.value.success

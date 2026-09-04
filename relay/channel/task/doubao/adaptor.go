@@ -119,7 +119,13 @@ func (a *TaskAdaptor) Init(info *relaycommon.RelayInfo) {
 // ValidateRequestAndSetAction parses body, validates fields and sets default action.
 func (a *TaskAdaptor) ValidateRequestAndSetAction(c *gin.Context, info *relaycommon.RelayInfo) (taskErr *dto.TaskError) {
 	// Accept only POST /v1/video/generations as "generate" action.
-	return relaycommon.ValidateBasicTaskRequest(c, info, constant.TaskActionGenerate)
+	if taskErr = relaycommon.ValidateBasicTaskRequest(c, info, constant.TaskActionGenerate); taskErr != nil {
+		return taskErr
+	}
+	if req, err := relaycommon.GetTaskRequest(c); err == nil && hasVideoInMetadata(req.Metadata) {
+		info.Action = constant.TaskActionVideoEdit
+	}
+	return nil
 }
 
 // BuildRequestURL constructs the upstream URL.
