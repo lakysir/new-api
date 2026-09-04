@@ -168,6 +168,9 @@ func RefundTaskQuota(ctx context.Context, task *model.Task, reason string) {
 	}
 
 	// 2. 退还令牌额度
+	// Reverse the original task charge in cumulative usage while preserving
+	// request_count, since the request was still made.
+	model.UpdateUserUsedQuota(task.UserId, -quota)
 	taskAdjustTokenQuota(ctx, task, -quota)
 
 	// 3. 记录日志
@@ -220,6 +223,10 @@ func RecalculateTaskQuota(ctx context.Context, task *model.Task, actualQuota int
 	}
 
 	// 调整令牌额度
+	if quotaDelta < 0 {
+		// The refunded portion was previously counted at submission time.
+		model.UpdateUserUsedQuota(task.UserId, quotaDelta)
+	}
 	taskAdjustTokenQuota(ctx, task, quotaDelta)
 
 	task.Quota = actualQuota
