@@ -27,6 +27,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { useSystemConfig } from '@/hooks/use-system-config'
 import { ROLE } from '@/lib/roles'
 
 import { updateUserSettings } from '../../api'
@@ -66,6 +67,7 @@ interface NotificationTabProps {
 
 export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
   const { t } = useTranslation()
+  const { currency } = useSystemConfig()
   const isAdmin = (profile?.role ?? 0) >= ROLE.ADMIN
   const [loading, setLoading] = useState(false)
   const [settings, setSettings] = useState<UserSettings>({
@@ -134,6 +136,35 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
 
   const notifyType = normalizeNotifyType(settings.notify_type)
 
+  const currencyRate =
+    currency.quotaDisplayType === 'CNY'
+      ? currency.usdExchangeRate
+      : currency.quotaDisplayType === 'CUSTOM'
+        ? currency.customCurrencyExchangeRate
+        : 1
+  const currencySymbol =
+    currency.quotaDisplayType === 'CNY'
+      ? 'CNY'
+      : currency.quotaDisplayType === 'CUSTOM'
+        ? currency.customCurrencySymbol
+        : currency.quotaDisplayType === 'TOKENS'
+          ? 'tokens'
+          : 'USD'
+  const thresholdInCurrency =
+    currency.quotaDisplayType === 'TOKENS'
+      ? (settings.quota_warning_threshold ?? 0)
+      : ((settings.quota_warning_threshold ?? 0) / currency.quotaPerUnit) *
+        currencyRate
+
+  const handleThresholdChange = (value: number) => {
+    const quotaValue =
+      currency.quotaDisplayType === 'TOKENS'
+        ? value
+        : (value / Math.max(currencyRate, Number.EPSILON)) *
+          Math.max(currency.quotaPerUnit, Number.EPSILON)
+    updateField('quota_warning_threshold', quotaValue)
+  }
+
   return (
     <div className='space-y-4 sm:space-y-6'>
       {/* Notification Type */}
@@ -177,14 +208,14 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
           id='threshold'
           type='number'
           className='h-9'
-          value={settings.quota_warning_threshold}
+          value={thresholdInCurrency}
           onChange={(e) =>
-            updateField('quota_warning_threshold', Number(e.target.value))
+            handleThresholdChange(Number(e.target.value))
           }
           placeholder={t('Enter threshold')}
         />
         <p className='text-muted-foreground text-xs'>
-          {t('Get notified when balance falls below this value')}
+          {t('Get notified when balance falls below this value')} ({currencySymbol})
         </p>
       </div>
 
