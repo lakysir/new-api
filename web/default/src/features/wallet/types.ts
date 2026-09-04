@@ -271,13 +271,27 @@ export interface TopupRecord {
   complete_time?: number
   /** Payment status */
   status: TopupStatus
+  type?: 'topup'
 }
+
+export interface AdminQuotaAdjustmentRecord {
+  type: 'admin_adjustment'
+  id: number
+  user_id: number
+  mode: 'add' | 'subtract' | 'override'
+  quota_delta: number
+  quota_before: number
+  quota_after: number
+  create_time: number
+}
+
+export type BillingHistoryRecord = TopupRecord | AdminQuotaAdjustmentRecord
 
 /**
  * Billing history response
  */
 export interface BillingHistoryResponse {
-  items: TopupRecord[]
+  items: BillingHistoryRecord[]
   total: number
 }
 

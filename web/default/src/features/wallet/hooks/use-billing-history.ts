@@ -28,7 +28,7 @@ import {
   completeOrder,
   isApiSuccess,
 } from '../api'
-import type { TopupRecord } from '../types'
+import type { BillingHistoryRecord } from '../types'
 
 // ============================================================================
 // Billing History Hook
@@ -45,7 +45,7 @@ export function useBillingHistory(options: UseBillingHistoryOptions = {}) {
   const { initialPage = 1, initialPageSize = 10 } = options
   const isAdmin = useIsAdmin()
 
-  const [records, setRecords] = useState<TopupRecord[]>([])
+  const [records, setRecords] = useState<BillingHistoryRecord[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(initialPage)
   const [pageSize, setPageSize] = useState(initialPageSize)

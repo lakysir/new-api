@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -450,15 +451,51 @@ func GetUserTopUps(c *gin.Context) {
 	if keyword != "" {
 		topups, total, err = model.SearchUserTopUps(userId, keyword, pageInfo)
 	} else {
-		topups, total, err = model.GetUserTopUps(userId, pageInfo)
+		allTopups, topupErr := model.GetAllUserTopUps(userId)
+		adjustments, adjustmentErr := model.GetUserQuotaAdjustments(userId)
+		if topupErr != nil {
+			err = topupErr
+		} else if adjustmentErr != nil {
+			err = adjustmentErr
+		} else {
+			items := make([]map[string]interface{}, 0, len(allTopups)+len(adjustments))
+			for _, item := range allTopups {
+				items = append(items, map[string]interface{}{
+					"type": "topup", "id": item.Id, "user_id": item.UserId,
+					"amount": item.Amount, "money": item.Money, "trade_no": item.TradeNo,
+					"payment_method": item.PaymentMethod, "create_time": item.CreateTime,
+					"complete_time": item.CompleteTime, "status": item.Status,
+				})
+			}
+			for _, item := range adjustments {
+				items = append(items, map[string]interface{}{
+					"type": "admin_adjustment", "id": item.Id, "user_id": item.UserId,
+					"mode": item.Mode, "quota_delta": item.Delta,
+					"quota_before": item.QuotaBefore, "quota_after": item.QuotaAfter,
+					"create_time": item.CreatedAt,
+				})
+			}
+			sort.SliceStable(items, func(i, j int) bool { return items[i]["create_time"].(int64) > items[j]["create_time"].(int64) })
+			total = int64(len(items))
+			start, end := pageInfo.GetStartIdx(), pageInfo.GetStartIdx()+pageInfo.GetPageSize()
+			if start > len(items) {
+				start = len(items)
+			}
+			if end > len(items) {
+				end = len(items)
+			}
+			pageInfo.SetTotal(int(total)); pageInfo.SetItems(items[start:end])
+		}
 	}
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
 
-	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(topups)
+	if keyword != "" {
+		pageInfo.SetTotal(int(total))
+		pageInfo.SetItems(topups)
+	}
 	common.ApiSuccess(c, pageInfo)
 }
 

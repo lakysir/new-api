@@ -178,6 +178,11 @@ func AdjustUserQuotaWithManualInvoiceCredit(userId, adminId int, mode string, va
 		if err := tx.Model(&User{}).Where("id = ?", userId).Update("quota", newQuota).Error; err != nil {
 			return err
 		}
+		if newQuota != user.Quota {
+			if err := tx.Create(newQuotaAdjustment(userId, adminId, mode, user.Quota, newQuota)).Error; err != nil {
+				return err
+			}
+		}
 		if positiveDelta == 0 {
 			return nil
 		}

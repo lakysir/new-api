@@ -203,6 +203,12 @@ func GetUserTopUps(userId int, pageInfo *common.PageInfo) (topups []*TopUp, tota
 	return topups, total, nil
 }
 
+func GetAllUserTopUps(userId int) ([]*TopUp, error) {
+	var topups []*TopUp
+	err := DB.Where("user_id = ? AND create_time >= ?", userId, topUpQueryCutoff()).Order("id DESC").Find(&topups).Error
+	return topups, err
+}
+
 // GetAllTopUps 获取全平台的充值记录（管理员使用，不限制时间窗口）
 func GetAllTopUps(pageInfo *common.PageInfo) (topups []*TopUp, total int64, err error) {
 	tx := DB.Begin()

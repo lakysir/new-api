@@ -46,7 +46,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { formatCurrencyFromUSD } from '@/lib/currency'
-import { formatNumber } from '@/lib/format'
+import { formatNumber, formatQuota } from '@/lib/format'
 
 import { useBillingHistory } from '../../hooks/use-billing-history'
 import {
@@ -180,6 +180,48 @@ export function BillingHistoryDialog({
             ) : (
               <div className='space-y-3'>
                 {records.map((record) => {
+                  if (record.type === 'admin_adjustment') {
+                    const modeLabel =
+                      record.mode === 'add'
+                        ? t('Administrator added quota')
+                        : record.mode === 'subtract'
+                          ? t('Administrator deducted quota')
+                          : t('Administrator adjusted quota')
+                    return (
+                      <div key={`adjustment-${record.id}`} className='rounded-lg border p-3 sm:p-4'>
+                        <div className='flex items-start justify-between gap-2'>
+                          <div>
+                            <div className='text-sm font-semibold'>{modeLabel}</div>
+                            <div className='text-muted-foreground mt-1 text-xs'>
+                              {formatTimestamp(record.create_time)}
+                            </div>
+                          </div>
+                          <StatusBadge
+                            label={record.quota_delta >= 0 ? t('Added') : t('Deducted')}
+                            variant={record.quota_delta >= 0 ? 'success' : 'danger'}
+                            showDot
+                            copyable={false}
+                          />
+                        </div>
+                        <div className='mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4'>
+                          <div className='space-y-1'>
+                            <Label className='text-muted-foreground text-xs'>{t('Quota Change')}</Label>
+                            <div className={record.quota_delta >= 0 ? 'text-sm font-semibold text-green-600' : 'text-sm font-semibold text-red-600'}>
+                              {record.quota_delta >= 0 ? '+' : ''}{formatQuota(record.quota_delta)}
+                            </div>
+                          </div>
+                          <div className='space-y-1'>
+                            <Label className='text-muted-foreground text-xs'>{t('Quota Before')}</Label>
+                            <div className='text-sm font-medium'>{formatQuota(record.quota_before)}</div>
+                          </div>
+                          <div className='space-y-1'>
+                            <Label className='text-muted-foreground text-xs'>{t('Quota After')}</Label>
+                            <div className='text-sm font-medium'>{formatQuota(record.quota_after)}</div>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  }
                   const statusConfig = getStatusConfig(record.status)
                   return (
                     <div
