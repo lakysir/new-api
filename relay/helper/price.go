@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
@@ -243,8 +244,17 @@ func ModelPriceHelperPerCall(c *gin.Context, info *relaycommon.RelayInfo) (types
 			}
 		}
 	} else {
-		// 按量计费：以模型倍率的一半作为预扣额度
-		quota = int(modelRatio / 2 * common.QuotaPerUnit * groupRatioInfo.GroupRatio)
+		// 按量计费任务默认预扣约 25 万 Token 等值额度；Doubao/VolcEngine
+		// 视频任务改为预扣约 50 万 Token 等值额度。
+		// Task billing normally pre-consumes an estimate equivalent to about
+		// 250K tokens. Doubao/VolcEngine video tasks use a larger 500K-token
+		// estimate to reduce large post-completion top-ups; final settlement
+		// still uses the actual upstream token usage.
+		preConsumeTokenDivisor := 2.0
+		if info.ChannelType == constant.ChannelTypeDoubaoVideo || info.ChannelType == constant.ChannelTypeVolcEngine {
+			preConsumeTokenDivisor = 1.0
+		}
+		quota = int(modelRatio / preConsumeTokenDivisor * common.QuotaPerUnit * groupRatioInfo.GroupRatio)
 		modelPrice = -1
 		if !operation_setting.GetQuotaSetting().EnableFreeModelPreConsume {
 			if groupRatioInfo.GroupRatio == 0 || modelRatio == 0 {
