@@ -26,8 +26,16 @@ func SplitUserGroups(userGroup string) []string {
 }
 
 func GetUserUsableGroups(userGroup string) map[string]string {
+	return GetUserUsableGroupsWithRestrictions(userGroup, nil)
+}
+
+func GetUserUsableGroupsWithRestrictions(userGroup string, restricted []string) map[string]string {
 	groupsCopy := setting.GetUserUsableGroupsCopy()
+	restrictedSet := make(map[string]struct{}, len(restricted))
+	for _, group := range restricted { if group = strings.TrimSpace(group); group != "" { restrictedSet[group] = struct{}{} } }
+	assigned := make(map[string]struct{})
 	for _, group := range SplitUserGroups(userGroup) {
+		assigned[group] = struct{}{}
 		specialSettings, ok := ratio_setting.GetGroupRatioSetting().GroupSpecialUsableGroup.Get(group)
 		if ok {
 			for specialGroup, desc := range specialSettings {
@@ -46,6 +54,7 @@ func GetUserUsableGroups(userGroup string) map[string]string {
 			groupsCopy[group] = "用户分组"
 		}
 	}
+	for group := range restrictedSet { if _, ok := assigned[group]; !ok { delete(groupsCopy, group) } }
 	return groupsCopy
 }
 
@@ -55,7 +64,11 @@ func GroupInUserUsableGroups(userGroup, groupName string) bool {
 }
 
 func GetUserAutoGroup(userGroup string) []string {
-	groups := GetUserUsableGroups(userGroup)
+	return GetUserAutoGroupWithRestrictions(userGroup, nil)
+}
+
+func GetUserAutoGroupWithRestrictions(userGroup string, restricted []string) []string {
+	groups := GetUserUsableGroupsWithRestrictions(userGroup, restricted)
 	autoGroups := make([]string, 0)
 	for _, group := range setting.GetAutoGroups() {
 		if _, ok := groups[group]; ok {

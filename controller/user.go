@@ -353,6 +353,7 @@ func GetUser(c *gin.Context) {
 		return
 	}
 	user.AdminPermissions = authz.Capabilities(user.Id, user.Role)
+	user.RestrictedPublicGroups = user.GetSetting().RestrictedPublicGroups
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
@@ -604,7 +605,7 @@ func GetUserModels(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	groups := service.GetUserUsableGroups(user.Group)
+	groups := service.GetUserUsableGroupsWithRestrictions(user.Group, user.GetSetting().RestrictedPublicGroups)
 	group := c.Query("group")
 	if group != "" {
 		if _, ok := groups[group]; !ok {

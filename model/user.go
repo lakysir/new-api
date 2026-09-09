@@ -54,6 +54,7 @@ type User struct {
 	LastLoginAt      int64                      `json:"last_login_at" gorm:"default:0;column:last_login_at"`
 	InvoiceEnabled   bool                       `json:"invoice_enabled" gorm:"column:invoice_enabled"`
 	AdminPermissions map[string]map[string]bool `json:"admin_permissions,omitempty" gorm:"-:all"`
+	RestrictedPublicGroups []string            `json:"restricted_public_groups,omitempty" gorm:"-:all"`
 }
 
 func (user *User) ToBaseUser() *UserBase {
@@ -567,7 +568,17 @@ func (user *User) UpdateWithTx(tx *gorm.DB, updatePassword bool) error {
 	if err = tx.First(&current, user.Id).Error; err != nil {
 		return err
 	}
-	if err = tx.Model(&current).Omit("quota", "used_quota", "request_count").Updates(newUser).Error; err != nil {
+	if newUser.RestrictedPublicGroups != nil {
+		userSetting := current.GetSetting()
+		userSetting.RestrictedPublicGroups = newUser.RestrictedPublicGroups
+		settingBytes, marshalErr := common.Marshal(userSetting)
+		if marshalErr != nil {
+			return marshalErr
+		}
+		if err = tx.Model(&current).Update("setting", string(settingBytes)).Error; err != nil { return err }
+		newUser.Setting = string(settingBytes)
+	}
+	if err = tx.Model(&current).Omit("quota", "used_quota", "request_count", "restricted_public_groups", "setting").Updates(newUser).Error; err != nil {
 		return err
 	}
 	return tx.First(user, user.Id).Error
@@ -588,7 +599,6 @@ func (user *User) EditWithTx(tx *gorm.DB, updatePassword bool) error {
 			return err
 		}
 	}
-
 	newUser := *user
 	updates := map[string]interface{}{
 		"username":     newUser.Username,
@@ -604,6 +614,13 @@ func (user *User) EditWithTx(tx *gorm.DB, updatePassword bool) error {
 	current := User{}
 	if err = tx.First(&current, user.Id).Error; err != nil {
 		return err
+	}
+	if newUser.RestrictedPublicGroups != nil {
+		userSetting := current.GetSetting()
+		userSetting.RestrictedPublicGroups = newUser.RestrictedPublicGroups
+		settingBytes, marshalErr := common.Marshal(userSetting)
+		if marshalErr != nil { return marshalErr }
+		updates["setting"] = string(settingBytes)
 	}
 	if err = tx.Model(&current).Updates(updates).Error; err != nil {
 		return err

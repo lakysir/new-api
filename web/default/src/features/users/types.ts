@@ -115,6 +115,7 @@ export interface UserFormData {
   remark?: string // Only used when updating user
   invoice_enabled?: boolean
   admin_permissions?: AdminPermissionMatrix
+  restricted_public_groups?: string[]
 }
 
 export type ManageUserAction =

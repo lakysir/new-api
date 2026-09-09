@@ -445,6 +445,7 @@ export function UsersMutateDrawer({
                       </FormItem>
                     )}
                   />
+                  <FormField control={form.control} name='restricted_public_groups' render={({ field }) => (<FormItem><FormLabel>{t('Restrict Public Groups')}</FormLabel><FormControl><MultiSelect options={groupOptions} selected={field.value || []} onChange={field.onChange} placeholder={t('Select groups')} emptyText={t('No group found.')} maxVisibleChips={4} /></FormControl></FormItem>)} />
 
                   <FormField
                     control={form.control}

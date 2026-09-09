@@ -10,6 +10,7 @@ import (
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/new-api/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -171,6 +172,7 @@ func AddToken(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	if token.Group != "" { if user, e := model.GetUserCache(c.GetInt("id")); e == nil { if _, ok := service.GetUserUsableGroupsWithRestrictions(user.Group, user.GetSetting().RestrictedPublicGroups)[token.Group]; !ok { common.ApiError(c, fmt.Errorf("no permission to use group %s", token.Group)); return } } }
 	if len(token.Name) > 50 {
 		common.ApiErrorI18n(c, i18n.MsgTokenNameTooLong)
 		return
@@ -256,6 +258,7 @@ func UpdateToken(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	if token.Group != "" { if user, e := model.GetUserCache(userId); e == nil { if _, ok := service.GetUserUsableGroupsWithRestrictions(user.Group, user.GetSetting().RestrictedPublicGroups)[token.Group]; !ok { common.ApiError(c, fmt.Errorf("no permission to use group %s", token.Group)); return } } }
 	if len(token.Name) > 50 {
 		common.ApiErrorI18n(c, i18n.MsgTokenNameTooLong)
 		return
