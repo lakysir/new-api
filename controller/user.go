@@ -280,11 +280,19 @@ func GetAllUsers(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	remainingQuota, err := model.GetTotalQuotaRemaining()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
 
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(users)
 
-	common.ApiSuccess(c, pageInfo)
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{
+		"items": users, "total": total, "page": pageInfo.Page, "page_size": pageInfo.PageSize,
+		"total_quota_remaining": remainingQuota,
+	}})
 	return
 }
 
@@ -312,7 +320,15 @@ func SearchUsers(c *gin.Context) {
 
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(users)
-	common.ApiSuccess(c, pageInfo)
+	remainingQuota, err := model.GetTotalQuotaRemaining()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{
+		"items": users, "total": total, "page": pageInfo.Page, "page_size": pageInfo.PageSize,
+		"total_quota_remaining": remainingQuota,
+	}})
 	return
 }
 
@@ -862,7 +878,10 @@ func DeleteUser(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	originUser, err := model.GetUserById(id, false)
+	// Include soft-deleted users: the admin list intentionally uses Unscoped,
+	// and those records must remain permanently deletable.
+	originUser := &model.User{Id: id}
+	err = model.DB.Unscoped().Omit("password", "access_token").First(originUser, "id = ?", id).Error
 	if err != nil {
 		common.ApiError(c, err)
 		return

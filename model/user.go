@@ -241,6 +241,14 @@ func GetAllUsers(pageInfo *common.PageInfo) (users []*User, total int64, err err
 	return users, total, nil
 }
 
+// GetTotalQuotaRemaining returns the sum of remaining quota for all users,
+// including soft-deleted (注销) users shown in the admin list.
+func GetTotalQuotaRemaining() (int64, error) {
+	var total int64
+	err := DB.Unscoped().Model(&User{}).Select("COALESCE(SUM(quota), 0)").Scan(&total).Error
+	return total, err
+}
+
 func SearchUsers(keyword string, group string, role *int, status *int, startIdx int, num int) ([]*User, int64, error) {
 	var users []*User
 	var total int64

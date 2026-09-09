@@ -29,6 +29,7 @@ import {
 } from '@/components/data-table'
 import { useMediaQuery } from '@/hooks'
 import { useTableUrlState } from '@/hooks/use-table-url-state'
+import { formatQuota } from '@/lib/format'
 
 import { getUsers, searchUsers } from '../api'
 import {
@@ -121,12 +122,13 @@ export function UsersTable() {
         toast.error(
           result.message || `Failed to ${hasFilter ? 'search' : 'load'} users`
         )
-        return { items: [], total: 0 }
+        return { items: [], total: 0, totalQuotaRemaining: 0 }
       }
 
       return {
         items: result.data?.items || [],
         total: result.data?.total || 0,
+        totalQuotaRemaining: result.data?.total_quota_remaining || 0,
       }
     },
     placeholderData: (previousData) => previousData,
@@ -164,42 +166,52 @@ export function UsersTable() {
   })
 
   return (
-    <DataTablePage
-      table={table}
-      columns={columns}
-      isLoading={isLoading}
-      isFetching={isFetching}
-      emptyTitle={t('No Users Found')}
-      emptyDescription={t(
-        'No users available. Try adjusting your search or filters.'
-      )}
-      skeletonKeyPrefix='users-skeleton'
-      applyHeaderSize
-      toolbarProps={{
-        searchPlaceholder: t('Filter by username, name or email...'),
-        filters: [
-          {
-            columnId: 'status',
-            title: t('Status'),
-            options: getUserStatusOptions(t),
-            singleSelect: true,
-          },
-          {
-            columnId: 'role',
-            title: t('Role'),
-            options: getUserRoleOptions(t),
-            singleSelect: true,
-          },
-        ],
-      }}
-      getRowClassName={(row, { isMobile }) =>
-        isDisabledUserRow(row.original)
-          ? isMobile
-            ? DISABLED_ROW_MOBILE
-            : DISABLED_ROW_DESKTOP
-          : undefined
-      }
-      bulkActions={<DataTableBulkActions table={table} />}
-    />
+    <div className='flex h-full min-h-0 flex-col gap-2'>
+      <div className='text-muted-foreground px-1 text-sm'>
+        {t('Total remaining quota')}:{' '}
+        <span className='text-foreground font-semibold'>
+          {formatQuota(data?.totalQuotaRemaining || 0)}
+        </span>
+      </div>
+      <div className='min-h-0 flex-1'>
+        <DataTablePage
+          table={table}
+          columns={columns}
+          isLoading={isLoading}
+          isFetching={isFetching}
+          emptyTitle={t('No Users Found')}
+          emptyDescription={t(
+            'No users available. Try adjusting your search or filters.'
+          )}
+          skeletonKeyPrefix='users-skeleton'
+          applyHeaderSize
+          toolbarProps={{
+            searchPlaceholder: t('Filter by username, name or email...'),
+            filters: [
+              {
+                columnId: 'status',
+                title: t('Status'),
+                options: getUserStatusOptions(t),
+                singleSelect: true,
+              },
+              {
+                columnId: 'role',
+                title: t('Role'),
+                options: getUserRoleOptions(t),
+                singleSelect: true,
+              },
+            ],
+          }}
+          getRowClassName={(row, { isMobile }) =>
+            isDisabledUserRow(row.original)
+              ? isMobile
+                ? DISABLED_ROW_MOBILE
+                : DISABLED_ROW_DESKTOP
+              : undefined
+          }
+          bulkActions={<DataTableBulkActions table={table} />}
+        />
+      </div>
+    </div>
   )
 }

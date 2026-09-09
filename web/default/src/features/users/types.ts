@@ -92,6 +92,7 @@ export interface GetUsersResponse {
     total: number
     page: number
     page_size: number
+    total_quota_remaining?: number
   }
 }
 
