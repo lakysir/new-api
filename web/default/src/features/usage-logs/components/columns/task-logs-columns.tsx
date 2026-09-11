@@ -242,6 +242,11 @@ export function useTaskLogsColumns(isAdmin: boolean): ColumnDef<TaskLog>[] {
               <span className='text-muted-foreground/60 truncate text-[11px]'>
                 {t(log.platform)} · {t(taskActionMapper.getLabel(log.action))}
               </span>
+              {log.group && (
+                <span className='text-muted-foreground/50 truncate text-[10px]'>
+                  {t('Group')}: {log.group}
+                </span>
+              )}
             </div>
             <TaskDetailsDialog
               log={log}
