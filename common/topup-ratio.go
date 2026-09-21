@@ -2,6 +2,7 @@ package common
 
 import (
 	"encoding/json"
+	"strings"
 	"sync"
 )
 
@@ -33,9 +34,18 @@ func GetTopupGroupRatio(name string) float64 {
 	topupGroupRatioMutex.RLock()
 	defer topupGroupRatioMutex.RUnlock()
 	ratio, ok := topupGroupRatio[name]
-	if !ok {
-		SysError("topup group ratio not found: " + name)
-		return 1
+	if ok {
+		return ratio
 	}
-	return ratio
+	for _, group := range strings.Split(name, ",") {
+		group = strings.TrimSpace(group)
+		if group == "" {
+			continue
+		}
+		if ratio, ok = topupGroupRatio[group]; ok {
+			return ratio
+		}
+	}
+	SysError("topup group ratio not found: " + name)
+	return 1
 }
