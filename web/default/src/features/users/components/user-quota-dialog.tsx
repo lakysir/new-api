@@ -78,8 +78,8 @@ export function UserQuotaDialog(props: UserQuotaDialogProps) {
     if (!amount && mode !== 'override') return
     if (quotaValue <= 0 && mode !== 'override') return
     const invoiceAmountValue = parseFloat(invoiceAmount) || 0
-    if (isPositiveAdjustment && invoiceAmountValue <= 0) {
-      toast.error(t('Enter the actual invoiceable CNY amount received.'))
+    if (isPositiveAdjustment && invoiceAmountValue < 0) {
+      toast.error(t('Invoiceable CNY amount cannot be negative.'))
       return
     }
 
@@ -197,7 +197,7 @@ export function UserQuotaDialog(props: UserQuotaDialogProps) {
             <Label>{t('Actual invoiceable amount received (CNY)')}</Label>
             <Input
               type='number'
-              min={0.01}
+              min={0}
               step={0.01}
               value={invoiceAmount}
               onChange={(e) => setInvoiceAmount(e.target.value)}
@@ -205,7 +205,7 @@ export function UserQuotaDialog(props: UserQuotaDialogProps) {
             />
             <p className='text-muted-foreground text-xs'>
               {t(
-                'This amount increases the customer invoice balance and may differ from the quota display amount.'
+                'Enter 0 when this quota adjustment should not increase the customer invoice balance.'
               )}
             </p>
           </div>

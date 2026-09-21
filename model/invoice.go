@@ -195,8 +195,11 @@ func adjustUserQuotaWithManualInvoiceCreditTx(tx *gorm.DB, userId, adminId int, 
 	if positiveDelta == 0 {
 		return user.Quota, newQuota, nil
 	}
-	if invoiceAmountCents <= 0 {
-		return 0, 0, errors.New("invoiceable CNY amount is required for a positive quota adjustment")
+	if invoiceAmountCents < 0 {
+		return 0, 0, errors.New("invoiceable CNY amount cannot be negative")
+	}
+	if invoiceAmountCents == 0 {
+		return user.Quota, newQuota, nil
 	}
 	credit := ManualInvoiceCredit{
 		UserId:      userId,

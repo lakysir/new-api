@@ -52,8 +52,8 @@ func CreateQuotaApplication(application *QuotaApplication) error {
 	if application.QuotaAmount <= 0 {
 		return errors.New("quota amount must be positive")
 	}
-	if application.InvoiceAmountCents <= 0 {
-		return errors.New("invoiceable CNY amount is required")
+	if application.InvoiceAmountCents < 0 {
+		return errors.New("invoiceable CNY amount cannot be negative")
 	}
 	if application.ApplicationInfo == "" || len(application.ApplicationInfo) > 2000 {
 		return errors.New("application information is required and must not exceed 2000 characters")

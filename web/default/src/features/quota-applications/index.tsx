@@ -224,8 +224,8 @@ function CreateApplicationDialog(props: {
       toast.error(t('Enter a valid credit amount'))
       return
     }
-    if (invoiceAmountCents <= 0) {
-      toast.error(t('Enter the actual invoiceable CNY amount received.'))
+    if (invoiceAmountCents < 0) {
+      toast.error(t('Invoiceable CNY amount cannot be negative.'))
       return
     }
     if (!applicationInfo.trim()) {
@@ -364,11 +364,16 @@ function CreateApplicationDialog(props: {
             <Label>{t('Actual invoiceable amount received (CNY)')}</Label>
             <Input
               type='number'
-              min={0.01}
+              min={0}
               step={0.01}
               value={invoiceAmount}
               onChange={(event) => setInvoiceAmount(event.target.value)}
             />
+            <p className='text-muted-foreground text-xs'>
+              {t(
+                'Enter 0 when this quota application should not increase the customer invoice balance.'
+              )}
+            </p>
           </div>
         </div>
 
