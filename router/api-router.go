@@ -3,6 +3,7 @@ package router
 import (
 	"github.com/QuantumNous/new-api/controller"
 	"github.com/QuantumNous/new-api/middleware"
+	"github.com/QuantumNous/new-api/service/authz"
 
 	// Import oauth package to register providers via init()
 	_ "github.com/QuantumNous/new-api/oauth"
@@ -155,6 +156,16 @@ func SetApiRouter(router *gin.Engine) {
 				adminRoute.GET("/2fa/stats", controller.Admin2FAStats)
 				adminRoute.DELETE("/:id/2fa", controller.AdminDisable2FA)
 			}
+		}
+
+		quotaApplicationRoute := apiRouter.Group("/quota-applications")
+		quotaApplicationRoute.Use(middleware.AdminAuth())
+		{
+			quotaApplicationRoute.GET("", middleware.RequirePermission(authz.QuotaApplicationApply), controller.ListQuotaApplications)
+			quotaApplicationRoute.GET("/users/search", middleware.RequirePermission(authz.QuotaApplicationApply), controller.SearchQuotaApplicationTargets)
+			quotaApplicationRoute.GET("/:id", middleware.RequirePermission(authz.QuotaApplicationApply), controller.GetQuotaApplication)
+			quotaApplicationRoute.POST("", middleware.RequirePermission(authz.QuotaApplicationApply), controller.CreateQuotaApplication)
+			quotaApplicationRoute.POST("/:id/review", middleware.RootAuth(), controller.ReviewQuotaApplication)
 		}
 
 		// Subscription billing (plans, purchase, admin management)

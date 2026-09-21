@@ -50,6 +50,7 @@ import { Route as AuthenticatedSubscriptionsIndexRouteImport } from './routes/_a
 import { Route as AuthenticatedScriptVersionsIndexRouteImport } from './routes/_authenticated/script-versions/index'
 import { Route as AuthenticatedScriptReviewIndexRouteImport } from './routes/_authenticated/script-review/index'
 import { Route as AuthenticatedRedemptionCodesIndexRouteImport } from './routes/_authenticated/redemption-codes/index'
+import { Route as AuthenticatedQuotaApplicationsIndexRouteImport } from './routes/_authenticated/quota-applications/index'
 import { Route as AuthenticatedProfileIndexRouteImport } from './routes/_authenticated/profile/index'
 import { Route as AuthenticatedPlaygroundIndexRouteImport } from './routes/_authenticated/playground/index'
 import { Route as AuthenticatedNodesConsoleIndexRouteImport } from './routes/_authenticated/nodes-console/index'
@@ -294,6 +295,12 @@ const AuthenticatedRedemptionCodesIndexRoute =
     path: '/redemption-codes/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedQuotaApplicationsIndexRoute =
+  AuthenticatedQuotaApplicationsIndexRouteImport.update({
+    id: '/quota-applications/',
+    path: '/quota-applications/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedProfileIndexRoute =
   AuthenticatedProfileIndexRouteImport.update({
     id: '/profile/',
@@ -518,6 +525,7 @@ export interface FileRoutesByFullPath {
   '/nodes-console/': typeof AuthenticatedNodesConsoleIndexRoute
   '/playground/': typeof AuthenticatedPlaygroundIndexRoute
   '/profile/': typeof AuthenticatedProfileIndexRoute
+  '/quota-applications/': typeof AuthenticatedQuotaApplicationsIndexRoute
   '/redemption-codes/': typeof AuthenticatedRedemptionCodesIndexRoute
   '/script-review/': typeof AuthenticatedScriptReviewIndexRoute
   '/script-versions/': typeof AuthenticatedScriptVersionsIndexRoute
@@ -588,6 +596,7 @@ export interface FileRoutesByTo {
   '/nodes-console': typeof AuthenticatedNodesConsoleIndexRoute
   '/playground': typeof AuthenticatedPlaygroundIndexRoute
   '/profile': typeof AuthenticatedProfileIndexRoute
+  '/quota-applications': typeof AuthenticatedQuotaApplicationsIndexRoute
   '/redemption-codes': typeof AuthenticatedRedemptionCodesIndexRoute
   '/script-review': typeof AuthenticatedScriptReviewIndexRoute
   '/script-versions': typeof AuthenticatedScriptVersionsIndexRoute
@@ -662,6 +671,7 @@ export interface FileRoutesById {
   '/_authenticated/nodes-console/': typeof AuthenticatedNodesConsoleIndexRoute
   '/_authenticated/playground/': typeof AuthenticatedPlaygroundIndexRoute
   '/_authenticated/profile/': typeof AuthenticatedProfileIndexRoute
+  '/_authenticated/quota-applications/': typeof AuthenticatedQuotaApplicationsIndexRoute
   '/_authenticated/redemption-codes/': typeof AuthenticatedRedemptionCodesIndexRoute
   '/_authenticated/script-review/': typeof AuthenticatedScriptReviewIndexRoute
   '/_authenticated/script-versions/': typeof AuthenticatedScriptVersionsIndexRoute
@@ -735,6 +745,7 @@ export interface FileRouteTypes {
     | '/nodes-console/'
     | '/playground/'
     | '/profile/'
+    | '/quota-applications/'
     | '/redemption-codes/'
     | '/script-review/'
     | '/script-versions/'
@@ -805,6 +816,7 @@ export interface FileRouteTypes {
     | '/nodes-console'
     | '/playground'
     | '/profile'
+    | '/quota-applications'
     | '/redemption-codes'
     | '/script-review'
     | '/script-versions'
@@ -878,6 +890,7 @@ export interface FileRouteTypes {
     | '/_authenticated/nodes-console/'
     | '/_authenticated/playground/'
     | '/_authenticated/profile/'
+    | '/_authenticated/quota-applications/'
     | '/_authenticated/redemption-codes/'
     | '/_authenticated/script-review/'
     | '/_authenticated/script-versions/'
@@ -1218,6 +1231,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRedemptionCodesIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/quota-applications/': {
+      id: '/_authenticated/quota-applications/'
+      path: '/quota-applications'
+      fullPath: '/quota-applications/'
+      preLoaderRoute: typeof AuthenticatedQuotaApplicationsIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/profile/': {
       id: '/_authenticated/profile/'
       path: '/profile'
@@ -1533,6 +1553,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedNodesConsoleIndexRoute: typeof AuthenticatedNodesConsoleIndexRoute
   AuthenticatedPlaygroundIndexRoute: typeof AuthenticatedPlaygroundIndexRoute
   AuthenticatedProfileIndexRoute: typeof AuthenticatedProfileIndexRoute
+  AuthenticatedQuotaApplicationsIndexRoute: typeof AuthenticatedQuotaApplicationsIndexRoute
   AuthenticatedRedemptionCodesIndexRoute: typeof AuthenticatedRedemptionCodesIndexRoute
   AuthenticatedScriptReviewIndexRoute: typeof AuthenticatedScriptReviewIndexRoute
   AuthenticatedScriptVersionsIndexRoute: typeof AuthenticatedScriptVersionsIndexRoute
@@ -1563,6 +1584,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedNodesConsoleIndexRoute: AuthenticatedNodesConsoleIndexRoute,
   AuthenticatedPlaygroundIndexRoute: AuthenticatedPlaygroundIndexRoute,
   AuthenticatedProfileIndexRoute: AuthenticatedProfileIndexRoute,
+  AuthenticatedQuotaApplicationsIndexRoute:
+    AuthenticatedQuotaApplicationsIndexRoute,
   AuthenticatedRedemptionCodesIndexRoute:
     AuthenticatedRedemptionCodesIndexRoute,
   AuthenticatedScriptReviewIndexRoute: AuthenticatedScriptReviewIndexRoute,

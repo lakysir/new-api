@@ -20,6 +20,7 @@ import {
   Activity,
   Box,
   CreditCard,
+  ClipboardCheck,
   FileText,
   FlaskConical,
   Key,
@@ -40,8 +41,10 @@ import { useTranslation } from 'react-i18next'
 
 import type { SidebarData } from '@/components/layout/types'
 import { useStatus } from '@/hooks/use-status'
+import { hasPermission } from '@/lib/admin-permissions'
 import { parseHeaderNavModulesFromStatus } from '@/lib/nav-modules'
 import { ROLE } from '@/lib/roles'
+import { useAuthStore } from '@/stores/auth-store'
 
 /**
  * Root navigation groups for the application sidebar.
@@ -57,6 +60,12 @@ export function useSidebarData(): SidebarData {
   )
   const p2pEnabled = headerNavModules.aitoken !== false
   const scriptsEnabled = headerNavModules.scripts !== false
+  const user = useAuthStore((state) => state.auth.user)
+  const canUseQuotaApplications = hasPermission(
+    user,
+    'quota_application',
+    'apply'
+  )
 
   return {
     navGroups: [
@@ -167,6 +176,15 @@ export function useSidebarData(): SidebarData {
             url: '/users',
             icon: Users,
           },
+          ...(canUseQuotaApplications
+            ? [
+                {
+                  title: t('Quota Applications'),
+                  url: '/quota-applications',
+                  icon: ClipboardCheck,
+                },
+              ]
+            : []),
           {
             title: t('Invoice approval'),
             url: '/invoices',

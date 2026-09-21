@@ -290,6 +290,7 @@ func migrateDB() error {
 		&InvoiceProfile{},
 		&ManualInvoiceCredit{},
 		&QuotaAdjustment{},
+		&QuotaApplication{},
 		&QuotaData{},
 		&Task{},
 		&Model{},
