@@ -49,9 +49,7 @@ type requestPayload struct {
 	ExecutionExpiresAfter *dto.IntValue  `json:"execution_expires_after,omitempty"`
 	GenerateAudio         *dto.BoolValue `json:"generate_audio,omitempty"`
 	Draft                 *dto.BoolValue `json:"draft,omitempty"`
-	Tools                 []struct {
-		Type string `json:"type,omitempty"`
-	} `json:"tools,omitempty"`
+	Tools                 []map[string]any `json:"tools,omitempty"`
 	SafetyIdentifier   string         `json:"safety_identifier,omitempty"`
 	Priority           *dto.IntValue  `json:"priority,omitempty"`
 	Resolution         string         `json:"resolution,omitempty"`
