@@ -156,6 +156,8 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		newAPIError = types.NewError(err, types.ErrorCodeModelPriceError, types.ErrOptionWithStatusCode(http.StatusBadRequest))
 		return
 	}
+	helper.ApplyReferenceImagePricing(c, relayInfo, nil)
+	priceData = relayInfo.PriceData
 
 	// common.SetContextKey(c, constant.ContextKeyTokenCountMeta, meta)
 

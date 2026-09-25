@@ -283,6 +283,7 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 				quotaCalculateDecimal = quotaCalculateDecimal.Mul(decimal.NewFromFloat(otherRatio))
 			}
 		}
+		quotaCalculateDecimal = quotaCalculateDecimal.Add(decimal.NewFromInt(int64(relayInfo.PriceData.ReferenceImageQuota)))
 
 		if !ratio.IsZero() && quotaCalculateDecimal.LessThanOrEqual(decimal.Zero) {
 			quotaCalculateDecimal = decimal.NewFromInt(1)
@@ -297,6 +298,7 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 				quotaCalculateDecimal = quotaCalculateDecimal.Mul(decimal.NewFromFloat(otherRatio))
 			}
 		}
+		quotaCalculateDecimal = quotaCalculateDecimal.Add(decimal.NewFromInt(int64(relayInfo.PriceData.ReferenceImageQuota)))
 		summary.Quota = int(quotaCalculateDecimal.Round(0).IntPart())
 	}
 

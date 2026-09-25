@@ -80,6 +80,7 @@ import { useUpdateOption } from '@/features/system-settings/hooks/use-update-opt
 import { normalizeJsonString } from '@/features/system-settings/models/utils'
 import type { ModelSettings } from '@/features/system-settings/types'
 import { safeJsonParse } from '@/features/system-settings/utils/json-parser'
+import { getCurrencyDisplay } from '@/lib/currency'
 
 import { createModel, updateModel, getModel, getVendors } from '../../api'
 import { getNameRuleOptions, ENDPOINT_TEMPLATES } from '../../constants'
@@ -110,12 +111,22 @@ const extendedModelFormSchema = z.object({
   imageRatio: z.string().optional(),
   audioRatio: z.string().optional(),
   audioCompletionRatio: z.string().optional(),
+  referenceImageFreeCount: z.string().optional(),
+  referenceImageUnitPrice: z.string().optional(),
 })
 
 type ExtendedModelFormValues = z.infer<typeof extendedModelFormSchema>
 
 type PricingMode = 'per-token' | 'per-request'
 type PricingSubMode = 'ratio' | 'price'
+
+function referenceImageDisplayRate(): number {
+  const c = getCurrencyDisplay().config
+  if (c.quotaDisplayType === 'CNY') return c.usdExchangeRate
+  if (c.quotaDisplayType === 'CUSTOM') return c.customCurrencyExchangeRate
+  if (c.quotaDisplayType === 'TOKENS') return c.quotaPerUnit
+  return 1
+}
 
 type ModelMutateDrawerProps = {
   open: boolean
@@ -196,6 +207,7 @@ export function ModelMutateDrawer({
       ImageRatio: '',
       AudioRatio: '',
       AudioCompletionRatio: '',
+      ReferenceImagePricing: '{}',
       ExposeRatioEnabled: false,
       'billing_setting.billing_mode': '{}',
       'billing_setting.billing_expr': '{}',
@@ -257,6 +269,8 @@ export function ModelMutateDrawer({
       imageRatio: '',
       audioRatio: '',
       audioCompletionRatio: '',
+      referenceImageFreeCount: '',
+      referenceImageUnitPrice: '',
     },
   })
 
@@ -371,6 +385,13 @@ export function ModelMutateDrawer({
         const imageRatio = imageMap[modelName]
         const audioRatio = audioMap[modelName]
         const audioCompletionRatio = audioCompletionMap[modelName]
+        const referenceImageMap = safeJsonParse<
+          Record<string, { free_count?: number; unit_price?: number }>
+        >(modelSettings.ReferenceImagePricing, { fallback: {}, silent: true })
+        const referenceImage = referenceImageMap[modelName]
+        const referenceImageUnitPrice = referenceImage?.unit_price
+          ? String(referenceImage.unit_price * referenceImageDisplayRate())
+          : ''
 
         // Determine pricing mode
         if (price !== undefined && price !== null) {
@@ -378,6 +399,9 @@ export function ModelMutateDrawer({
           form.reset({
             ...baseModelData,
             price: price.toString(),
+            referenceImageFreeCount:
+              referenceImage?.free_count?.toString() || '',
+            referenceImageUnitPrice,
           })
         } else {
           setPricingMode('per-token')
@@ -397,6 +421,9 @@ export function ModelMutateDrawer({
             imageRatio: imageRatio?.toString() || '',
             audioRatio: audioRatio?.toString() || '',
             audioCompletionRatio: audioCompletionRatio?.toString() || '',
+            referenceImageFreeCount:
+              referenceImage?.free_count?.toString() || '',
+            referenceImageUnitPrice,
           })
           setAdvancedOpen(
             !!(cacheRatio || imageRatio || audioRatio || audioCompletionRatio)
@@ -505,6 +532,8 @@ export function ModelMutateDrawer({
           imageRatio,
           audioRatio,
           audioCompletionRatio,
+          referenceImageFreeCount,
+          referenceImageUnitPrice,
           ...modelData
         } = submitData
 
@@ -564,6 +593,12 @@ export function ModelMutateDrawer({
               modelSettings.AudioCompletionRatio,
               { fallback: {}, silent: true }
             )
+            const referenceImageMap = safeJsonParse<
+              Record<string, { free_count?: number; unit_price?: number }>
+            >(modelSettings.ReferenceImagePricing, {
+              fallback: {},
+              silent: true,
+            })
 
             // Reference-video token pricing is stored in ModelRatio even though
             // the model otherwise uses per-request pricing. Preserve that hidden
@@ -585,6 +620,11 @@ export function ModelMutateDrawer({
               delete imageMap[oldModelName]
               delete audioMap[oldModelName]
               delete audioCompletionMap[oldModelName]
+              if (referenceImageMap[oldModelName] !== undefined) {
+                referenceImageMap[finalModelName] =
+                  referenceImageMap[oldModelName]
+                delete referenceImageMap[oldModelName]
+              }
               if (billingModeMap[oldModelName] !== undefined) {
                 billingModeMap[finalModelName] = billingModeMap[oldModelName]
                 delete billingModeMap[oldModelName]
@@ -600,6 +640,7 @@ export function ModelMutateDrawer({
             delete imageMap[finalModelName]
             delete audioMap[finalModelName]
             delete audioCompletionMap[finalModelName]
+            delete referenceImageMap[finalModelName]
 
             // Only add new entries if user provided new configuration
             if (hasRatioConfig) {
@@ -647,6 +688,25 @@ export function ModelMutateDrawer({
                     values.audioCompletionRatio
                   )
                 }
+              }
+            }
+            const freeCount = Number.parseInt(
+              referenceImageFreeCount || '0',
+              10
+            )
+            const displayPrice = Number.parseFloat(
+              referenceImageUnitPrice || '0'
+            )
+            const rate = referenceImageDisplayRate()
+            if (
+              pricingMode === 'per-request' &&
+              freeCount > 0 &&
+              displayPrice > 0 &&
+              rate > 0
+            ) {
+              referenceImageMap[finalModelName] = {
+                free_count: freeCount,
+                unit_price: displayPrice / rate,
               }
             }
 
@@ -724,6 +784,18 @@ export function ModelMutateDrawer({
               updates.push({
                 key: 'AudioCompletionRatio',
                 value: newAudioCompletionRatio,
+              })
+            }
+            const newReferenceImagePricing = normalizeJsonString(
+              JSON.stringify(referenceImageMap)
+            )
+            if (
+              newReferenceImagePricing !==
+              normalizeJsonString(modelSettings.ReferenceImagePricing)
+            ) {
+              updates.push({
+                key: 'ReferenceImagePricing',
+                value: newReferenceImagePricing,
               })
             }
 
@@ -1469,6 +1541,68 @@ export function ModelMutateDrawer({
                     </CollapsibleContent>
                   </Collapsible>
                 </>
+              )}
+
+              {pricingMode === 'per-request' && (
+                <div className='mt-4 space-y-4 border-t pt-4'>
+                  <Label>{t('Reference image pricing')}</Label>
+                  <FormField
+                    control={form.control}
+                    name='referenceImageFreeCount'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Free reference image count')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            type='text'
+                            inputMode='numeric'
+                            placeholder='0'
+                            {...field}
+                            onChange={(e) => {
+                              const value = e.target.value
+                              if (value === '' || /^\d+$/.test(value))
+                                field.onChange(value)
+                            }}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t(
+                            '0 disables reference image billing; all reference images are free.'
+                          )}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name='referenceImageUnitPrice'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>
+                          {t('Reference image price per image')}
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            type='text'
+                            placeholder='0'
+                            {...field}
+                            onChange={(e) => {
+                              const value = e.target.value
+                              if (validateNumber(value)) field.onChange(value)
+                            }}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t(
+                            'Charged for each image after the free count, in the current display unit.'
+                          )}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
               )}
             </SideDrawerSection>
 

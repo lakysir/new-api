@@ -5430,6 +5430,11 @@
     "最小间隔": "Intervalle minimum",
     "该 API 要求两次提交间隔 90 秒": "L'API nécessite 90 secondes entre les soumissions",
     "每执行单位基础费用": "Frais de base par unité d'exécution",
-    "价格计算示例": "Exemple de calcul de prix"
+    "价格计算示例": "Exemple de calcul de prix",
+    "Reference image pricing": "Tarification des images de référence",
+    "Free reference image count": "Nombre d’images de référence gratuites",
+    "0 disables reference image billing; all reference images are free.": "0 désactive la facturation des images de référence ; toutes les images sont gratuites.",
+    "Reference image price per image": "Prix par image de référence",
+    "Charged for each image after the free count, in the current display unit.": "Facturé pour chaque image après le nombre gratuit, dans l’unité d’affichage actuelle."
   }
 }

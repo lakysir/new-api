@@ -5482,6 +5482,11 @@
     "最小间隔": "最小间隔",
     "该 API 要求两次提交间隔 90 秒": "该 API 要求两次提交间隔 90 秒",
     "每执行单位基础费用": "每执行单位基础费用",
-    "价格计算示例": "价格计算示例"
+    "价格计算示例": "价格计算示例",
+    "Reference image pricing": "参考图计价",
+    "Free reference image count": "免费参考图数量",
+    "0 disables reference image billing; all reference images are free.": "0 表示关闭参考图计费，所有参考图免费。",
+    "Reference image price per image": "每张参考图单价",
+    "Charged for each image after the free count, in the current display unit.": "超过免费数量后，按当前显示单位对每张参考图计费。"
   }
 }

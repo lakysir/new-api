@@ -5430,6 +5430,11 @@
     "最小间隔": "最小間隔",
     "该 API 要求两次提交间隔 90 秒": "API では送信の間に 90 秒の時間が必要です",
     "每执行单位基础费用": "約定単位あたりの基本料金",
-    "价格计算示例": "価格計算例"
+    "价格计算示例": "価格計算例",
+    "Reference image pricing": "参照画像の料金",
+    "Free reference image count": "無料の参照画像数",
+    "0 disables reference image billing; all reference images are free.": "0 は参照画像の課金を無効にし、すべての参照画像を無料にします。",
+    "Reference image price per image": "参照画像1枚あたりの価格",
+    "Charged for each image after the free count, in the current display unit.": "無料数を超えた画像ごとに、現在の表示単位で課金します。"
   }
 }

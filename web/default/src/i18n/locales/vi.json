@@ -5430,6 +5430,11 @@
     "最小间隔": "Khoảng thời gian tối thiểu",
     "该 API 要求两次提交间隔 90 秒": "API yêu cầu 90 giây giữa các lần gửi",
     "每执行单位基础费用": "Phí cơ bản cho mỗi đơn vị thực hiện",
-    "价格计算示例": "Ví dụ tính giá"
+    "价格计算示例": "Ví dụ tính giá",
+    "Reference image pricing": "Định giá ảnh tham chiếu",
+    "Free reference image count": "Số ảnh tham chiếu miễn phí",
+    "0 disables reference image billing; all reference images are free.": "0 tắt tính phí ảnh tham chiếu; tất cả ảnh tham chiếu đều miễn phí.",
+    "Reference image price per image": "Giá mỗi ảnh tham chiếu",
+    "Charged for each image after the free count, in the current display unit.": "Tính phí cho mỗi ảnh sau số lượng miễn phí theo đơn vị hiển thị hiện tại."
   }
 }
