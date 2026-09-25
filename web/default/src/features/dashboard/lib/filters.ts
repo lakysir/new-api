@@ -31,10 +31,16 @@ import type {
   DashboardFilters,
   ModelAnalyticsChartTab,
 } from '@/features/dashboard/types'
+import dayjs from '@/lib/dayjs'
 import { getRollingDateRange, type TimeGranularity } from '@/lib/time'
 
 function isTimeGranularity(value: unknown): value is TimeGranularity {
-  return value === 'hour' || value === 'day' || value === 'week'
+  return (
+    value === 'hour' ||
+    value === 'day' ||
+    value === 'week' ||
+    value === 'month'
+  )
 }
 
 function getLegacySavedGranularity(): TimeGranularity {
@@ -143,7 +149,21 @@ export function getDefaultDays(granularity?: TimeGranularity): number {
 export function buildDefaultDashboardFilters(
   preferences: DashboardChartPreferences = getSavedChartPreferences()
 ): DashboardFilters {
-  const { start, end } = getRollingDateRange(preferences.defaultTimeRangeDays)
+  let start: Date
+  let end: Date
+  if (preferences.defaultTimeGranularity === 'month') {
+    const currentMonth = dayjs().startOf('month')
+    start = currentMonth.subtract(11, 'month').toDate()
+    end = dayjs().endOf('day').toDate()
+  } else if (preferences.defaultTimeGranularity === 'week') {
+    const currentWeek = dayjs().startOf('week').add(1, 'day')
+    start = currentWeek.subtract(11, 'week').toDate()
+    end = dayjs().endOf('day').toDate()
+  } else {
+    const range = getRollingDateRange(preferences.defaultTimeRangeDays)
+    start = range.start
+    end = range.end
+  }
   return {
     ...EMPTY_DASHBOARD_FILTERS,
     start_timestamp: start,

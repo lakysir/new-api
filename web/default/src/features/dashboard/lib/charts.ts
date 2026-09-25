@@ -280,11 +280,13 @@ export function processChartData(
       ...data.map((item) => Number(item.created_at) || 0)
     )
     const intervalSec =
-      timeGranularity === 'week'
-        ? 604800
-        : timeGranularity === 'day'
-          ? 86400
-          : 3600
+      timeGranularity === 'month'
+        ? 30 * 86400
+        : timeGranularity === 'week'
+          ? 604800
+          : timeGranularity === 'day'
+            ? 86400
+            : 3600
     const padded = Array.from({ length: MAX_TREND_POINTS }, (_, i) =>
       formatChartTime(
         lastTime - (MAX_TREND_POINTS - 1 - i) * intervalSec,

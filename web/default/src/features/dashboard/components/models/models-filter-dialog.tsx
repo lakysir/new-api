@@ -66,6 +66,7 @@ interface ModelsFilterProps {
 // instead of leaving the granularity on its previous value (e.g. hourly).
 function granularityForRangeDays(days: number): TimeGranularity {
   if (days <= 1) return 'hour'
+  if (days >= 365) return 'month'
   if (days >= 29) return 'week'
   return 'day'
 }

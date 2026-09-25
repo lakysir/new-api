@@ -24,7 +24,7 @@ import dayjs from '@/lib/dayjs'
 /**
  * Time granularity type
  */
-export type TimeGranularity = 'hour' | 'day' | 'week'
+export type TimeGranularity = 'hour' | 'day' | 'week' | 'month'
 
 /**
  * Convert Date object to Unix timestamp (seconds)
@@ -169,8 +169,12 @@ export function formatChartTime(
   if (granularity === 'hour') {
     result += ` ${d.format('HH')}:00`
   } else if (granularity === 'week') {
-    const weekEnd = d.add(6, 'day')
-    result += ` - ${weekEnd.format('MM-DD')}`
+    // Always use calendar weeks (Monday-Sunday), never a rolling 7-day window.
+    const monday = d.subtract((d.day() + 6) % 7, 'day')
+    const weekEnd = monday.add(6, 'day')
+    result = `${monday.format('MM-DD')} - ${weekEnd.format('MM-DD')}`
+  } else if (granularity === 'month') {
+    result = d.format('YYYY-MM')
   }
 
   return result
