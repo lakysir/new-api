@@ -30,6 +30,11 @@ import type {
   ApiResponse,
 } from './types'
 
+export async function getUserConsumption(username: string, start_timestamp: number, end_timestamp: number) {
+  const res = await api.get('/api/data', { params: { start_timestamp, end_timestamp, username } })
+  return res.data as { success: boolean; data?: Array<{ created_at: number; quota?: number; model_name?: string; use_group?: string }>; message?: string }
+}
+
 // ============================================================================
 // User Management APIs
 // ============================================================================

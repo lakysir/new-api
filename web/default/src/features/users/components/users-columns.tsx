@@ -17,6 +17,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { type ColumnDef } from '@tanstack/react-table'
+import { BarChart3 } from 'lucide-react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { BadgeCell } from '@/components/data-table'
@@ -32,6 +34,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { formatQuota, formatTimestamp } from '@/lib/format'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 import {
@@ -42,6 +45,7 @@ import {
 } from '../constants'
 import { type User } from '../types'
 import { DataTableRowActions } from './data-table-row-actions'
+import { UserConsumptionDialog } from './user-consumption-dialog'
 
 function getQuotaProgressColor(percentage: number): string {
   if (percentage <= 10) return '[&_[data-slot=progress-indicator]]:bg-rose-500'
@@ -55,6 +59,12 @@ function splitUserGroups(group?: string): string[] {
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean)
+}
+
+function ConsumptionCell({ user }: { user: User }) {
+  const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
+  return <><div className='flex items-center gap-2'><span className='font-medium tabular-nums'>{formatQuota(user.used_quota)}</span><Button variant='ghost' size='icon-sm' onClick={() => setOpen(true)} aria-label={t('View consumption details')}><BarChart3 className='size-4' /></Button></div><UserConsumptionDialog user={user} open={open} onOpenChange={setOpen} /></>
 }
 
 export function useUsersColumns(): ColumnDef<User>[] {
@@ -232,6 +242,13 @@ export function useUsersColumns(): ColumnDef<User>[] {
         )
       },
       size: 170,
+    },
+    {
+      id: 'consumption',
+      header: t('Consumption'),
+      cell: ({ row }) => <ConsumptionCell user={row.original} />,
+      enableSorting: false,
+      size: 140,
     },
     {
       accessorKey: 'group',
